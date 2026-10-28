@@ -9,6 +9,7 @@ Read README.md, docs/architecture/decisions.md and docs/product/requirements.md 
 - Do not invent decisions for offline, QRIS, consignment or negative stock; consult product decisions.
 - Run scripts/check; for web/API changes also start Compose and run scripts/smoke.py.
 - Do not disable TLS/signature/checksum verification. Keep credentials out of source, logs and fixtures.
-- Identity/catalog and initial ordering, fulfillment, batch and inventory ledger (intake/dispatch/receipt) are implemented. POS sales, cooking/counting, shifts, returns/replacements and offline remain unimplemented. Read docs/supply-workflow.md for the exact scope.
+- Identity/catalog and initial ordering, fulfillment, batch and inventory ledger (intake/dispatch/receipt) are implemented. Stock opening/cooking and independent count/waste review are implemented; see docs/stock-control.md. POS sales, shifts, returns/replacements and offline remain unimplemented. Read docs/supply-workflow.md for the exact scope.
 - Run python3 scripts/smoke-identity.py for API/web identity or supply-workflow changes; it uses isolated temporary containers/database.
+- All stock balance changes must use StockLedger.apply inside a transaction and increment stock_revision; do not bypass snapshot guards or independent-review authorization.
 - Development uses SQLite; do not claim PostgreSQL or device-release builds are verified.

@@ -7,9 +7,14 @@ class StockBatch {
     required this.packSize,
     required this.usable,
     required this.quarantined,
+    this.opened = 0,
+    this.ready = 0,
+    this.waste = 0,
+    this.revision = 0,
   });
   final String sku, name, code, expiry;
-  final int packSize, usable, quarantined;
+  final int packSize, usable, quarantined, opened, ready, waste, revision;
+  int get available => usable + opened + ready;
   factory StockBatch.fromJson(Map<String, dynamic> j) => StockBatch(
     sku: j['sku'] as String,
     name: j['name'] as String,
@@ -18,5 +23,9 @@ class StockBatch {
     packSize: j['pack_size'] as int,
     usable: j['usable_pieces'] as int,
     quarantined: j['quarantined_pieces'] as int,
+    opened: j['opened_pieces'] as int? ?? 0,
+    ready: j['ready_pieces'] as int? ?? 0,
+    waste: j['waste_pieces'] as int? ?? 0,
+    revision: j['stock_revision'] as int? ?? 0,
   );
 }

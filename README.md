@@ -2,7 +2,7 @@
 
 Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jaringan mitra dan POS dimsum.
 
-**Sudah diimplementasikan:** identitas dan katalog awal, pengajuan/persetujuan pesanan, pengiriman parsial, penerimaan aktual, batch dan ledger stok awal. Web mempunyai formulir operasional; Flutter menampilkan katalog, pesanan dan stok melalui API. Ini implementasi development, belum POS siap berjualan.
+**Sudah diimplementasikan:** identitas dan katalog awal, pengajuan/persetujuan pesanan, pengiriman parsial, penerimaan aktual, batch/ledger, pembukaan kemasan, pengukusan hasil aktual serta opname/susut dengan review terpisah. Web mempunyai formulir operasional; Flutter menampilkan katalog, pesanan dan stok melalui API. Ini implementasi development, belum POS siap berjualan.
 
 | Direktori | Isi |
 | --- | --- |
@@ -10,13 +10,13 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, pemilihan toko, katalog, stok batch dan rincian pesanan mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.3.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.4.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
 ## Setup dan akun pertama
 
-Prasyarat Linux x86_64, Docker Engine + Compose v2, Python 3. Runtime PHP 8.5.12/Composer dan Flutter memakai image dengan digest terkunci. Container Composer untuk development, bukan deployment production.
+Prasyarat Linux x86_64, Docker Engine + Compose v2, Python 3. Runtime PHP 8.5.12/Composer dan Flutter memakai image dengan digest terkunci. Jika UID/GID host bukan 1000, ekspor `TESTYCO_UID=$(id -u)` dan `TESTYCO_GID=$(id -g)` sebelum menjalankan Compose; CI sudah melakukannya. Container Composer untuk development, bukan deployment production.
 
 ```bash
 scripts/setup
@@ -47,6 +47,8 @@ Admin pusat dapat mengelola metadata onboarding mitra; hak ini tidak otomatis me
 Buka tautan **Pesanan dan stok** pada toko atau **Pesanan pusat** pada navigasi. Alur: pengajuan → persetujuan pimpinan → gudang sumber → alokasi batch/pengiriman → penerimaan aktual. Harga dan konversi disimpan sebagai snapshot; barang rusak masuk karantina. Toko sendiri memakai transfer internal bernilai komersial nol.
 
 Ikuti [panduan operasional](docs/supply-workflow.md) untuk persiapan SKU pusat/lokal, stock intake dan batas penanganan selisih. Flutter pada tahap ini membaca status/stock; aksi operasional memakai web.
+
+Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan, kukus dan proposal hitung fisik. Snapshot lama tidak dapat menimpa pergerakan baru; approval opname memerlukan peninjau berwenang yang berbeda dari pengusul. Ikuti [panduan kontrol stok](docs/stock-control.md).
 
 ## Flutter pada perangkat
 
@@ -83,9 +85,11 @@ Blade memakai `resources/views/components/{atoms,molecules,organisms,templates}`
 
 Katalog lokal tetap milik organisasi; katalog B2B pusat kini tersedia untuk pemohon berwenang. SKU tujuan dipilih eksplisit per baris order dengan isi kemasan dan kondisi yang sama. Harga/konversi order sudah mempunyai snapshot. Kontrak harga khusus/bermasa berlaku, gambar, resep/paket, kontrak kemitraan dan PostgreSQL belum dibuat. Akun dinonaktifkan melalui API/web; reaktivasi akun, pemulihan password melalui email, MFA dan siklus pengelolaan anggota lintas organisasi belum tersedia.
 
-Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Perubahan setelah approval/reapproval, resolusi retur/kredit/pengganti, pengukusan, opname, notifikasi stok minimum, checkout POS, shift, refund, struk/printer, voucher, invoice, pelaporan, aset dan offline masih backlog. Hanya layar transaksi POS yang masih placeholder; stok dan pesanan Flutter memakai data API. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
+Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Perubahan setelah approval/reapproval, resolusi retur/kredit/pengganti, notifikasi stok minimum, checkout POS, shift, refund, struk/printer, voucher, invoice, pelaporan, aset dan offline masih backlog. Hanya layar transaksi POS yang masih placeholder; stok dan pesanan Flutter memakai data API. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
 
-Kebijakan konsinyasi, stok minus, offline, QRIS dan cakupan data mitra tetap mengikuti keputusan bisnis yang belum ditutup. SQLite dipilih untuk development irisan ini; migrasi dan uji PostgreSQL serta concurrency wajib sebelum deployment pilot untuk stok/keuangan. Deployment production memerlukan HTTPS, cookie Secure, konfigurasi APP_DEBUG=false, backup/restore dan secrets yang dikelola dengan benar.
+Kebijakan konsinyasi, stok minus, offline, QRIS dan cakupan data mitra tetap mengikuti keputusan bisnis yang belum ditutup. Pembukaan/pengukusan memakai batch beku yang sama, bukan resep lintas SKU. Masa simpan siap jual tidak dihitung otomatis. Susut proses dicatat langsung bersama hasil fisik; susut terpisah menunggu review. Rollback migrasi kontrol stok ditolak setelah digunakan agar data tidak hilang.
+
+SQLite dipilih untuk development irisan ini; migrasi dan uji PostgreSQL serta concurrency wajib sebelum deployment pilot untuk stok/keuangan. Deployment production memerlukan HTTPS, cookie Secure, konfigurasi APP_DEBUG=false, backup/restore dan secrets yang dikelola dengan benar.
 
 ## Jaringan dan dokumen
 

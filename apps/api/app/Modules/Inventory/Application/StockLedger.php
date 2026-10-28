@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Application;
 
+use App\Modules\Inventory\Domain\StockBucket;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -18,8 +19,7 @@ final class StockLedger
         abort_unless($record->expires_on->format('Y-m-d') === $expiry && $record->condition === $product['condition'], 409, 'Identitas batch sudah ada dengan tanggal/kondisi berbeda.');
         if ($packs > 0) {
             $pieces = $packs * $record->pack_size;
-            $record->increment($bucket.'_pieces', $pieces);
-            $this->entry($record, $actor, $pieces, $sourceType, $sourceId, $bucket, $note);
+            $this->apply($record, $actor, [$bucket => $pieces], $sourceType, $sourceId, $note);
         }
 
         return $record->fresh()->toArray();
@@ -30,11 +30,40 @@ final class StockLedger
         $batch = InventoryBatch::where('store_id', $store)->where('product_id', $product)->where('pack_size', $packSize)->lockForUpdate()->findOrFail($batchId);
         $pieces = $packs * $packSize;
         abort_unless($batch->usable_pieces >= $pieces, 409, 'Stok batch tidak cukup; stok karantina tidak dapat dikirim.');
-        $changed = InventoryBatch::whereKey($batch->id)->where('usable_pieces', '>=', $pieces)->decrement('usable_pieces', $pieces);
-        abort_unless($changed === 1, 409, 'Stok berubah. Coba kembali.');
-        $this->entry($batch, $actor, -$pieces, 'shipment_dispatch', $sourceId, 'usable', null);
+        $this->apply($batch, $actor, ['usable' => -$pieces], 'shipment_dispatch', $sourceId);
 
-        return $batch->toArray();
+        return $batch->fresh()->toArray();
+    }
+
+    public function apply(InventoryBatch $batch, int $actor, array $changes, string $sourceType, string $sourceId, ?string $note = null): InventoryBatch
+    {
+        abort_unless(DB::transactionLevel() > 0, 500, 'Pergerakan stok harus dalam transaksi.');
+        $batch = InventoryBatch::lockForUpdate()->findOrFail($batch->id);
+        $attributes = [];
+        $deltas = [];
+        foreach ($changes as $key => $delta) {
+            $bucket = StockBucket::tryFrom($key);
+            abort_unless($bucket && is_int($delta), 422, 'Bucket atau jumlah stok tidak valid.');
+            if ($delta === 0) {
+                continue;
+            }
+            $remaining = $batch->{$bucket->column()} + $delta;
+            abort_if($remaining < 0, 409, 'Stok pada bucket sumber tidak cukup.');
+            if ($bucket === StockBucket::Sealed) {
+                abort_unless($remaining % $batch->pack_size === 0, 422, 'Stok utuh harus berupa kelipatan isi kemasan historis.');
+            }
+            $attributes[$bucket->column()] = $remaining;
+            $deltas[$key] = $delta;
+        }
+        if ($deltas) {
+            $batch->fill([...$attributes, 'stock_revision' => $batch->stock_revision + 1]);
+            $batch->save();
+            foreach ($deltas as $bucket => $delta) {
+                $this->entry($batch, $actor, $delta, $sourceType, $sourceId, $bucket, $note);
+            }
+        }
+
+        return $batch;
     }
 
     private function entry(InventoryBatch $batch, int $actor, int $pieces, string $type, string $id, string $bucket, ?string $note): void

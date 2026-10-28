@@ -37,10 +37,12 @@ Setiap formulir mutasi mempunyai UUID operasi. Gunakan UUID yang sama untuk meng
 
 ## API dan Flutter
 
-Kontrak OpenAPI 0.3.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
+Kontrak OpenAPI 0.4.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
 
 Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok yang menampilkan jumlah baik/karantina. `FEATURE_ORDERING=false` dan `FEATURE_INVENTORY=false` dapat menonaktifkan modul presentasi saat build. Aksi pengajuan/persetujuan/pengiriman/penerimaan Flutter belum dibuat; gunakan web.
 
 ## Batas berikutnya
 
-Belum ada reservasi stok, perubahan setelah approval dengan reapproval, resolusi barang rusak/hilang, pembuktian foto/suhu terstruktur, kontrak harga khusus mitra, notifikasi stok minimum, pengukusan, opname, POS/shift, billing atau offline. PostgreSQL/concurrency dan UAT belum diverifikasi. Gunakan untuk development dan pengujian alur ini dahulu.
+Belum ada reservasi stok, perubahan setelah approval dengan reapproval, resolusi barang rusak/hilang, pembuktian foto/suhu terstruktur, kontrak harga khusus mitra, notifikasi stok minimum, POS/shift, billing atau offline. PostgreSQL/concurrency dan UAT belum diverifikasi. Gunakan untuk development dan pengujian alur ini dahulu.
+
+Pembukaan kemasan, pengukusan dan opname/susut berapproval kini tersedia pada [kontrol stok](stock-control.md). Pengiriman tetap hanya mengambil stok utuh; proses tidak membuat kuota pengganti atau perubahan tagihan.

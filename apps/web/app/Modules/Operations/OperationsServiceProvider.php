@@ -5,6 +5,7 @@ namespace App\Modules\Operations;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ApiSession;
 use App\Modules\Operations\Presentation\OperationsController;
+use App\Modules\Operations\Presentation\StockControlController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -16,6 +17,11 @@ final class OperationsServiceProvider extends ServiceProvider
             throw new \LogicException('Operations requires Identity.');
         }
         Route::middleware(['web', ApiSession::class])->group(function () {
+            $stock = StockControlController::class;
+            Route::get('/app/stores/{store}/stock-control', [$stock, 'index']);
+            Route::post('/app/stores/{store}/stock-control/processes', [$stock, 'process']);
+            Route::post('/app/stores/{store}/stock-control/counts', [$stock, 'propose']);
+            Route::post('/app/stores/{store}/stock-control/counts/{count}/{action}', [$stock, 'review'])->where('action', 'approve|reject|cancel');
             $c = OperationsController::class;
             Route::get('/app/stores/{store}/operations', [$c, 'store']);
             Route::get('/app/stores/{store}/orders/new', [$c, 'createForm']);

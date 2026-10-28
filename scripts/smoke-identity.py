@@ -157,9 +157,43 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         html = opener.open(web + f'/app/stores/{store}/operations').read().decode()
         assert '144' in html and 'Karantina: 16' in html
         api(base, 'GET', f'stores/{store}/inventory/batches', token=owner, expected=403)
+        # Stock controls: real web processing/review, manager proposes with an observed revision.
+        manager = {'name':'Smoke Manager','email':'manager@smoke.test','password':PASSWORD,'role':'store_manager','store_ids':[store]}
+        api(base, 'POST', f'organizations/{org}/users', manager, owner, 201)
+        manager_token = api(base, 'POST', 'auth/login', {'email':manager['email'],'password':PASSWORD,'device_name':'smoke'})['token']
+        control_path = f'/app/stores/{store}/stock-control'
+        html = opener.open(web + control_path).read().decode()
+        assert 'Buka kemasan beku' in html and 'Siap jual' in html
+        csrf = re.search(r'name="_token" value="([^"]+)"', html).group(1)
+        process_path = control_path + '/processes'
+        opening = {'_token':csrf,'operation_id':str(uuid.uuid4()),'batch_id':batch['id'],'expected_revision':batch['stock_revision'],'kind':'open','quantity_packs':'1','reason':'Physical pack opening'}
+        web_post(process_path, opening).read()
+        web_post(process_path, opening).read()
+        batch = api(base, 'GET', f'stores/{store}/inventory/batches', token=lead_token)['data'][0]
+        assert batch['usable_pieces'] == 136 and batch['opened_pieces'] == 8
+        cooking = {'_token':csrf,'operation_id':str(uuid.uuid4()),'batch_id':batch['id'],'expected_revision':batch['stock_revision'],'kind':'cook','input_pieces':'6','output_pieces':'5','reason':'Five actual outputs and one processing loss'}
+        web_post(process_path, cooking).read()
+        batch = api(base, 'GET', f'stores/{store}/inventory/batches', token=lead_token)['data'][0]
+        assert batch['opened_pieces'] == 2 and batch['ready_pieces'] == 5 and batch['waste_pieces'] == 1
+        count = api(base, 'POST', f'stores/{store}/inventory/counts', {'operation_id':str(uuid.uuid4()),'batch_id':batch['id'],'expected_revision':batch['stock_revision'],'purpose':'waste','bucket':'opened','counted_pieces':1,'reason':'One physically lost opened piece'}, manager_token, 201)['data']
+        before_review = api(base, 'GET', f'stores/{store}/inventory/batches', token=lead_token)['data'][0]
+        assert before_review['opened_pieces'] == 2
+        api(base, 'POST', f'inventory/counts/{count["id"]}/approve', {'operation_id':str(uuid.uuid4()),'version':1,'review_note':'Self review must fail'}, manager_token, expected=403)
+        html = opener.open(web + control_path).read().decode()
+        approval_path = control_path + f'/counts/{count["id"]}/approve'
+        approval = fields(html, approval_path); approval['review_note'] = 'Rechecked physical stock by partner lead'
+        web_post(approval_path, approval).read()
+        web_post(approval_path, approval).read()
+        batch = api(base, 'GET', f'stores/{store}/inventory/batches', token=lead_token)['data'][0]
+        assert batch['opened_pieces'] == 1 and batch['ready_pieces'] == 5 and batch['waste_pieces'] == 2 and batch['available_pieces'] == 142
+        stale = api(base, 'POST', f'stores/{store}/inventory/counts', {'operation_id':str(uuid.uuid4()),'batch_id':batch['id'],'expected_revision':batch['stock_revision'],'purpose':'stocktake','bucket':'opened','counted_pieces':0,'reason':'Physical recount'}, manager_token, 201)['data']
+        api(base, 'POST', f'stores/{store}/inventory/processes', {'operation_id':str(uuid.uuid4()),'batch_id':batch['id'],'expected_revision':batch['stock_revision'],'kind':'cook','input_pieces':1,'output_pieces':1,'reason':'Movement after count snapshot'}, manager_token, 201)
+        api(base, 'POST', f'inventory/counts/{stale["id"]}/approve', {'operation_id':str(uuid.uuid4()),'version':1,'review_note':'Stale review must fail'}, lead_token, expected=409)
+        html = opener.open(web + control_path).read().decode()
+        assert 'Snapshot kedaluwarsa' in html
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay and cross-tenant denial, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

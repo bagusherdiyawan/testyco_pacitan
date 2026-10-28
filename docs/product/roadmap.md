@@ -24,7 +24,7 @@ Gate: MVP-01 dan bagian nonaktif/audit MVP-10 lulus, isolasi di query/filter/eks
 
 ## Tahap 2 — Order, pemenuhan dan ledger stok
 
-Status: pengajuan/approval, snapshot, pemilihan gudang dan batch, dispatch parsial, actual receipt, karantina, ledger idempoten serta transfer internal sudah diimplementasikan. Gate penuh belum selesai: reapproval pascapersetujuan, retur/pengganti/kredit, pengukusan, opname, notifikasi dan UAT masih tertunda. Web memiliki aksi; Flutter masih berupa tampilan status dan stok.
+Status: pengajuan/approval, snapshot, pemilihan gudang dan batch, dispatch parsial, actual receipt, karantina, ledger idempoten, transfer internal, buka/kukus dengan hasil aktual serta opname/susut berapproval independen sudah diimplementasikan. Gate penuh belum selesai: reapproval pascapersetujuan, retur/pengganti/kredit, kebijakan SOP/masa simpan hasil olahan, notifikasi dan UAT masih tertunda. Web memiliki aksi; Flutter masih berupa tampilan status dan stok.
 
 Cakupan: PRD 04–05 dan 09. Pengajuan → persetujuan → pusat → picking → antar/ambil → penerimaan aktual/selisih. Transfer toko sendiri dipisah dari penjualan mitra. Batch, pembukaan kemasan, pengukusan, opname dan notifikasi stok minimum.
 

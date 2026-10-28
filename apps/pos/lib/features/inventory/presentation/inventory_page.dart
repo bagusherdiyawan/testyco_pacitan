@@ -51,6 +51,12 @@ class _InventoryPageState extends State<InventoryPage> {
           ],
         ),
       ),
+      const Padding(
+        padding: EdgeInsets.symmetric(horizontal: 16),
+        child: Text(
+          'Buka kemasan, kukus dan opname dilakukan melalui web operasional. Masa simpan siap jual mengikuti SOP, bukan tanggal kedaluwarsa kemasan.',
+        ),
+      ),
       Expanded(
         child: FutureBuilder<List<StockBatch>>(
           future: _batches,
@@ -83,6 +89,10 @@ class _InventoryPageState extends State<InventoryPage> {
                     packSize: b.packSize,
                     usable: b.usable,
                     quarantined: b.quarantined,
+                    opened: b.opened,
+                    ready: b.ready,
+                    waste: b.waste,
+                    revision: b.revision,
                   ),
               ],
             );

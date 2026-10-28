@@ -53,7 +53,7 @@ void main() {
         ),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Diterima baik: 144 biji'), findsOneWidget);
+      expect(find.text('Utuh: 144 biji'), findsOneWidget);
       expect(find.text('Karantina: 16 biji'), findsOneWidget);
       expect(find.text('Isi kemasan historis: 8 biji'), findsOneWidget);
       expect(tester.takeException(), isNull);
@@ -205,4 +205,63 @@ void main() {
       expect(calls.last.queryParameters['page'], '2');
     },
   );
+
+  for (final width in [390.0, 1024.0]) {
+    testWidgets('Processed stock and loss remain separate at $width', (
+      tester,
+    ) async {
+      tester.view.physicalSize = Size(width, 1000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      final api = ApiClient(
+        baseUrl: Uri.parse('https://api.example.test/api/v1/'),
+        client: MockClient(
+          (_) async => http.Response(
+            jsonEncode({
+              'data': [
+                {
+                  'sku': 'AYAM10',
+                  'name': 'Ayam',
+                  'batch_code': 'LOT10',
+                  'expires_on': '2030-01-01',
+                  'pack_size': 10,
+                  'usable_pieces': 0,
+                  'opened_pieces': 4,
+                  'ready_pieces': 5,
+                  'quarantined_pieces': 2,
+                  'waste_pieces': 1,
+                  'stock_revision': 3,
+                },
+              ],
+            }),
+            200,
+          ),
+        ),
+      );
+      addTearDown(api.close);
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: InventoryPage(
+              repository: InventoryRepository(api),
+              storeId: 'S1',
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Utuh: 0 biji'), findsOneWidget);
+      expect(find.text('Beku terbuka: 4 biji'), findsOneWidget);
+      expect(find.text('Siap jual: 5 biji'), findsOneWidget);
+      expect(find.text('Karantina: 2 biji'), findsOneWidget);
+      expect(find.text('Susut kumulatif: 1 biji'), findsOneWidget);
+      expect(
+        find.text('Total di luar karantina/susut: 9 biji'),
+        findsOneWidget,
+      );
+      expect(find.text('Revisi stok: 3'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+    });
+  }
 }

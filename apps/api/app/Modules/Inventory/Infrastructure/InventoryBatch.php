@@ -13,8 +13,15 @@ final class InventoryBatch extends Model
 
     protected $guarded = ['id'];
 
+    protected $appends = ['available_pieces'];
+
+    public function getAvailablePiecesAttribute(): int
+    {
+        return $this->usable_pieces + $this->opened_pieces + $this->ready_pieces;
+    }
+
     protected function casts(): array
     {
-        return ['pack_size' => 'integer', 'usable_pieces' => 'integer', 'quarantined_pieces' => 'integer', 'expires_on' => 'date:Y-m-d'];
+        return ['pack_size' => 'integer', 'usable_pieces' => 'integer', 'quarantined_pieces' => 'integer', 'opened_pieces' => 'integer', 'ready_pieces' => 'integer', 'waste_pieces' => 'integer', 'stock_revision' => 'integer', 'expires_on' => 'date:Y-m-d'];
     }
 }

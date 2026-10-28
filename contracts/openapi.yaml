@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Identity, Catalog and Supply API",
-    "version": "0.3.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically."
+    "version": "0.4.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements."
   },
   "security": [
     {
@@ -4036,6 +4036,710 @@
           }
         }
       }
+    },
+    "/api/v1/stores/{store}/inventory/processes": {
+      "get": {
+        "operationId": "stockProcessHistory",
+        "summary": "Scoped pack-opening and cooking history",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StockProcess"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role denied, self-review, or non-creator cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown batch/count in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale stock snapshot/version, insufficient source stock, completed review, operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid yield, physical count, sealed unit alignment or input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "processStock",
+        "summary": "Reclassify frozen batch with actual yield and loss atomically",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StockProcess"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role denied, self-review, or non-creator cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown batch/count in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale stock snapshot/version, insufficient source stock, completed review, operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid yield, physical count, sealed unit alignment or input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Assigned stock staff only. UUID replay is stable. expected_revision binds displayed stock snapshot. Open: intact pieces to opened. Cook: opened to ready plus cumulative loss. Quarantine cannot supply cooking. No automatic shelf-life or quality certification.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockProcessInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/inventory/counts": {
+      "get": {
+        "operationId": "stockCountHistory",
+        "summary": "Scoped proposals with current staleness and review capabilities",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/StockCount"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role denied, self-review, or non-creator cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown batch/count in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale stock snapshot/version, insufficient source stock, completed review, operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid yield, physical count, sealed unit alignment or input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "proposeStockCount",
+        "summary": "Record physical count/waste proposal without changing stock",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StockCount"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role denied, self-review, or non-creator cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown batch/count in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale stock snapshot/version, insufficient source stock, completed review, operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid yield, physical count, sealed unit alignment or input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Expected stock revision must still match when proposing. Baseline and delta are computed by server. Only four countable buckets; cumulative waste is not editable.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockCountInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/counts/{count}/approve": {
+      "post": {
+        "operationId": "approveStockCount",
+        "summary": "Independent authorized reviewer applies adjustment once",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StockCount"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role denied, self-review, or non-creator cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown batch/count in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale stock snapshot/version, insufficient source stock, completed review, operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid yield, physical count, sealed unit alignment or input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Center owner/admin or partner lead with own store access. Proposer cannot self-approve. Pending status, count version and unchanged batch stock_revision are required. Waste proposal moves loss to cumulative waste bucket; ordinary stocktake does not infer loss reason.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "count",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockReviewInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/counts/{count}/reject": {
+      "post": {
+        "operationId": "rejectStockCount",
+        "summary": "Independent authorized reviewer rejects without stock movement",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StockCount"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role denied, self-review, or non-creator cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown batch/count in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale stock snapshot/version, insufficient source stock, completed review, operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid yield, physical count, sealed unit alignment or input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "count",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockReviewInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/inventory/counts/{count}/cancel": {
+      "post": {
+        "operationId": "cancelStockCount",
+        "summary": "Proposer cancels pending proposal without stock movement",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StockCount"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role denied, self-review, or non-creator cancellation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown batch/count in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale stock snapshot/version, insufficient source stock, completed review, operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid yield, physical count, sealed unit alignment or input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "count",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockReviewInput"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -5008,7 +5712,8 @@
           },
           "expires_on": {
             "type": "string",
-            "format": "date"
+            "format": "date",
+            "description": "Original package expiry. No prepared-food lifetime is inferred."
           },
           "condition": {
             "type": "string"
@@ -5017,10 +5722,32 @@
             "type": "integer"
           },
           "usable_pieces": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Accepted pieces still in intact packages; does not include opened/ready buckets"
           },
           "quarantined_pieces": {
             "type": "integer"
+          },
+          "opened_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ready_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waste_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stock_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "available_pieces": {
+            "type": "integer",
+            "minimum": 0,
+            "description": "usable + opened + ready; excludes quarantine and cumulative loss; does not certify quality or sale readiness"
           }
         },
         "required": [
@@ -5059,7 +5786,10 @@
           "bucket": {
             "enum": [
               "usable",
-              "quarantined"
+              "opened",
+              "ready",
+              "quarantined",
+              "waste"
             ]
           },
           "quantity_pieces": {
@@ -5069,7 +5799,11 @@
             "enum": [
               "warehouse_intake",
               "shipment_dispatch",
-              "shipment_receipt"
+              "shipment_receipt",
+              "inventory_open",
+              "inventory_cook",
+              "stock_count",
+              "stock_waste"
             ]
           },
           "source_id": {
@@ -5456,6 +6190,12 @@
           },
           "can_intake": {
             "type": "boolean"
+          },
+          "can_manage_stock": {
+            "type": "boolean"
+          },
+          "can_review_stock": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -5464,6 +6204,398 @@
           "role",
           "can_order",
           "can_intake"
+        ]
+      },
+      "StockBalances": {
+        "type": "object",
+        "properties": {
+          "usable_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "opened_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ready_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "quarantined_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waste_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "stock_revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "usable_pieces",
+          "opened_pieces",
+          "ready_pieces",
+          "quarantined_pieces",
+          "waste_pieces",
+          "stock_revision"
+        ]
+      },
+      "StockOpenInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "kind": {
+            "const": "open"
+          },
+          "quantity_packs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "operation_id",
+          "batch_id",
+          "expected_revision",
+          "reason",
+          "kind",
+          "quantity_packs"
+        ]
+      },
+      "StockCookInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "kind": {
+            "const": "cook"
+          },
+          "input_pieces": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 100000000
+          },
+          "output_pieces": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 100000000,
+            "description": "Actual yield; cannot exceed input. Difference becomes process loss."
+          }
+        },
+        "required": [
+          "operation_id",
+          "batch_id",
+          "expected_revision",
+          "reason",
+          "kind",
+          "input_pieces",
+          "output_pieces"
+        ]
+      },
+      "StockProcessInput": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/StockOpenInput"
+          },
+          {
+            "$ref": "#/components/schemas/StockCookInput"
+          }
+        ]
+      },
+      "StockProcess": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "inventory_batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "actor_id": {
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "open",
+              "cook"
+            ]
+          },
+          "pack_size": {
+            "type": "integer"
+          },
+          "input_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "output_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "waste_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string"
+          },
+          "before": {
+            "$ref": "#/components/schemas/StockBalances"
+          },
+          "after": {
+            "$ref": "#/components/schemas/StockBalances"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "batch": {
+            "$ref": "#/components/schemas/InventoryBatch"
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "inventory_batch_id",
+          "actor_id",
+          "kind",
+          "pack_size",
+          "input_pieces",
+          "output_pieces",
+          "waste_pieces",
+          "before",
+          "after",
+          "reason",
+          "created_at"
+        ]
+      },
+      "StockCountInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "purpose": {
+            "enum": [
+              "stocktake",
+              "waste"
+            ]
+          },
+          "bucket": {
+            "enum": [
+              "usable",
+              "opened",
+              "ready",
+              "quarantined"
+            ]
+          },
+          "counted_pieces": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000,
+            "description": "Physical remaining pieces, not delta. Sealed count must be a multiple of historical pack_size. Waste proposal must reduce the selected bucket."
+          }
+        },
+        "required": [
+          "operation_id",
+          "batch_id",
+          "expected_revision",
+          "reason",
+          "purpose",
+          "bucket",
+          "counted_pieces"
+        ]
+      },
+      "StockCount": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "inventory_batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "created_by": {
+            "type": "integer"
+          },
+          "reviewed_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "purpose": {
+            "enum": [
+              "stocktake",
+              "waste"
+            ]
+          },
+          "bucket": {
+            "enum": [
+              "usable",
+              "opened",
+              "ready",
+              "quarantined"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "cancelled"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "snapshot_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expected_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "counted_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "difference_pieces": {
+            "type": "integer"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "review_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reviewed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "batch": {
+            "$ref": "#/components/schemas/InventoryBatch"
+          },
+          "is_stale": {
+            "type": "boolean"
+          },
+          "can_review": {
+            "type": "boolean"
+          },
+          "can_cancel": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "inventory_batch_id",
+          "created_by",
+          "purpose",
+          "bucket",
+          "status",
+          "version",
+          "snapshot_revision",
+          "expected_pieces",
+          "counted_pieces",
+          "difference_pieces",
+          "reason"
+        ]
+      },
+      "StockReviewInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "review_note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "review_note"
         ]
       }
     }

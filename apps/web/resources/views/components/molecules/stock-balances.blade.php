@@ -1,0 +1,2 @@
+@props(['batch'])
+<dl class="stock-balances"><dt>Utuh (biji di kemasan)</dt><dd>{{ $batch['usable_pieces'] }}</dd><dt>Beku terbuka</dt><dd>{{ $batch['opened_pieces'] ?? 0 }}</dd><dt>Siap jual</dt><dd>{{ $batch['ready_pieces'] ?? 0 }}</dd><dt>Karantina</dt><dd>{{ $batch['quarantined_pieces'] }}</dd><dt>Susut kumulatif</dt><dd>{{ $batch['waste_pieces'] ?? 0 }}</dd><dt>Revisi stok</dt><dd>{{ $batch['stock_revision'] ?? 0 }}</dd></dl>

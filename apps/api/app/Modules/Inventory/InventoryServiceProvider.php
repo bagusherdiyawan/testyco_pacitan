@@ -6,6 +6,7 @@ use App\Modules\Catalog\CatalogServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Inventory\Presentation\InventoryController;
+use App\Modules\Inventory\Presentation\StockControlController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -20,6 +21,12 @@ final class InventoryServiceProvider extends ServiceProvider
             throw new \LogicException('Inventory requires Catalog.');
         }
         Route::prefix('api/v1')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
+            $control = StockControlController::class;
+            Route::get('stores/{store}/inventory/processes', [$control, 'processes']);
+            Route::post('stores/{store}/inventory/processes', [$control, 'process']);
+            Route::get('stores/{store}/inventory/counts', [$control, 'counts']);
+            Route::post('stores/{store}/inventory/counts', [$control, 'propose']);
+            Route::post('inventory/counts/{count}/{action}', [$control, 'review'])->where('action', 'approve|reject|cancel');
             Route::get('stores/{store}/inventory/batches', [InventoryController::class, 'batches']);
             Route::get('stores/{store}/inventory/ledger', [InventoryController::class, 'ledger']);
             Route::post('stores/{store}/inventory/intakes', [InventoryController::class, 'intake']);

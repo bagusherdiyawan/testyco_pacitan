@@ -1,5 +1,3 @@
 # Testyco web
 
-Laravel Blade frontend terpisah dari API. Token pengguna disimpan pada session server. Modul Operations menyediakan formulir pengajuan/approval, gudang/pengiriman dan penerimaan stok; mutasi dilindungi CSRF, UUID operasi dan authorization API. Lihat panduan pada docs/supply-workflow.md di root.
-
-Halaman stock-control menyediakan pembukaan/pengukusan, hitung fisik dan review independen dengan CSRF, UUID operasi dan snapshot revision.
+Laravel Blade frontend terpisah dari API. Token pengguna berada pada session server; setiap mutasi memakai CSRF dan authorization API. Modul Operations menyediakan pesanan, pengiriman, penerimaan serta kontrol stok. Modul Pos menyediakan shift, keranjang, review/pembayaran tunai, struk digital/cetak browser, kas masuk/keluar, riwayat dan ringkasan penjualan. Lihat README root, docs/supply-workflow.md, docs/stock-control.md dan docs/cash-pos.md.

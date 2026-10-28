@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Testyco Identity, Catalog and Supply API",
-    "version": "0.4.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements."
+    "title": "Testyco Identity, Supply and Cash POS API",
+    "version": "0.5.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented."
   },
   "security": [
     {
@@ -4740,6 +4740,1338 @@
           }
         }
       }
+    },
+    "/api/v1/stores/{store}/shifts": {
+      "get": {
+        "operationId": "listCashShifts",
+        "summary": "Own shifts or manager scoped-store shift history",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CashShift"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ]
+      },
+      "post": {
+        "operationId": "openCashShift",
+        "summary": "Open one active cashier shift per store; other cashiers may open separately",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CashShift"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Initial technical policy pending UAT. Device name is an operator label, not hardware authentication. Same operation replay returns original shift.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftOpenInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shifts/{shift}": {
+      "get": {
+        "operationId": "showCashShift",
+        "summary": "Authorized cashier/manager drawer history",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CashShift"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shift",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/shifts/{shift}/cash-movements": {
+      "post": {
+        "operationId": "recordCashMovement",
+        "summary": "Manager records categorized cash in/out without changing revenue",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "shift": {
+                          "$ref": "#/components/schemas/CashShift"
+                        },
+                        "movement": {
+                          "$ref": "#/components/schemas/CashMovement"
+                        }
+                      },
+                      "required": [
+                        "shift",
+                        "movement"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Current version required. Cashier role cannot record manual movements. Outflow cannot exceed expected cash.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shift",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashMovementInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/shifts/{shift}/close": {
+      "post": {
+        "operationId": "closeCashShift",
+        "summary": "Owning cashier closes after physical count; pending intents block close",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CashShift"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Current version required to avoid overwriting sales posted after physical count. Difference needs note. Expected cash is opening+cash sales+in-out; refunds unsupported.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shift",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShiftCloseInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/pos/context": {
+      "get": {
+        "operationId": "cashPosContext",
+        "summary": "Own active shift, recoverable pending drafts and last twenty receipts",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/PosContext"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/stores/{store}/sales/intents": {
+      "post": {
+        "operationId": "createCashSaleIntent",
+        "summary": "Review authoritative priced cart with explicit batch allocations",
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SaleIntent"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Durable server draft, no stock reservation/debit/payment. Up to 20 pending intents per shift. One product per line; sum allocation selling units equals quantity. Piece=1, portion=current portion_size, pack=current pack_size. All POS unit prices derive from retail per-piece price; B2B wholesale prices are not used. Loose units require opened/ready stock; packs require matching intact historical pack.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashCartInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sales/intents/{intent}": {
+      "get": {
+        "operationId": "recoverSaleIntent",
+        "summary": "Recover draft or existing paid receipt",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "intent": {
+                          "$ref": "#/components/schemas/SaleIntent"
+                        },
+                        "sale": {
+                          "oneOf": [
+                            {
+                              "$ref": "#/components/schemas/CashSale"
+                            },
+                            {
+                              "type": "null"
+                            }
+                          ]
+                        },
+                        "is_owner": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "intent",
+                        "sale",
+                        "is_owner"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "intent",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/sales/intents/{intent}/pay": {
+      "post": {
+        "operationId": "confirmCashPayment",
+        "summary": "Atomically create one immutable sale, debit stock and post net cash once",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CashSale"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Owning cashier only. Rechecks price/conversion and stock. Unique sale per intent also protects a retry with a new operation UUID. Already paid intent returns original receipt only if same tender; no history mutation. Cash tender must cover total. QRIS/transfer are rejected. Exact replay after closed shift returns receipt.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "intent",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CashPayInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sales/intents/{intent}/cancel": {
+      "post": {
+        "operationId": "cancelPendingCashIntent",
+        "summary": "Cancel unpaid draft without touching cash or stock",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SaleIntent"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Not a refund endpoint. Paid draft cancellation is rejected.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "intent",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CancelSaleIntentInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/sales": {
+      "get": {
+        "operationId": "listCashSales",
+        "summary": "Own receipt history; store managers may read all authorized-store receipts",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CashSaleSummary"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer"
+                    },
+                    "last_page": {
+                      "type": "integer"
+                    },
+                    "per_page": {
+                      "type": "integer"
+                    },
+                    "total": {
+                      "type": "integer"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "description": "Paginated list metadata; lines are loaded only on receipt detail."
+      }
+    },
+    "/api/v1/sales/{sale}": {
+      "get": {
+        "operationId": "cashReceipt",
+        "summary": "Read immutable persisted receipt; GET/reprint never debits stock",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CashSale"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "sale",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/stores/{store}/sales/summary": {
+      "get": {
+        "operationId": "cashSalesSummary",
+        "summary": "Manager summary for explicit inclusive-from/exclusive-to instants",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "from": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "to": {
+                          "type": "string",
+                          "format": "date-time"
+                        },
+                        "transaction_count": {
+                          "type": "integer"
+                        },
+                        "gross_sales": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Integer rupiah/IDR"
+                        },
+                        "discount_amount": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Integer rupiah/IDR"
+                        },
+                        "net_sales": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Integer rupiah/IDR"
+                        },
+                        "cash_sales": {
+                          "type": "integer",
+                          "minimum": 0,
+                          "description": "Integer rupiah/IDR"
+                        },
+                        "currency": {
+                          "const": "IDR"
+                        }
+                      }
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Store/role/cashier ownership denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown object in scoped store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Closed shift, stale cash/price version, insufficient stock, existing paid intent conflict or active draft",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid money/units/cash tender or missing reason",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Both endpoints must carry timezone offset. Maximum 31 days. No implicit business-day/shift rollover policy. Cash movements are excluded from revenue; refunds/promotions/non-cash not supported.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -5803,7 +7135,8 @@
               "inventory_open",
               "inventory_cook",
               "stock_count",
-              "stock_waste"
+              "stock_waste",
+              "pos_sale"
             ]
           },
           "source_id": {
@@ -6195,6 +7528,9 @@
             "type": "boolean"
           },
           "can_review_stock": {
+            "type": "boolean"
+          },
+          "can_pos": {
             "type": "boolean"
           }
         },
@@ -6596,6 +7932,909 @@
           "operation_id",
           "version",
           "review_note"
+        ]
+      },
+      "CashShift": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "cashier_id": {
+            "type": "integer"
+          },
+          "cashier_name": {
+            "type": "string"
+          },
+          "device_name": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "open",
+              "closed"
+            ]
+          },
+          "version": {
+            "type": "integer"
+          },
+          "opening_cash": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "cash_sales": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "cash_in": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "cash_out": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "expected_cash": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "counted_cash": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "difference_cash": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "closing_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "opened_at": {
+            "type": "string"
+          },
+          "closed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "is_owner": {
+            "type": "boolean"
+          },
+          "can_manage": {
+            "type": "boolean"
+          },
+          "movements": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CashMovement"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "cashier_id",
+          "status",
+          "version",
+          "opening_cash",
+          "cash_sales",
+          "cash_in",
+          "cash_out",
+          "expected_cash"
+        ]
+      },
+      "CashMovement": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "cash_shift_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "actor_id": {
+            "type": "integer"
+          },
+          "kind": {
+            "enum": [
+              "in",
+              "out"
+            ]
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "category": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "cash_shift_id",
+          "actor_id",
+          "kind",
+          "amount",
+          "category",
+          "reason"
+        ]
+      },
+      "ShiftOpenInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "device_name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "opening_cash": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          }
+        },
+        "required": [
+          "operation_id",
+          "device_name",
+          "opening_cash"
+        ]
+      },
+      "CashMovementInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "kind": {
+            "enum": [
+              "in",
+              "out"
+            ]
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "category": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "kind",
+          "amount",
+          "category",
+          "reason"
+        ]
+      },
+      "ShiftCloseInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "counted_cash": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "closing_note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000,
+            "description": "Required when physical count differs from expected cash"
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "counted_cash"
+        ]
+      },
+      "CartAllocationInput": {
+        "type": "object",
+        "properties": {
+          "batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "bucket": {
+            "enum": [
+              "usable",
+              "opened",
+              "ready"
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000,
+            "description": "Selling units from this batch/bucket, not base pieces"
+          }
+        },
+        "required": [
+          "batch_id",
+          "bucket",
+          "quantity"
+        ]
+      },
+      "CashCartInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "shift_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "properties": {
+                "product_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "unit": {
+                  "enum": [
+                    "piece",
+                    "portion",
+                    "pack"
+                  ]
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                },
+                "allocations": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 100,
+                  "items": {
+                    "$ref": "#/components/schemas/CartAllocationInput"
+                  }
+                }
+              },
+              "required": [
+                "product_id",
+                "unit",
+                "quantity",
+                "allocations"
+              ]
+            }
+          }
+        },
+        "required": [
+          "operation_id",
+          "shift_id",
+          "lines"
+        ]
+      },
+      "CashSaleLine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "piece",
+              "portion",
+              "pack"
+            ]
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "pieces_per_unit": {
+            "type": "integer"
+          },
+          "unit_price": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "line_total": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "allocations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "inventory_batch_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "bucket": {
+                  "enum": [
+                    "usable",
+                    "opened",
+                    "ready"
+                  ]
+                },
+                "pieces": {
+                  "type": "integer"
+                },
+                "batch_code": {
+                  "type": "string"
+                },
+                "expires_on": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "batch_pack_size": {
+                  "type": "integer"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "product_id",
+          "sku",
+          "name",
+          "unit",
+          "quantity",
+          "pieces_per_unit",
+          "unit_price",
+          "line_total"
+        ]
+      },
+      "SaleIntent": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "cash_shift_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "cashier_id": {
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "paid",
+              "cancelled"
+            ]
+          },
+          "total_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "price_hash": {
+            "type": "string",
+            "description": "Optimistic price/conversion fingerprint; not a credential"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "product_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "sku": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "condition": {
+                  "type": "string"
+                },
+                "catalog_pack_size": {
+                  "type": "integer"
+                },
+                "unit": {
+                  "enum": [
+                    "piece",
+                    "portion",
+                    "pack"
+                  ]
+                },
+                "quantity": {
+                  "type": "integer"
+                },
+                "pieces_per_unit": {
+                  "type": "integer"
+                },
+                "unit_price": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000000,
+                  "description": "Integer rupiah/IDR"
+                },
+                "line_total": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000000,
+                  "description": "Integer rupiah/IDR"
+                },
+                "allocations": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "batch_id": {
+                        "type": "string",
+                        "description": "ULID"
+                      },
+                      "bucket": {
+                        "type": "string"
+                      },
+                      "quantity": {
+                        "type": "integer"
+                      },
+                      "pieces": {
+                        "type": "integer"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "cancel_reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "cash_shift_id",
+          "cashier_id",
+          "status",
+          "total_amount",
+          "items"
+        ]
+      },
+      "CashSale": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "cash_shift_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sale_intent_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "cashier_id": {
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "store_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cashier_name": {
+            "type": "string"
+          },
+          "status": {
+            "const": "completed"
+          },
+          "currency": {
+            "const": "IDR"
+          },
+          "payment_method": {
+            "const": "cash"
+          },
+          "subtotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "discount_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "total_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "cash_received": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "change_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "sold_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CashSaleLine"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "cash_shift_id",
+          "sale_intent_id",
+          "number",
+          "store_name",
+          "cashier_name",
+          "status",
+          "currency",
+          "payment_method",
+          "subtotal",
+          "discount_amount",
+          "total_amount",
+          "cash_received",
+          "change_amount",
+          "sold_at",
+          "lines"
+        ]
+      },
+      "CashPayInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "payment_method": {
+            "const": "cash"
+          },
+          "cash_received": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          }
+        },
+        "required": [
+          "operation_id",
+          "payment_method",
+          "cash_received"
+        ]
+      },
+      "CancelSaleIntentInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "operation_id",
+          "reason"
+        ]
+      },
+      "PosContext": {
+        "type": "object",
+        "properties": {
+          "store": {
+            "$ref": "#/components/schemas/Store"
+          },
+          "can_manage": {
+            "type": "boolean"
+          },
+          "shift": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CashShift"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending_intents": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "status": {
+                  "type": "string"
+                },
+                "total_amount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000000,
+                  "description": "Integer rupiah/IDR"
+                },
+                "created_at": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "recent_sales": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "number": {
+                  "type": "string"
+                },
+                "total_amount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000000000,
+                  "description": "Integer rupiah/IDR"
+                },
+                "sold_at": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "store",
+          "can_manage",
+          "shift",
+          "pending_intents",
+          "recent_sales"
+        ]
+      },
+      "CashSaleSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "cash_shift_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sale_intent_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "cashier_id": {
+            "type": "integer"
+          },
+          "number": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "store_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "cashier_name": {
+            "type": "string"
+          },
+          "status": {
+            "const": "completed"
+          },
+          "currency": {
+            "const": "IDR"
+          },
+          "payment_method": {
+            "const": "cash"
+          },
+          "subtotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "discount_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "total_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "cash_received": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "change_amount": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000,
+            "description": "Integer rupiah/IDR"
+          },
+          "sold_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "cash_shift_id",
+          "sale_intent_id",
+          "number",
+          "store_name",
+          "cashier_name",
+          "status",
+          "currency",
+          "payment_method",
+          "subtotal",
+          "discount_amount",
+          "total_amount",
+          "cash_received",
+          "change_amount",
+          "sold_at"
         ]
       }
     }

@@ -10,6 +10,8 @@ use App\Modules\Inventory\InventoryServiceProvider;
 use App\Modules\Ordering\Application\OrderAccess;
 use App\Modules\Ordering\Application\OrderWorkflow;
 use App\Modules\Ordering\Infrastructure\SupplyOrder;
+use App\Modules\Sales\SalesServiceProvider;
+use App\Modules\Shifts\Application\PosAccess;
 use Illuminate\Http\Request;
 
 final class OrderController
@@ -21,7 +23,7 @@ final class OrderController
         $s = $this->identity->store($r->user(), $store);
         $role = $this->identity->role($r->user(), $s->organization_id)?->value;
 
-        return ['data' => [...$s->toArray(), 'role' => $role, 'can_manage_stock' => app()->getProvider(InventoryServiceProvider::class) && in_array($role, StockAccess::STAFF, true), 'can_review_stock' => app()->getProvider(InventoryServiceProvider::class) && app(StockAccess::class)->canReview($r->user(), $s), 'can_order' => in_array($role, OrderAccess::RECIPIENT_ROLES, true), 'can_intake' => in_array($role, ['owner', 'admin', 'warehouse'], true) && Organization::findOrFail($s->organization_id)->type === 'center']];
+        return ['data' => [...$s->toArray(), 'role' => $role, 'can_manage_stock' => app()->getProvider(InventoryServiceProvider::class) && in_array($role, StockAccess::STAFF, true), 'can_review_stock' => app()->getProvider(InventoryServiceProvider::class) && app(StockAccess::class)->canReview($r->user(), $s), 'can_pos' => app()->getProvider(SalesServiceProvider::class) && in_array($role, PosAccess::CASHIERS, true), 'can_order' => in_array($role, OrderAccess::RECIPIENT_ROLES, true), 'can_intake' => in_array($role, ['owner', 'admin', 'warehouse'], true) && Organization::findOrFail($s->organization_id)->type === 'center']];
     }
 
     public function catalog(Request $r, string $store, SupplyCatalog $catalog): mixed

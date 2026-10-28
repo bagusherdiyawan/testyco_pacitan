@@ -1,0 +1,1 @@
+<x-templates.console><x-organisms.sale-receipt :sale="$sale" /><button class="button no-print" type="button" data-print-receipt>Cetak melalui browser</button><p class="no-print"><a href="/app/stores/{{ $sale['store_id'] }}/pos">Kembali ke POS</a></p><script src="/receipt.js" defer></script></x-templates.console>

@@ -2,15 +2,15 @@
 
 Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jaringan mitra dan POS dimsum.
 
-**Sudah diimplementasikan:** identitas dan katalog awal, pengajuan/persetujuan pesanan, pengiriman parsial, penerimaan aktual, batch/ledger, pembukaan kemasan, pengukusan hasil aktual serta opname/susut dengan review terpisah. Web mempunyai formulir operasional; Flutter menampilkan katalog, pesanan dan stok melalui API. Ini implementasi development, belum POS siap berjualan.
+**Sudah diimplementasikan:** identitas dan katalog awal, pengajuan/persetujuan pesanan, pengiriman parsial, penerimaan aktual, batch/ledger, pembukaan kemasan, pengukusan hasil aktual serta opname/susut dengan review terpisah. Web dan Flutter kini menyediakan POS tunai online, draft tersimpan di server, struk digital dan buka/tutup shift. Ini implementasi development; UAT, concurrency PostgreSQL dan perangkat nyata belum diverifikasi.
 
 | Direktori | Isi |
 | --- | --- |
-| `apps/api` | Laravel 12 + Sanctum, modul Identity, Catalog, Ordering, Inventory dan Fulfillment, persistence SQLite untuk development |
+| `apps/api` | Laravel 12 + Sanctum, modul Identity, Catalog, Ordering, Inventory, Fulfillment, Shifts dan Sales, persistence SQLite untuk development |
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
-| `apps/pos` | Flutter 3.35.7, login, pemilihan toko, katalog, stok batch dan rincian pesanan mobile/tablet |
+| `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.4.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.5.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -50,6 +50,12 @@ Ikuti [panduan operasional](docs/supply-workflow.md) untuk persiapan SKU pusat/l
 
 Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan, kukus dan proposal hitung fisik. Snapshot lama tidak dapat menimpa pergerakan baru; approval opname memerlukan peninjau berwenang yang berbeda dari pengusul. Ikuti [panduan kontrol stok](docs/stock-control.md).
 
+## POS tunai dan kas shift
+
+Buka **POS tunai** dari toko di web atau modul Penjualan Flutter. Buka shift, pilih produk/satuan/batch, tinjau total server, lalu konfirmasi uang tunai. Struk berasal dari transaksi tersimpan; membuka/cetak ulang tidak memotong stok lagi. Draft tersimpan di server dan dapat dipulihkan setelah login ulang.
+
+Pengelola berwenang mencatat kas masuk/keluar melalui web. Tutup shift memerlukan hitungan fisik; selisih wajib diberi alasan dan draft aktif harus diselesaikan/dibatalkan. Web menyediakan riwayat struk serta ringkasan penjualan per tanggal WIB. Lihat [panduan POS dan shift](docs/cash-pos.md) untuk batas satuan, retry dan hak akses.
+
 ## Flutter pada perangkat
 
 Untuk emulator Android, default debug API adalah `http://10.0.2.2:8000/api/v1/`. Mesin developer harus dapat menjangkau backend; localhost cloud tidak otomatis tersedia pada perangkat Anda. Untuk perangkat fisik/iOS gunakan alamat API yang dapat dijangkau dengan TLS dan SDK lokal:
@@ -85,7 +91,7 @@ Blade memakai `resources/views/components/{atoms,molecules,organisms,templates}`
 
 Katalog lokal tetap milik organisasi; katalog B2B pusat kini tersedia untuk pemohon berwenang. SKU tujuan dipilih eksplisit per baris order dengan isi kemasan dan kondisi yang sama. Harga/konversi order sudah mempunyai snapshot. Kontrak harga khusus/bermasa berlaku, gambar, resep/paket, kontrak kemitraan dan PostgreSQL belum dibuat. Akun dinonaktifkan melalui API/web; reaktivasi akun, pemulihan password melalui email, MFA dan siklus pengelolaan anggota lintas organisasi belum tersedia.
 
-Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Perubahan setelah approval/reapproval, resolusi retur/kredit/pengganti, notifikasi stok minimum, checkout POS, shift, refund, struk/printer, voucher, invoice, pelaporan, aset dan offline masih backlog. Hanya layar transaksi POS yang masih placeholder; stok dan pesanan Flutter memakai data API. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
+Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Perubahan setelah approval/reapproval, resolusi retur/kredit/pengganti, notifikasi stok minimum, refund, integrasi printer, voucher, invoice, pelaporan lanjutan, aset dan offline masih backlog. POS tunai, shift, struk digital dan ringkasan penjualan awal tersedia; QRIS/non-tunai belum tersedia. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
 
 Kebijakan konsinyasi, stok minus, offline, QRIS dan cakupan data mitra tetap mengikuti keputusan bisnis yang belum ditutup. Pembukaan/pengukusan memakai batch beku yang sama, bukan resep lintas SKU. Masa simpan siap jual tidak dihitung otomatis. Susut proses dicatat langsung bersama hasil fisik; susut terpisah menunggu review. Rollback migrasi kontrol stok ditolak setelah digunakan agar data tidak hilang.
 

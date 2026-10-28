@@ -6,13 +6,13 @@ import 'package:testyco_pos/features/inventory/data/inventory_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:testyco_pos/features/inventory/inventory_module.dart';
 import 'package:testyco_pos/core/modules/feature_module.dart';
-import 'package:testyco_pos/features/sales/sales_module.dart';
+
 import 'package:testyco_pos/design_system/templates/responsive_shell.dart';
 
 void main() {
   test('Registry rejects duplicate module identifiers', () {
     expect(
-      () => ModuleRegistry([SalesModule(), SalesModule()]),
+      () => ModuleRegistry([_ShellFixture(), _ShellFixture()]),
       throwsArgumentError,
     );
   });
@@ -23,7 +23,7 @@ void main() {
     addTearDown(tester.view.resetDevicePixelRatio);
     await tester.pumpWidget(
       MaterialApp(
-        home: ResponsiveShell(registry: ModuleRegistry([SalesModule()])),
+        home: ResponsiveShell(registry: ModuleRegistry([_ShellFixture()])),
       ),
     );
     expect(find.text('Kasir toko'), findsOneWidget);
@@ -40,7 +40,7 @@ void main() {
         MaterialApp(
           home: ResponsiveShell(
             registry: ModuleRegistry([
-              SalesModule(),
+              _ShellFixture(),
               InventoryModule(
                 repository: InventoryRepository(
                   ApiClient(
@@ -63,4 +63,15 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+}
+
+class _ShellFixture implements FeatureModule {
+  @override
+  String get id => 'fixture';
+  @override
+  String get label => 'POS';
+  @override
+  IconData get icon => Icons.point_of_sale;
+  @override
+  Widget buildPage() => const Center(child: Text('Kasir toko'));
 }

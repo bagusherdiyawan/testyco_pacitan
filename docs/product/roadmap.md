@@ -16,7 +16,7 @@ Gate: aplikasi fondasi dapat dijalankan dan diuji; batas implementasi tercatat; 
 
 ## Tahap 1 — Identitas, mitra, katalog
 
-Status implementasi: irisan identitas dan katalog per organisasi tersedia. Kontrak/consent mitra, paket/resep, gambar, price list efektif dan gate pilot belum selesai; katalog B2B pusat awal sudah tersedia. Tahap 2 telah mempunyai irisan awal; tahap 3–5 belum diimplementasikan.
+Status implementasi: irisan identitas dan katalog per organisasi tersedia. Kontrak/consent mitra, paket/resep, gambar, price list efektif dan gate pilot belum selesai; katalog B2B pusat awal sudah tersedia. Tahap 2 telah mempunyai irisan awal; tahap 3 mempunyai irisan POS tunai/shift awal; tahap 4–5 belum diimplementasikan.
 
 Cakupan: PRD 01–03, 13-SEC dan fondasi audit. Aktivasi mitra/toko, akun/peran/penugasan, katalog dengan konversi dan harga historis. Owner pusat, pimpinan mitra, kepala toko, gudang dan kasir diuji dengan izin positif/negatif.
 
@@ -31,6 +31,8 @@ Cakupan: PRD 04–05 dan 09. Pengajuan → persetujuan → pusat → picking →
 Gate: MVP-02/03/04/08/09 lulus; retry tidak menggandakan pergerakan; stok fisik pilot direkonsiliasi; perubahan sesudah approval memerlukan persetujuan ulang. SOP batch/susut/kurang stok ditetapkan (D-05).
 
 ## Tahap 3 — POS mobile/tablet dan shift, pilot terbatas
+
+Status: POS tunai online web/Flutter, draft server dapat dipulihkan, harga/konversi server, stok/kas atomik, struk digital, buka/tutup shift, kas masuk/keluar web dan ringkasan penjualan WIB tersedia. QRIS manual/otomatis, refund, promosi, printer fisik, offline dan gate pilot belum selesai. Lihat [panduan POS](../cash-pos.md).
 
 Cakupan: PRD 06–07, ringkasan PRD 11, notifikasi 13-NOT. Keranjang, satuan/paket, tunai dan pencatatan QRIS manual, transaksi idempoten, refund berizin, struk, kas masuk/keluar dan tutup shift. Layout tablet dapat memperlihatkan katalog dan keranjang bersamaan; mobile mempertahankan alur transaksi yang sama dengan navigasi sesuai ruang.
 

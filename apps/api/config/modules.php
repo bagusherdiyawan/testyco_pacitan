@@ -10,5 +10,7 @@ return ['providers' => [
     \App\Modules\Inventory\InventoryServiceProvider::class,
     \App\Modules\Ordering\OrderingServiceProvider::class,
     \App\Modules\Fulfillment\FulfillmentServiceProvider::class,
+    \App\Modules\Shifts\ShiftsServiceProvider::class,
+    \App\Modules\Sales\SalesServiceProvider::class,
     WorkspaceServiceProvider::class,
 ]];

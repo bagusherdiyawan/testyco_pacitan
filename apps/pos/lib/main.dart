@@ -9,6 +9,7 @@ import 'features/identity/presentation/store_picker_page.dart';
 import 'features/catalog/catalog_module.dart';
 import 'features/catalog/data/catalog_repository.dart';
 import 'features/sales/sales_module.dart';
+import 'features/sales/data/pos_repository.dart';
 import 'features/inventory/inventory_module.dart';
 import 'features/inventory/data/inventory_repository.dart';
 import 'features/ordering/ordering_module.dart';
@@ -100,7 +101,15 @@ class _TestycoAppState extends State<TestycoApp> {
                 repository: CatalogRepository(widget.session.api),
                 storeId: _store!.id,
               ),
-              SalesModule(),
+              if (_store!.canSell &&
+                  const bool.fromEnvironment(
+                    'FEATURE_SALES',
+                    defaultValue: true,
+                  ))
+                SalesModule(
+                  repository: PosRepository(widget.session.api),
+                  storeId: _store!.id,
+                ),
               if (const bool.fromEnvironment(
                 'FEATURE_INVENTORY',
                 defaultValue: true,

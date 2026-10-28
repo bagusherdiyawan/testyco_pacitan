@@ -191,9 +191,49 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base, 'POST', f'inventory/counts/{stale["id"]}/approve', {'operation_id':str(uuid.uuid4()),'version':1,'review_note':'Stale review must fail'}, lead_token, expected=409)
         html = opener.open(web + control_path).read().decode()
         assert 'Snapshot kedaluwarsa' in html
+        # Real cashier browser session: durable draft, cash sale/reprint, manager expense and closing.
+        cashier = {'name':'Smoke Cashier','email':'cashier@smoke.test','password':PASSWORD,'role':'cashier','store_ids':[store]}
+        api(base, 'POST', f'organizations/{org}/users', cashier, owner, 201)
+        cashier_token = api(base, 'POST', 'auth/login', {'email':cashier['email'],'password':PASSWORD,'device_name':'smoke'})['token']
+        opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        html = opener.open(web + '/login').read().decode()
+        csrf = re.search(r'name="_token" value="([^"]+)"', html).group(1)
+        opener.open(Request(web + '/login', data=urlencode({'_token':csrf,'email':cashier['email'],'password':PASSWORD}).encode())).read()
+        pos_path = f'/app/stores/{store}/pos'
+        html = opener.open(web + pos_path).read().decode()
+        open_path = pos_path + '/shifts'; opening = fields(html, open_path)
+        opening.update({'device_name':'Smoke Terminal','opening_cash':'100000'})
+        html = web_post(open_path, opening).read().decode()
+        cart_path = pos_path + '/intents'; cart = fields(html, cart_path)
+        cart.update({'lines[0][product_id]':local_product_id,'lines[0][unit]':'piece','lines[0][quantity]':'4','lines[0][stock]':batch['id']+':ready'})
+        response = web_post(cart_path, cart); html = response.read().decode(); intent_id = response.url.rsplit('/',1)[1]
+        assert 'Tinjau pembayaran' in html and 'Total Rp 12000' in html
+        assert web_post(cart_path, cart).url.endswith(intent_id)
+        pay_path = f'/app/pos/intents/{intent_id}/pay'; payment = fields(html, pay_path); payment['cash_received']='20000'
+        response = web_post(pay_path, payment); html=response.read().decode(); sale_id=response.url.rsplit('/',1)[1]
+        assert '12.000' in html and '8.000' in html and 'Cetak melalui browser' in html
+        assert web_post(pay_path,payment).url.endswith(sale_id)
+        sale = api(base,'GET',f'sales/{sale_id}',token=cashier_token)['data']
+        assert sale['total_amount']==12000 and sale['change_amount']==8000
+        current=api(base,'GET',f'stores/{store}/inventory/batches',token=cashier_token)['data'][0]
+        assert current['ready_pieces']==2 and current['quarantined_pieces']==16
+        entries=api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']
+        opener.open(web+f'/app/pos/sales/{sale_id}').read()
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==entries
+        shift=api(base,'GET',f'shifts/{sale["cash_shift_id"]}',token=cashier_token)['data']
+        assert shift['expected_cash']==112000 and shift['cash_sales']==12000
+        api(base,'POST',f'shifts/{shift["id"]}/cash-movements',{'operation_id':str(uuid.uuid4()),'version':shift['version'],'kind':'out','amount':2000,'category':'Operations','reason':'Physical drawer expense'},manager_token,201)
+        html=opener.open(web+f'/app/pos/shifts/{shift["id"]}').read().decode()
+        close_path=f'/app/pos/shifts/{shift["id"]}/close'; closing=fields(html,close_path)
+        closing.update({'counted_cash':'109000','closing_note':'Physical count differs by one thousand'})
+        html=web_post(close_path,closing).read().decode()
+        assert 'closed' in html and '-1000' in html
+        shift=api(base,'GET',f'shifts/{shift["id"]}',token=cashier_token)['data']
+        assert shift['expected_cash']==110000 and shift['difference_cash']==-1000 and shift['cash_sales']==12000
+        assert api(base,'GET',f'stores/{store}/pos/context',token=cashier_token)['data']['shift'] is None
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

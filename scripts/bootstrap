@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+if [[ ! -t 0 || ! -t 1 ]]; then echo 'Run scripts/bootstrap from an interactive terminal.' >&2; exit 2; fi
+scripts/composer api php artisan identity:bootstrap "$@"

@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo_dir=$(cd "$(dirname "$0")/.." && pwd)
+app=${1:?Usage: scripts/composer api|web arguments...}; shift
+[[ "$app" == api || "$app" == web ]] || exit 2
+interactive=()
+if [[ -t 0 && -t 1 ]]; then interactive=(-it); fi
+docker run --rm "${interactive[@]}" --user "$(id -u):$(id -g)" -e COMPOSER_HOME=/tmp/composer -e COMPOSER_CAFILE=/host-ca/ca-certificates.crt -v /etc/ssl/certs:/host-ca:ro -v "$repo_dir:/app" -w "/app/apps/$app" composer@sha256:b6dcd72ca98fa19d0e5b8476de179859704891fad06dd9e0b96833d4c430a5fc "$@"

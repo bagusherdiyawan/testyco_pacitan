@@ -1,0 +1,16 @@
+name: Validate foundation
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  foundation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/setup
+      - run: scripts/check
+      - run: docker compose up -d --wait
+      - run: python3 scripts/smoke.py
+      - run: python3 scripts/smoke-identity.py
+      - if: always()
+        run: docker compose down

@@ -1,0 +1,13 @@
+/attachments/
+.env
+**/.env
+**/vendor/
+**/node_modules/
+**/.dart_tool/
+**/build/
+**/.phpunit.result.cache
+**/database/*.sqlite
+**/storage/logs/*
+**/.flutter-plugins-dependencies
+
+/.cache/

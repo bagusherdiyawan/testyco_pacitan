@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo_dir=$(cd "$(dirname "$0")/.." && pwd)
+mkdir -p "$repo_dir/.cache/pub"
+docker run --rm -v "$repo_dir/.cache/pub:/root/.pub-cache" -v /etc/ssl/certs/ca-certificates.crt:/etc/ssl/certs/ca-certificates.crt:ro -v "$repo_dir:/app" -w /app/apps/pos ghcr.io/cirruslabs/flutter@sha256:d271a49ddd8ce1be6c7954f7eabe0e03766c8a1bf1430f0dce780888a21ed408 flutter "$@"

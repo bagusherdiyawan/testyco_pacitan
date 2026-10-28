@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+set -euo pipefail
+cd "$(dirname "$0")/.."
+scripts/composer api php artisan test
+scripts/composer web php artisan test
+scripts/flutter analyze
+scripts/flutter test

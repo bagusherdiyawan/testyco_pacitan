@@ -1,0 +1,2 @@
+@props(['orders'])
+<div class="module-grid">@forelse($orders as $order)<article class="panel"><x-atoms.badge>{{ $order['status'] }}</x-atoms.badge><h2>{{ $order['destination_name'] }}</h2><p>{{ $order['kind'] === 'internal_transfer' ? 'Transfer internal' : 'Pembelian mitra' }} · Rp {{ number_format($order['total_amount'],0,',','.') }}</p><p>{{ $order['id'] }}</p><a href="/app/orders/{{ $order['id'] }}">Detail pesanan</a></article>@empty<p>Belum ada pesanan sesuai akses Anda.</p>@endforelse</div><x-molecules.pagination :items="$orders" />

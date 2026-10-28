@@ -1,0 +1,29 @@
+name: testyco
+x-runtime: &runtime
+  image: composer@sha256:b6dcd72ca98fa19d0e5b8476de179859704891fad06dd9e0b96833d4c430a5fc
+  user: "1000:1000"
+  entrypoint: ["php"]
+  command: ["artisan", "serve", "--host=0.0.0.0", "--port=8000", "--no-reload"]
+  healthcheck:
+    test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:8000/up') === false ? 1 : 0);"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+services:
+  api:
+    <<: *runtime
+    working_dir: /app/apps/api
+    volumes: [".:/app"]
+    ports: ["127.0.0.1:8000:8000"]
+  web:
+    <<: *runtime
+    working_dir: /app/apps/web
+    volumes: [".:/app"]
+    ports: ["127.0.0.1:8080:8000"]
+    environment:
+      API_BASE_URL: http://api:8000
+      NO_PROXY: api,localhost,127.0.0.1
+      no_proxy: api,localhost,127.0.0.1
+    depends_on:
+      api:
+        condition: service_healthy

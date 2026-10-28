@@ -1,0 +1,166 @@
+"""Isolated HTTP integration smoke: temporary DB, disposable API/web containers.
+Does not seed or modify the normal development database. Requires Docker.
+"""
+import http.cookiejar
+import json
+import os
+import re
+import secrets
+import subprocess
+import tempfile
+import time
+import uuid
+from pathlib import Path
+from urllib.error import HTTPError, URLError
+from urllib.request import Request, build_opener, HTTPCookieProcessor, urlopen
+
+ROOT = Path(__file__).resolve().parents[1]
+IMAGE = 'composer@sha256:b6dcd72ca98fa19d0e5b8476de179859704891fad06dd9e0b96833d4c430a5fc'
+NAME = 'testyco-smoke-' + uuid.uuid4().hex[:10]
+PASSWORD = secrets.token_urlsafe(24) + 'Aa7'
+created = []
+
+def docker(*args):
+    return subprocess.check_output(['docker', *args], text=True, stderr=subprocess.STDOUT, env={**os.environ, 'TEST_PASSWORD': PASSWORD}).strip()
+
+def port(name):
+    return int(docker('port', name, '8000/tcp').rsplit(':', 1)[1])
+
+def ready(base):
+    deadline = time.monotonic() + 45
+    while time.monotonic() < deadline:
+        try:
+            with urlopen(base + '/up', timeout=2) as response:
+                if response.status == 200:
+                    return
+        except (OSError, TimeoutError):
+            time.sleep(.3)
+    raise RuntimeError('Service readiness timed out')
+
+def api(base, method, path, body=None, token=None, expected=200):
+    headers = {'Accept': 'application/json', 'Content-Type': 'application/json'}
+    if token:
+        headers['Authorization'] = 'Bearer ' + token
+    request = Request(base + '/api/v1/' + path, data=json.dumps(body).encode() if body is not None else None, headers=headers, method=method)
+    try:
+        response = urlopen(request, timeout=10)
+    except HTTPError as error:
+        response = error
+    with response:
+        payload = response.read()
+        if response.status != expected:
+            error=json.loads(payload)
+            raise AssertionError(f'{method} {path}: expected {expected}, got {response.status}; errors={error.get("errors", {})}')
+        return json.loads(payload) if payload else None
+
+try:
+    docker('network', 'create', NAME)
+    with tempfile.TemporaryDirectory(prefix='testyco-http-') as directory:
+        seed = Path(directory) / 'seed.php'
+        seed.write_text('''<?php
+require '/app/apps/api/vendor/autoload.php';
+$app = require '/app/apps/api/bootstrap/app.php';
+$app->make(Illuminate\\Contracts\\Console\\Kernel::class)->bootstrap();
+if (!app()->environment('testing')) throw new RuntimeException('Tests only');
+$org = App\\Modules\\Identity\\Infrastructure\\Organization::create(['name'=>'Smoke Pusat','type'=>'center']);
+$u = App\\Models\\User::create(['name'=>'Smoke Owner','email'=>'owner@smoke.test','password'=>getenv('TEST_PASSWORD')]);
+if (!Illuminate\\Support\\Facades\\Hash::check(getenv('TEST_PASSWORD'),$u->fresh()->password)) throw new RuntimeException('Test password hashing mismatch');
+Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organization_id'=>$org->id,'user_id'=>$u->id,'role'=>'owner']);
+''')
+        common = ['--user', f'{os.getuid()}:{os.getgid()}', '--network', NAME, '-p', '127.0.0.1::8000', '-v', f'{ROOT}:/app', '-e', 'APP_ENV=testing', '-e', 'APP_DEBUG=false', '-e', 'NO_PROXY=api,localhost,127.0.0.1', '-e', 'no_proxy=api,localhost,127.0.0.1']
+        api_name = NAME + '-api'
+        docker('run', '-d', '--name', api_name, '--network-alias', 'api', *common, '-e', 'DB_DATABASE=/tmp/smoke.sqlite', '-e', 'TEST_PASSWORD', '-v', directory + ':/fixtures:ro', '-w', '/app/apps/api', IMAGE, 'sh', '-c', 'touch /tmp/smoke.sqlite && php artisan migrate --force --no-interaction && php /fixtures/seed.php && php artisan serve --host=0.0.0.0 --port=8000 --no-reload')
+        created.append(api_name)
+        base = 'http://127.0.0.1:' + str(port(api_name))
+        ready(base)
+        owner = api(base, 'POST', 'auth/login', {'email':'owner@smoke.test','password':PASSWORD,'device_name':'smoke'})['token']
+        org = api(base, 'POST', 'organizations', {'name':'Smoke Mitra A'}, owner, 201)['data']['id']
+        other = api(base, 'POST', 'organizations', {'name':'Smoke Mitra B'}, owner, 201)['data']['id']
+        store = api(base, 'POST', f'organizations/{org}/stores', {'name':'Smoke Toko A1'}, owner, 201)['data']['id']
+        lead = {'name':'Smoke Lead','email':'lead@smoke.test','password':PASSWORD,'role':'partner_lead','store_ids':[]}
+        api(base, 'POST', f'organizations/{org}/users', lead, owner, 201)
+        lead_token = api(base, 'POST', 'auth/login', {'email':lead['email'],'password':PASSWORD,'device_name':'smoke'})['token']
+        product = {'sku':'AYAM-8','name':'Smoke Dimsum Ayam','condition':'frozen','pack_size':8,'portion_size':4,'retail_price':3000,'wholesale_price':18000}
+        local_product_id = api(base, 'POST', f'organizations/{org}/products', product, lead_token, 201)['data']['id']
+        api(base, 'GET', f'stores/{store}/catalog', token=owner, expected=403)
+        api(base, 'GET', f'organizations/{other}/users', token=lead_token, expected=403)
+        catalog = api(base, 'GET', f'stores/{store}/catalog', token=lead_token)
+        assert catalog['data'][0]['retail_price'] == 3000
+        assert 'wholesale_price' not in catalog['data'][0]
+        web_name = NAME + '-web'
+        docker('run', '-d', '--name', web_name, *common, '-e', 'APP_ENV=local', '-e', 'API_BASE_URL=http://api:8000', '-w', '/app/apps/web', IMAGE, 'php', 'artisan', 'serve', '--host=0.0.0.0', '--port=8000', '--no-reload')
+        created.append(web_name)
+        web = 'http://127.0.0.1:' + str(port(web_name))
+        ready(web)
+        opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        try:
+            opener.open(Request(web + '/login', data=b'email=missing%40smoke.test&password=invalid'))
+            raise AssertionError('Web accepted a POST without CSRF token')
+        except HTTPError as error:
+            assert error.code == 419, f'Missing CSRF expected 419, got {error.code}'
+        html = opener.open(web + '/login').read().decode()
+        csrf = re.search(r'name="_token" value="([^"]+)"', html).group(1)
+        from urllib.parse import urlencode
+        login_response = opener.open(Request(web + '/login', data=urlencode({'_token':csrf,'email':lead['email'],'password':PASSWORD}).encode()))
+        html = login_response.read().decode()
+        assert 'Smoke Mitra A' in html and 'Smoke Mitra B' not in html, f'Web login ended at {login_response.url}; heading={re.findall(r"<h1>([^<]*)</h1>",html)}; error={re.findall(r"<li>([^<]*)</li>",html)}'
+        html = opener.open(web + f'/app/organizations/{org}/catalog').read().decode()
+        assert 'Smoke Dimsum Ayam' in html and '18000' in html
+        html = opener.open(web + f'/app/organizations/{org}').read().decode()
+        assert 'Smoke Toko A1' in html and 'Smoke Lead' in html
+        # Supply workflow is tested through real web forms and API, using only this temporary DB.
+        from html.parser import HTMLParser
+        class Forms(HTMLParser):
+            def __init__(self):
+                super().__init__(); self.forms = {}; self.current = None
+            def handle_starttag(self, tag, attrs):
+                attrs = dict(attrs)
+                if tag == 'form':
+                    self.current = attrs.get('action'); self.forms[self.current] = {}
+                if tag == 'input' and self.current and attrs.get('type') == 'hidden':
+                    self.forms[self.current][attrs['name']] = attrs.get('value', '')
+            def handle_endtag(self, tag):
+                if tag == 'form': self.current = None
+        def fields(html, action):
+            parser = Forms(); parser.feed(html); return parser.forms[action]
+        def web_post(path, values):
+            return opener.open(Request(web + path, data=urlencode(values).encode()))
+        center = next(o['id'] for o in api(base, 'GET', 'organizations', token=owner)['data'] if o['type'] == 'center')
+        source = api(base, 'POST', f'organizations/{center}/stores', {'name':'Smoke Gudang','address':'Pacitan'}, owner, 201)['data']['id']
+        supplier_id = api(base, 'POST', f'organizations/{center}/products', product, owner, 201)['data']['id']
+        batch = api(base, 'POST', f'stores/{source}/inventory/intakes', {'operation_id':str(uuid.uuid4()),'product_id':supplier_id,'batch_code':'SMOKE-BATCH','expires_on':'2030-01-01','quantity_packs':20,'note':'Test physical warehouse receipt'}, owner, 201)['data']
+        html = opener.open(web + f'/app/stores/{store}/orders/new').read().decode()
+        create_path = f'/app/stores/{store}/orders'
+        data = fields(html, create_path)
+        data.update({'delivery_mode':'pickup','lines[0][supplier_product_id]':supplier_id,'lines[0][local_product_id]':local_product_id,'lines[0][quantity_packs]':'20'})
+        response = web_post(create_path, data); html = response.read().decode(); order_id = response.url.rsplit('/', 1)[1]
+        assert 'awaiting_approval' in html
+        assert api(base, 'GET', 'supply/orders', token=owner)['data'] == []
+        api(base, 'GET', f'orders/{order_id}', token=owner, expected=403)
+        approve_path = f'/app/orders/{order_id}/approve'
+        response = web_post(approve_path, fields(html, approve_path)); html = response.read().decode()
+        order = api(base, 'GET', f'orders/{order_id}', token=owner)['data']
+        assert order['status'] == 'approved' and order['total_amount'] == 360000
+        order = api(base, 'POST', f'orders/{order_id}/process', {'operation_id':str(uuid.uuid4()),'version':order['version'],'source_store_id':source}, owner)['data']
+        dispatch = {'operation_id':str(uuid.uuid4()),'version':order['version'],'handler':'Smoke warehouse','lines':[{'order_line_id':order['lines'][0]['id'],'allocations':[{'batch_id':batch['id'],'quantity_packs':20}]}]}
+        shipment = api(base, 'POST', f'orders/{order_id}/shipments', dispatch, owner, 201)['data']['shipment']
+        api(base, 'POST', f'orders/{order_id}/shipments', dispatch, owner, 201)
+        html = opener.open(web + f'/app/orders/{order_id}').read().decode()
+        receive_path = f'/app/orders/{order_id}/shipments/{shipment["id"]}/receive'
+        data = fields(html, receive_path)
+        data.update({'lines[0][good_packs]':'18','lines[0][damaged_packs]':'2','lines[0][condition_note]':'Two damaged packs from physical check'})
+        html = web_post(receive_path, data).read().decode()
+        assert 'partially_received' in html
+        web_post(receive_path, data).read()  # Same operation replay must not double stock.
+        batch = api(base, 'GET', f'stores/{store}/inventory/batches', token=lead_token)['data'][0]
+        assert batch['usable_pieces'] == 144 and batch['quarantined_pieces'] == 16
+        html = opener.open(web + f'/app/stores/{store}/operations').read().decode()
+        assert '144' in html and 'Karantina: 16' in html
+        api(base, 'GET', f'stores/{store}/inventory/batches', token=owner, expected=403)
+        api(base, 'POST', 'auth/logout', {}, lead_token, 204)
+        api(base, 'GET', 'auth/me', token=lead_token, expected=401)
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay and cross-tenant denial, logout')
+finally:
+    for name in reversed(created):
+        subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(['docker', 'network', 'rm', NAME], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

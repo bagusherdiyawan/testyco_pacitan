@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+set -euo pipefail
+repo_dir=$(cd "$(dirname "$0")/.." && pwd)
+cd "$repo_dir"
+python3 scripts/generate-tokens.py
+for app in api web; do
+  scripts/composer "$app" install --no-interaction --prefer-dist
+  if [[ ! -f "apps/$app/.env" ]]; then
+    cp "apps/$app/.env.example" "apps/$app/.env"
+    scripts/composer "$app" php artisan key:generate --no-interaction
+  fi
+done
+if [[ ! -f apps/api/database/database.sqlite ]]; then touch apps/api/database/database.sqlite; fi
+scripts/composer api php artisan migrate --force --no-interaction
+scripts/flutter pub get --enforce-lockfile

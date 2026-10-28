@@ -1,0 +1,33 @@
+<?php
+
+namespace App\Modules\Operations;
+
+use App\Modules\Identity\IdentityServiceProvider;
+use App\Modules\Identity\Presentation\ApiSession;
+use App\Modules\Operations\Presentation\OperationsController;
+use Illuminate\Support\Facades\Route;
+use Illuminate\Support\ServiceProvider;
+
+final class OperationsServiceProvider extends ServiceProvider
+{
+    public function boot(): void
+    {
+        if (! $this->app->getProvider(IdentityServiceProvider::class)) {
+            throw new \LogicException('Operations requires Identity.');
+        }
+        Route::middleware(['web', ApiSession::class])->group(function () {
+            $c = OperationsController::class;
+            Route::get('/app/stores/{store}/operations', [$c, 'store']);
+            Route::get('/app/stores/{store}/orders/new', [$c, 'createForm']);
+            Route::post('/app/stores/{store}/orders', [$c, 'create']);
+            Route::post('/app/stores/{store}/inventory/intakes', [$c, 'intake']);
+            Route::get('/app/supply/orders', [$c, 'inbox']);
+            Route::get('/app/orders/{order}', [$c, 'show']);
+            Route::get('/app/orders/{order}/edit', [$c, 'editForm']);
+            Route::post('/app/orders/{order}/amend', [$c, 'amend']);
+            Route::post('/app/orders/{order}/shipments', [$c, 'dispatch']);
+            Route::post('/app/orders/{order}/shipments/{shipment}/receive', [$c, 'receive']);
+            Route::post('/app/orders/{order}/{action}', [$c, 'transition'])->where('action', 'approve|reject|cancel|process');
+        });
+    }
+}

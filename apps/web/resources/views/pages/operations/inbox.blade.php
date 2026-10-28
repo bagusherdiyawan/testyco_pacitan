@@ -1,0 +1,1 @@
+<x-templates.console><h1>Pesanan masuk pusat</h1><p>Pengajuan yang belum disetujui pimpinan mitra tidak muncul di sini. Gudang hanya melihat lokasi yang ditugaskan.</p><x-organisms.order-list :orders="$orders" /></x-templates.console>

@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.6.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.7.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -46,9 +46,9 @@ Admin pusat dapat mengelola metadata onboarding mitra; hak ini tidak otomatis me
 
 Buka tautan **Pesanan dan stok** pada toko atau **Pesanan pusat** pada navigasi. Alur: pengajuan → persetujuan pimpinan → gudang sumber → alokasi batch/pengiriman → penerimaan aktual. Harga dan konversi disimpan sebagai snapshot; barang rusak masuk karantina. Toko sendiri memakai transfer internal bernilai komersial nol.
 
-Ikuti [panduan operasional](docs/supply-workflow.md) untuk persiapan SKU pusat/lokal, stock intake dan batas penanganan selisih. Flutter pada tahap ini membaca status/stock; aksi operasional memakai web.
+Ikuti [panduan operasional](docs/supply-workflow.md) untuk persiapan SKU pusat/lokal, stock intake dan batas penanganan selisih. Flutter membaca status pesanan/pengiriman; aksi supply tetap melalui web. Pengolahan stok dan opname/review kini juga tersedia pada Flutter bagi petugas berwenang.
 
-Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan, kukus dan proposal hitung fisik. Snapshot lama tidak dapat menimpa pergerakan baru; approval opname memerlukan peninjau berwenang yang berbeda dari pengusul. Ikuti [panduan kontrol stok](docs/stock-control.md).
+Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan, kukus dan proposal hitung fisik. Snapshot lama tidak dapat menimpa pergerakan baru; approval opname memerlukan peninjau berwenang yang berbeda dari pengusul. Pada Flutter, petugas berwenang membuka tab **Stok → Pengolahan dan opname** untuk buka/kukus, pengajuan dan review yang sama. Ikuti [panduan kontrol stok](docs/stock-control.md).
 
 ## Stok minimum
 

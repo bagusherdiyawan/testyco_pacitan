@@ -203,10 +203,16 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert observed['data'][0]['minimum_pieces'] == 140 and observed['data'][0]['version'] == 1
         assert observed['data'][0]['available_pieces'] == 142 and not observed['data'][0]['is_low']
         api(base, 'GET', f'stores/{store}/inventory/minimums', token=owner, expected=403)
+        # Native clients use an Inventory-owned capability endpoint, without Ordering coupling.
+        control_context = api(base, 'GET', f'stores/{store}/inventory/control-context', token=manager_token)['data']
+        assert control_context['can_process'] and control_context['can_propose'] and not control_context['can_review']
+        assert api(base, 'GET', f'stores/{store}/inventory/control-context', token=lead_token)['data']['can_review']
+        api(base, 'GET', f'stores/{store}/inventory/control-context', token=owner, expected=403)
         # Real cashier browser session: durable draft, cash sale/reprint, manager expense and closing.
         cashier = {'name':'Smoke Cashier','email':'cashier@smoke.test','password':PASSWORD,'role':'cashier','store_ids':[store]}
         api(base, 'POST', f'organizations/{org}/users', cashier, owner, 201)
         cashier_token = api(base, 'POST', 'auth/login', {'email':cashier['email'],'password':PASSWORD,'device_name':'smoke'})['token']
+        api(base, 'GET', f'stores/{store}/inventory/control-context', token=cashier_token, expected=403)
         opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
         html = opener.open(web + '/login').read().decode()
         csrf = re.search(r'name="_token" value="([^"]+)"', html).group(1)
@@ -251,7 +257,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',f'stores/{store}/pos/context',token=cashier_token)['data']['shift'] is None
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

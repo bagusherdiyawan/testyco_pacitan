@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Identity, Supply and Cash POS API",
-    "version": "0.6.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow."
+    "version": "0.7.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context."
   },
   "security": [
     {
@@ -6287,6 +6287,74 @@
           }
         }
       }
+    },
+    "/api/v1/stores/{store}/inventory/control-context": {
+      "get": {
+        "operationId": "stockControlContext",
+        "summary": "Scoped stock-control capabilities for web/native clients",
+        "description": "Inventory module endpoint independent of Ordering. Stock staff only: own organization owner/admin/partner lead or assigned store manager/warehouse. Cashier, unassigned user, other tenant and central onboarding override are denied. Inactive store history may still be read by authorized staff, but all mutation capabilities are false. can_review is the organization-level eligibility only; each count response still enforces different actor, status and snapshot. No prices, tokens or account details are returned. Flags are UI hints, never authorization for a mutation.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StockControlContext"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/role/store assignment denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9260,6 +9328,38 @@
           "can_manage",
           "store",
           "observed_at"
+        ]
+      },
+      "StockControlContext": {
+        "type": "object",
+        "properties": {
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "can_process": {
+            "type": "boolean"
+          },
+          "can_propose": {
+            "type": "boolean"
+          },
+          "can_review": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "store_id",
+          "store_name",
+          "active",
+          "can_process",
+          "can_propose",
+          "can_review"
         ]
       }
     }

@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../data/inventory_repository.dart';
 import '../domain/stock_batch.dart';
 import 'stock_minimum_page.dart';
+import 'stock_control_page.dart';
+import '../data/stock_control_repository.dart';
 import '../../../design_system/molecules/error_panel.dart';
 import '../../../design_system/molecules/stock_batch_card.dart';
 
@@ -9,10 +11,12 @@ class InventoryPage extends StatefulWidget {
   const InventoryPage({
     required this.repository,
     required this.storeId,
+    this.canControl = false,
     super.key,
   });
   final InventoryRepository repository;
   final String storeId;
+  final bool canControl;
   @override
   State<InventoryPage> createState() => _InventoryPageState();
 }
@@ -64,10 +68,28 @@ class _InventoryPageState extends State<InventoryPage> {
           ),
         ),
       ),
+      if (widget.canControl)
+        TextButton.icon(
+          icon: const Icon(Icons.edit_note),
+          label: const Text('Pengolahan dan opname'),
+          onPressed: () async {
+            await Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => StockControlPage(
+                  repository: StockControlRepository(widget.repository.api),
+                  storeId: widget.storeId,
+                ),
+              ),
+            );
+            if (mounted) {
+              _reload();
+            }
+          },
+        ),
       const Padding(
         padding: EdgeInsets.symmetric(horizontal: 16),
         child: Text(
-          'Buka kemasan, kukus dan opname dilakukan melalui web operasional. Masa simpan siap jual mengikuti SOP, bukan tanggal kedaluwarsa kemasan.',
+          'Pengolahan dan opname tersedia bagi petugas berwenang melalui tombol kontrol stok atau web. Masa simpan siap jual mengikuti SOP, bukan tanggal kedaluwarsa kemasan.',
         ),
       ),
       Expanded(

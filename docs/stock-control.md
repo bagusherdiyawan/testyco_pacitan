@@ -1,6 +1,6 @@
 # Pengolahan, susut dan stok opname
 
-Cakupan PRD 05-COOK/COUNT/MOV. Web memiliki aksi; Flutter menampilkan saldo per keadaan dari API. POS tunai kini menggunakan ledger yang sama; lihat [panduan POS](cash-pos.md). Kontrol mutu/SOP penuh belum tersedia.
+Cakupan PRD 05-COOK/COUNT/MOV. Web dan Flutter mobile/tablet memiliki aksi buka/kukus, pengajuan opname/susut dan review melalui API yang sama. POS tunai kini menggunakan ledger yang sama; lihat [panduan POS](cash-pos.md). Kontrol mutu/SOP penuh belum tersedia.
 
 ## Keadaan stok per batch
 
@@ -47,6 +47,24 @@ Jika ada pergerakan, jangan memaksa saldo lama menimpa saldo baru. Muat ulang, p
 
 Semua mutasi memakai UUID operasi. Replay identik dengan UUID/aktor/scope sama mengembalikan hasil awal; payload berbeda dengan UUID lama ditolak. Versi pengajuan juga wajib saat approve/reject/cancel. Jangan mengganti UUID hanya karena respons jaringan terlambat.
 
+## Flutter mobile/tablet
+
+Buka tab **Stok → Pengolahan dan opname**. Tombol hanya ditampilkan bagi role stok (owner/admin/partner_lead/store_manager/warehouse); API tetap memeriksa membership dan assignment. Kasir tidak mendapat mutasi stok ini. `FEATURE_INVENTORY=false` mematikan modul stok saat build. Halaman mengambil capability context dari Inventory sendiri, tanpa bergantung pada modul Ordering.
+
+1. Pilih snapshot batch dan periksa saldo/revisi serta isi kemasan historis.
+2. Pilih buka kemasan atau kukus untuk batch beku. Isi jumlah fisik dan alasan; hasil kukus harus diisi sendiri, termasuk nol bila seluruh hasil gagal.
+3. Untuk opname/susut pilih keadaan yang dihitung dan isi **jumlah fisik tersisa dalam biji**, bukan angka selisih. Nilai utuh harus kelipatan isi kemasan. Karantina dapat dihitung, bukan menjadi sumber pengukusan atau penjualan.
+4. Tinjau ringkasan dan konfirmasi pencatatan. Pengajuan opname/susut belum mengubah saldo. Riwayat menampilkan sistem, fisik, selisih, snapshot dan status.
+5. Peninjau yang berbeda dapat menyetujui atau menolak dengan catatan. Pengusul hanya dapat membatalkan sendiri. Snapshot stale tidak mempunyai tombol setujui; penolakan/pembatalan tetap dapat mencatat alasan hitung ulang.
+
+Setiap refresh membuang pilihan snapshot. Pilih batch lagi dan periksa/hitung kembali sebelum mengirim; angka fisik lama tidak diterapkan otomatis ke revisi baru. Konflik 409 mengunci tindakan sampai refresh berhasil. Jika refresh gagal, saldo lama tidak digunakan untuk mutasi baru. Toko nonaktif hanya menampilkan riwayat bagi petugas yang tetap berwenang.
+
+Jika respons mutasi hilang, pertahankan halaman dan gunakan **Ulangi operasi yang sama**. Controller menyimpan path, UUID dan body secara utuh di memori; tindakan baru serta navigasi kembali ditahan selama hasil belum diketahui. Retry identik tidak menggandakan proses/pengajuan/review. Bila server sudah mengonfirmasi sukses tetapi refresh gagal, aplikasi menyatakan operasi tersimpan dan meminta muat ulang, tanpa membuat retry mutasi baru.
+
+Ini bukan offline atau penyimpanan antrean yang tahan restart. Jika aplikasi ditutup paksa/perangkat mati/sesi berganti saat hasil belum diketahui, UUID di memori dapat hilang. Login kembali dan rekonsiliasi batch, riwayat proses/pengajuan serta audit melalui petugas berwenang sebelum mencatat ulang; jangan menganggap proses gagal hanya karena struk/hasil tidak terlihat di perangkat. Pemulihan otomatis lintas restart belum tersedia. Kebutuhan secure storage/antrean offline tetap menunggu keputusan terpisah.
+
+Komponen atomic `StockNumberField`, `StockBatchCard` dan `StockCountCard` menangani tampilan; controller mengelola snapshot dan retry. Perhitungan ledger, izin dan validasi final berada di API. Alur diuji sebagai widget mobile/tablet, bukan build Android/iOS atau UAT perangkat fisik.
+
 ## Batas
 
-Belum ada pembalikan pengolahan, relokasi SKU, pelepasan karantina melalui workflow mutu, rasio/ambang susut otomatis, masa simpan siap jual, push notifikasi minimum, FEFO otomatis, refund/QRIS, retur/kredit atau offline. Aksi Flutter masih tahap berikutnya; gunakan web untuk proses dan review. PostgreSQL/concurrency multi-koneksi, backup/restore dan UAT belum diverifikasi.
+Belum ada pembalikan pengolahan, relokasi SKU, pelepasan karantina melalui workflow mutu, rasio/ambang susut otomatis, masa simpan siap jual, push notifikasi minimum, FEFO otomatis, refund/QRIS, retur/kredit atau offline. Aksi Flutter kini tersedia bagi petugas berwenang. Pengolahan/review tetap online; tidak ada antrean operasi lokal yang persisten. PostgreSQL/concurrency multi-koneksi, backup/restore dan UAT belum diverifikasi.

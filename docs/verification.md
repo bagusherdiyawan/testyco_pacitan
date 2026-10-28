@@ -4,17 +4,17 @@ Dijalankan pada lingkungan onboarding, 28 Oktober 2026. Hasil lokal, bukan UAT b
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 108 tes lulus, 734 assertions |
+| API PHPUnit | 110 tes lulus, 747 assertions |
 | Web PHPUnit | 43 tes lulus, 171 assertions |
-| Flutter | 29 tes lulus; peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 180 tes lulus |
+| Flutter | 42 tes lulus; kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 195 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
 | Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.6.0 | 61 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.7.0 | 62 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -47,7 +47,7 @@ Identity/token/password/revocation, scope organisasi/store, audit tanpa kredensi
 
 Compose mempertahankan environment override dengan --no-reload dan memakai NO_PROXY/no_proxy untuk API internal. CA host dipasang read-only; TLS/checksum tidak dimatikan. Lockfile dependensi tetap dipertahankan.
 
-Aksi proses/submit/review melalui web; Flutter masih membaca status/saldo. POS tunai/shift tersedia pada web/Flutter. Belum ada QRIS/refund, printer fisik, retur/kredit/penggantian, pembalikan proses, aturan masa simpan siap jual, pelepasan karantina bermutu, ambang susut, push notifikasi minimum, FEFO otomatis, billing atau offline. Kontrol dua pelaku masih perlu validasi operasional/UAT. PostgreSQL/concurrency, backup/restore dan perangkat nyata tetap menjadi gate pilot.
+Aksi proses/submit/review kini tersedia melalui web dan Flutter bagi petugas berwenang. POS tunai/shift tersedia pada web/Flutter. Belum ada QRIS/refund, printer fisik, retur/kredit/penggantian, pembalikan proses, aturan masa simpan siap jual, pelepasan karantina bermutu, ambang susut, push notifikasi minimum, FEFO otomatis, billing atau offline. Kontrol dua pelaku masih perlu validasi operasional/UAT. PostgreSQL/concurrency, backup/restore dan perangkat nyata tetap menjadi gate pilot.
 
 ## Bukti POS tunai dan shift
 
@@ -77,3 +77,15 @@ Hasil di atas bukan bukti concurrency PostgreSQL, UAT kasir, klik interaktif bro
 - Smoke HTTP nyata: pengelola mengatur ambang 140 melalui form web ber-CSRF; replay tetap version 1. Saldo 142 tidak rendah, penjualan 4 membuat 138 dengan shortfall 2. Kasir melihat warning di web/API tetapi konfigurasi ditolak; karantina 16 tidak masuk total.
 
 Suite akhir: 108 API/734 assertions, 43 web/171 assertions dan 29 Flutter; analyzer bersih. Tes ini memverifikasi peringatan saat halaman dimuat, bukan event/inbox/push notification, concurrency PostgreSQL atau UAT ambang bisnis. Kontrak 0.6.0 diperiksa 61 operation ID unik, local refs/path parameters konsisten; operasi/schema lama tetap sama. Validator OpenAPI eksternal belum dijalankan.
+
+## Bukti kontrol stok native
+
+- API control-context memberi capability proses/pengajuan kepada petugas stok dan eligibility review sesuai organisasi; semua capability mutasi false saat toko nonaktif. Kasir, pengguna tanpa assignment, mitra lain dan owner pusat tanpa membership mitra ditolak. Respons tidak mengandung harga atau detail akun.
+- Controller Flutter diuji membuka 1 kemasan isi 10, kukus dengan hasil aktual termasuk nol/seluruh hasil gagal, revisi snapshot dan pemisahan stok utuh/terbuka/siap/susut. Invalid/fractional/negatif/berlebih, bucket waste, hitungan utuh bukan kelipatan, susut tanpa pengurangan, alasan kosong dan batch non-beku tidak mengirim mutasi.
+- Setelah response hilang sesudah commit, UUID/path/body tetap identik pada retry. Tindakan baru ditahan; refresh tidak mengganti pending request; satu commit menghasilkan satu perubahan. Widget menampilkan retry dan menahan pop selama hasil belum diketahui.
+- Snapshot 409 membuang pilihan dan menonaktifkan mutasi sampai reload berhasil. Reload tidak memajukan expected_revision dari isian lama secara diam-diam. POST sukses tetapi refresh gagal menyatakan operasi sudah tersimpan, tanpa meninggalkan retry atau memakai saldo stale.
+- Opname dikirim sebagai fisik tersisa, bukan delta/status. Self review dan stale approval ditolak; reject/cancel memakai versi asli. Dialog review wajib mengirim catatan, tanpa amount/count yang dapat menimpa proposal.
+- Widget 390px/1200px menjalankan pilih batch → buka 1 kemasan → kukus 6 hasil 5 → ajukan hitung fisik. Proposal belum mengubah stok. Widget lain memverifikasi approval berizin, rejection stale, histori status dan retry identik setelah hasil jaringan tidak diketahui.
+- Smoke HTTP nyata memverifikasi context pengelola vs peninjau dan denial pusat/kasir, bersama alur supply/proses/count/penjualan yang sudah ada. Ini bukan eksekusi aplikasi Flutter pada perangkat Android/iOS.
+
+Suite akhir irisan native: 110 API/747 assertions, 43 web/171 assertions, 42 Flutter; analyzer bersih, HTTP smoke dan metadata lulus. OpenAPI 0.7.0 mempunyai 62 operation ID; schema/path refs diperiksa secara lokal, bukan validator eksternal. Operasi native masih online dengan pending request dalam memori halaman; terminasi paksa memerlukan rekonsiliasi manual sebelum mencatat ulang. Offline/persistensi operasi lintas restart, concurrency PostgreSQL, backup/restore dan UAT perangkat tetap belum terverifikasi.

@@ -14,6 +14,13 @@ final class StockControlController
 {
     public function __construct(private StockAccess $access, private StockControl $control) {}
 
+    public function context(Request $r, string $store): mixed
+    {
+        $s = $this->access->staff($r->user(), $store);
+
+        return ['data' => ['store_id' => $s->id, 'store_name' => $s->name, 'active' => $s->active, 'can_process' => $s->active, 'can_propose' => $s->active, 'can_review' => $s->active && $this->access->canReview($r->user(), $s)]];
+    }
+
     public function processes(Request $r, string $store): mixed
     {
         $this->access->staff($r->user(), $store);

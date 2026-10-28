@@ -84,7 +84,7 @@ Kontrol awal memakai dua pelaku berbeda: kepala toko/gudang/pimpinan boleh mengu
 
 Stok opname biasa dapat menambah/mengurangi sesuai hitungan disetujui tanpa menyimpulkan penyebab susut. Proposal waste hanya mengurangi bucket dan menambah counter waste. Counter waste tidak dapat dihitung ulang/dihapus melalui opname. Nilai fisik sama dengan sistem menghasilkan catatan review tanpa pergerakan ledger palsu. Seluruh mutasi tetap memakai UUID idempoten dan audit.
 
-Web menyediakan proses/submit/review dan riwayat; Flutter menampilkan counter dan revisi baru. Workflow native Flutter, pelepasan karantina, pembalikan proses, kebijakan masa simpan siap jual dan ambang susut otomatis belum tersedia. Masa simpan hasil kukus tidak diturunkan dari expiry kemasan. PostgreSQL/concurrency dan pilot UAT tetap belum diverifikasi.
+Web menyediakan proses/submit/review dan riwayat; Flutter menampilkan counter dan revisi baru. Workflow native Flutter kini tersedia (ADR-012). Pelepasan karantina, pembalikan proses, kebijakan masa simpan siap jual dan ambang susut otomatis belum tersedia. Masa simpan hasil kukus tidak diturunkan dari expiry kemasan. PostgreSQL/concurrency dan pilot UAT tetap belum diverifikasi.
 
 ## ADR-010: POS tunai, draft server dan kas shift
 
@@ -105,3 +105,13 @@ Inventory memiliki inventory_minimums unik per toko/SKU, nullable threshold, ver
 Tidak ada ambang bawaan. Null mematikan tanpa menghapus riwayat; zero adalah threshold aktif. Peringatan strict available < minimum dengan available = total usable + opened + ready seluruh batch toko/SKU; quarantine/waste dikecualikan. SKU aktif tanpa batch bernilai nol. Jumlah ini bukan stok siap saji, pemeriksaan expiry atau sertifikasi mutu. Pengelola organisasi/store yang berwenang mengubah, kasir/gudang assigned hanya membaca; tidak ada onboarding override pusat.
 
 Peringatan adalah read projection saat dimuat, bukan event terpersistensi yang membuktikan penyeberangan ambang. UI memperlihatkan breakdown dan tombol refresh; web mencari/paginasi, Flutter dapat melihat low-only atau semua SKU. Shared atomic molecule menampilkan nilai server. Reliability tetap planned: push/email/inbox/read receipt, auto-reorder dan prediksi belum diimplementasikan. Tiap halaman live dapat berubah antarpagination. PostgreSQL concurrency serta UAT tetap gate tersendiri.
+
+## ADR-012: kontrol stok native dan pemeliharaan snapshot
+
+Inventory mengekspos control-context sendiri agar Flutter tidak bergantung pada Ordering untuk capability. Role UI hanya menentukan navigasi; context dan semua mutasi tetap memakai StockAccess server. Context toko nonaktif menutup seluruh capability mutasi, sementara riwayat tetap berizin. Count response menentukan can_review/can_cancel per aktor; is_stale menutup approval tetapi tetap memungkinkan reject/cancel berizin.
+
+Flutter memisahkan DTO stok/count/process, StockControlRepository, controller dan page/form. Molecules/organisms menerima nilai/callback tampilan. Setiap pemilihan batch menyimpan snapshot utuh beserta revisinya. Refresh membuang pilihan, memaksa pemeriksaan fisik baru; konflik tidak mengganti expected_revision diam-diam. Load gagal menutup mutasi dari data lama.
+
+PendingStockOperation menyimpan path/body/UUID immutable di memori ketika hasil POST tidak diketahui. Tindakan baru tidak mengganti pending request; retry mengirim ulang identik. UI menahan pop selama busy/pending. Sukses POST dan kegagalan refresh dibedakan agar sukses tidak dianggap perlu proses baru. Idempotensi server dan revisi batch tetap guard final, bukan disable tombol saja.
+
+Tidak ada persistensi operasi native lintas restart atau antrean offline. Setelah terminasi paksa ketika hasil belum diketahui, rekonsiliasi saldo/riwayat/audit diperlukan sebelum mencatat ulang. Penyimpanan aman perangkat dan aturan offline tidak ditetapkan oleh irisan ini. Ledger, SOP mutu dan otorisasi independent-review tidak berubah. Widget mobile/tablet diverifikasi; build/perangkat fisik dan PostgreSQL concurrency masih belum diverifikasi.

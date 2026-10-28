@@ -25,6 +25,7 @@ final class InventoryServiceProvider extends ServiceProvider
             Route::get('stores/{store}/inventory/minimums', [StockMinimumController::class, 'index']);
             Route::post('stores/{store}/inventory/minimums/{product}', [StockMinimumController::class, 'configure']);
             $control = StockControlController::class;
+            Route::get('stores/{store}/inventory/control-context', [$control, 'context']);
             Route::get('stores/{store}/inventory/processes', [$control, 'processes']);
             Route::post('stores/{store}/inventory/processes', [$control, 'process']);
             Route::get('stores/{store}/inventory/counts', [$control, 'counts']);

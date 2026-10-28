@@ -391,4 +391,22 @@ class StockControlTest extends TestCase
         $this->assertDatabaseCount('inventory_processes', 1);
         $this->assertSame(10, $this->batch->fresh()->opened_pieces);
     }
+
+    public function test_native_control_context_is_scoped_and_reports_review_permission_without_prices(): void
+    {
+        $url = '/api/v1/stores/'.$this->store->id.'/inventory/control-context';
+        $this->act($this->manager)->getJson($url)->assertOk()->assertExactJson(['data' => ['store_id' => $this->store->id, 'store_name' => 'A1', 'active' => true, 'can_process' => true, 'can_propose' => true, 'can_review' => false]]);
+        $this->act($this->lead)->getJson($url)->assertOk()->assertJsonPath('data.can_review', true);
+        $this->store->update(['active' => false]);
+        $this->act($this->lead)->getJson($url)->assertOk()->assertJsonPath('data.active', false)->assertJsonPath('data.can_process', false)->assertJsonPath('data.can_propose', false)->assertJsonPath('data.can_review', false);
+    }
+
+    public function test_native_context_denies_cashier_cross_tenant_unassigned_and_onboarding_override(): void
+    {
+        $center = Organization::create(['name' => 'Pusat', 'type' => 'center']);
+        $url = '/api/v1/stores/'.$this->store->id.'/inventory/control-context';
+        foreach ([$this->cashier, $this->otherLead, $this->user($this->org, 'warehouse'), $this->user($center, 'owner')] as $actor) {
+            $this->act($actor)->getJson($url)->assertForbidden();
+        }
+    }
 }

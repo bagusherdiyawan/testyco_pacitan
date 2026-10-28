@@ -4,9 +4,14 @@ import 'data/inventory_repository.dart';
 import 'presentation/inventory_page.dart';
 
 class InventoryModule implements FeatureModule {
-  const InventoryModule({required this.repository, required this.storeId});
+  const InventoryModule({
+    required this.repository,
+    required this.storeId,
+    this.canControl = false,
+  });
   final InventoryRepository repository;
   final String storeId;
+  final bool canControl;
   @override
   String get id => 'inventory';
   @override
@@ -14,5 +19,9 @@ class InventoryModule implements FeatureModule {
   @override
   IconData get icon => Icons.inventory_2_outlined;
   @override
-  Widget buildPage() => InventoryPage(repository: repository, storeId: storeId);
+  Widget buildPage() => InventoryPage(
+    repository: repository,
+    storeId: storeId,
+    canControl: canControl,
+  );
 }

@@ -116,6 +116,7 @@ class _TestycoAppState extends State<TestycoApp> {
               ))
                 InventoryModule(
                   repository: InventoryRepository(widget.session.api),
+                  canControl: _store!.canControlStock,
                   storeId: _store!.id,
                 ),
               if (_store!.canOrder &&

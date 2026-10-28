@@ -1,5 +1,7 @@
 class StockBatch {
   const StockBatch({
+    this.id = '',
+    this.condition = '',
     required this.sku,
     required this.name,
     required this.code,
@@ -12,10 +14,12 @@ class StockBatch {
     this.waste = 0,
     this.revision = 0,
   });
-  final String sku, name, code, expiry;
+  final String id, condition, sku, name, code, expiry;
   final int packSize, usable, quarantined, opened, ready, waste, revision;
   int get available => usable + opened + ready;
   factory StockBatch.fromJson(Map<String, dynamic> j) => StockBatch(
+    id: j['id'] as String? ?? '',
+    condition: j['condition'] as String? ?? '',
     sku: j['sku'] as String,
     name: j['name'] as String,
     code: j['batch_code'] as String,

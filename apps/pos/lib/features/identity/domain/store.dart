@@ -9,6 +9,13 @@ class AssignedStore {
   final String name;
   final bool active;
   final String? role;
+  bool get canControlStock => const {
+    'owner',
+    'admin',
+    'partner_lead',
+    'store_manager',
+    'warehouse',
+  }.contains(role);
   bool get canSell => const {
     'owner',
     'admin',

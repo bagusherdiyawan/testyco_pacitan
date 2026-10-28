@@ -9,5 +9,6 @@ return ['providers' => [
     CatalogServiceProvider::class,
     \App\Modules\Operations\OperationsServiceProvider::class,
     \App\Modules\Pos\PosServiceProvider::class,
+    \App\Modules\Reporting\ReportingServiceProvider::class,
     WorkspaceServiceProvider::class,
 ]];

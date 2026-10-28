@@ -11,7 +11,7 @@ return ['modules' => [
     ['id' => 'promotions', 'name' => 'Voucher dan promosi', 'prd' => '08', 'status' => 'planned'],
     ['id' => 'fulfillment', 'name' => 'Pengiriman dan penerimaan', 'prd' => '09', 'status' => 'available'],
     ['id' => 'billing', 'name' => 'Tagihan dan pembayaran', 'prd' => '10', 'status' => 'planned'],
-    ['id' => 'reporting', 'name' => 'Laporan kinerja', 'prd' => '11', 'status' => 'planned'],
+    ['id' => 'reporting', 'name' => 'Laporan kinerja', 'prd' => '11', 'status' => 'available'],
     ['id' => 'assets', 'name' => 'Freezer dan fasilitas', 'prd' => '12', 'status' => 'planned'],
     ['id' => 'reliability', 'name' => 'Keandalan dan notifikasi', 'prd' => '13', 'status' => 'planned'],
 ]];

@@ -13,6 +13,8 @@ import 'features/sales/data/pos_repository.dart';
 import 'features/inventory/inventory_module.dart';
 import 'features/inventory/data/inventory_repository.dart';
 import 'features/ordering/ordering_module.dart';
+import 'features/reporting/reporting_module.dart';
+import 'features/reporting/data/cash_report_repository.dart';
 import 'features/ordering/data/orders_repository.dart';
 import 'design_system/templates/responsive_shell.dart';
 import 'design_system/tokens.dart';
@@ -126,6 +128,16 @@ class _TestycoAppState extends State<TestycoApp> {
                   ))
                 OrderingModule(
                   repository: OrdersRepository(widget.session.api),
+                  storeId: _store!.id,
+                ),
+              if (_store!.canViewReports &&
+                  const bool.fromEnvironment(
+                    'FEATURE_REPORTING',
+                    defaultValue: true,
+                  ))
+                ReportingModule(
+                  repository: CashReportRepository(widget.session.api),
+                  organizationId: _store!.organizationId,
                   storeId: _store!.id,
                 ),
             ]),

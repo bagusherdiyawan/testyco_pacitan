@@ -44,3 +44,5 @@ Web menyediakan riwayat struk berhalaman serta ringkasan penjualan per tanggal k
 Belum ada QRIS/transfer, promo/voucher, refund/void penjualan lunas, printer fisik, perangkat terdaftar, shift bersama/serah-terima, penutupan paksa oleh pengelola, persetujuan selisih kas, ekspor atau offline. Dynamic module melalui registry/flag saat build, bukan plugin executable yang diunduh. Sales membutuhkan Shifts, Catalog, Inventory dan Identity. Flag UI tidak menggantikan authorization API.
 
 Tes development memakai SQLite; concurrency PostgreSQL multi-koneksi, backup/restore, perangkat Android/iOS/printer dan UAT bisnis belum diverifikasi. Jangan memakai alur ini untuk transaksi nyata sebelum gate pilot dan SOP stok/keuangan selesai.
+
+Laporan tunai lintas toko, rincian produk historis dan ekspor CSV kini tersedia melalui modul Reporting; lihat [panduan laporan](cash-reporting.md).

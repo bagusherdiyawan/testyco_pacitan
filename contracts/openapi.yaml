@@ -1,9 +1,9 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "Testyco Identity, Supply and Cash POS API",
-    "version": "0.7.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context."
+    "title": "Testyco Operations API",
+    "version": "0.8.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report."
   },
   "security": [
     {
@@ -6355,6 +6355,320 @@
           }
         }
       }
+    },
+    "/api/v1/organizations/{organization}/reports/cash-sales": {
+      "get": {
+        "operationId": "cashReportSummary",
+        "summary": "Cash sales totals and authorized-store comparison",
+        "description": "Owner/admin/partner lead in own active organization, or store manager limited to assigned stores. Cashier/warehouse denied; central onboarding does not override tenant access. Inactive stores retain authorized history. Scope is completed IDR cash POS sales in [from,to), not draft intents, cash movements, B2B, transfers, debt or unsupported refunds/non-cash. Each request is a live observation, not a cross-request snapshot. Private/no-store. Totals derive from the same grouped query as by_store. Authorized empty stores have zero metrics. Store labels are current metadata; sale CSV preserves historical labels.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            },
+            "description": "Optional authorized store; omission aggregates only stores currently authorized in this organization."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CashReportSummary"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization role or store filter outside authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid period/filter or export exceeds 10000 transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/reports/cash-sales/products": {
+      "get": {
+        "operationId": "cashReportProducts",
+        "summary": "Historical product breakdown in base pieces",
+        "description": "Owner/admin/partner lead in own active organization, or store manager limited to assigned stores. Cashier/warehouse denied; central onboarding does not override tenant access. Inactive stores retain authorized history. Scope is completed IDR cash POS sales in [from,to), not draft intents, cash movements, B2B, transfers, debt or unsupported refunds/non-cash. Each request is a live observation, not a cross-request snapshot. Private/no-store. Groups by product ID, snapshot SKU/name/condition. Master changes do not rewrite history. sold_pieces uses quantity times historical pieces_per_unit. Product gross is line total; no allocation of discounts/refunds. Per-product distinct receipt counts must not be summed as total receipts. 50 rows per page.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            },
+            "description": "Optional authorized store; omission aggregates only stores currently authorized in this organization."
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CashReportProducts"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization role or store filter outside authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid period/filter or export exceeds 10000 transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/reports/cash-sales/export": {
+      "get": {
+        "operationId": "exportCashSalesCsv",
+        "summary": "Bounded private CSV of stored cash transactions",
+        "description": "Owner/admin/partner lead in own active organization, or store manager limited to assigned stores. Cashier/warehouse denied; central onboarding does not override tenant access. Inactive stores retain authorized history. Scope is completed IDR cash POS sales in [from,to), not draft intents, cash movements, B2B, transfers, debt or unsupported refunds/non-cash. Each request is a live observation, not a cross-request snapshot. Private/no-store. One row per receipt, historical store/cashier names, UTC ISO-8601 time, integer IDR gross/discount/net/tender/change. UTF-8 BOM and standard CSV quoting. Formula-like text prefixes are escaped with apostrophe, including whitespace/control and full-width prefixes; numeric money remains numeric. Query materializes at most 10001 rows and rejects over 10000 before streaming instead of truncating. Prepared exports are audited with period, allowed stores and row count, without receipt content. This is preparation evidence, not proof the client completed a download.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            },
+            "description": "Optional authorized store; omission aggregates only stores currently authorized in this organization."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "UTF-8 CSV attachment; private/no-store, nosniff",
+            "content": {
+              "text/csv": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization role or store filter outside authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid period/filter or export exceeds 10000 transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -9360,6 +9674,250 @@
           "can_process",
           "can_propose",
           "can_review"
+        ]
+      },
+      "CashReportMetrics": {
+        "type": "object",
+        "properties": {
+          "transaction_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gross_sales": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "discount_amount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "net_sales": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "transaction_count",
+          "gross_sales",
+          "discount_amount",
+          "net_sales"
+        ]
+      },
+      "CashReportStore": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "active"
+        ]
+      },
+      "CashReportStoreMetrics": {
+        "type": "object",
+        "properties": {
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "transaction_count": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gross_sales": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "discount_amount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "net_sales": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "store_id",
+          "store_name",
+          "active",
+          "transaction_count",
+          "gross_sales",
+          "discount_amount",
+          "net_sales"
+        ]
+      },
+      "CashReportProduct": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "sold_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "gross_sales": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "transaction_count": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "product_id",
+          "sku",
+          "name",
+          "condition",
+          "sold_pieces",
+          "gross_sales",
+          "transaction_count"
+        ]
+      },
+      "CashReportSummary": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "available_stores": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CashReportStore"
+            }
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "const": "IDR"
+          },
+          "scope": {
+            "const": "server_confirmed_cash_sales"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "totals": {
+            "$ref": "#/components/schemas/CashReportMetrics"
+          },
+          "by_store": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CashReportStoreMetrics"
+            }
+          }
+        },
+        "required": [
+          "organization",
+          "available_stores",
+          "from",
+          "to",
+          "currency",
+          "scope",
+          "observed_at",
+          "totals",
+          "by_store"
+        ]
+      },
+      "CashReportProducts": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CashReportProduct"
+            }
+          },
+          "current_page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "per_page": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "const": "IDR"
+          }
+        },
+        "required": [
+          "data",
+          "current_page",
+          "last_page",
+          "per_page",
+          "total",
+          "from",
+          "to",
+          "observed_at",
+          "currency"
         ]
       }
     }

@@ -15,6 +15,9 @@
                 @if($org['can_manage'])
                     <p><a href="/app/organizations/{{ $org['id'] }}">Kelola toko dan pengguna</a></p>
                 @endif
+                @if(app()->getProvider(\App\Modules\Reporting\ReportingServiceProvider::class) && ($org['active'] ?? false) && in_array($org['role'] ?? null, ['owner','admin','partner_lead','store_manager'], true))
+                    <p><a href="/app/organizations/{{ $org['id'] }}/reports/cash-sales">Laporan penjualan tunai</a></p>
+                @endif
                 @if($org['can_catalog'])
                     <p><a href="/app/organizations/{{ $org['id'] }}/catalog">Katalog dan harga</a></p>
                 @endif

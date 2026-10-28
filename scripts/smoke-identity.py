@@ -255,9 +255,40 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         shift=api(base,'GET',f'shifts/{shift["id"]}',token=cashier_token)['data']
         assert shift['expected_cash']==110000 and shift['difference_cash']==-1000 and shift['cash_sales']==12000
         assert api(base,'GET',f'stores/{store}/pos/context',token=cashier_token)['data']['shift'] is None
+        # Cross-store cash reporting and CSV use the same stored sale, excluding cash expenses.
+        import csv
+        import io
+        from datetime import datetime, timedelta, timezone
+        wib = timezone(timedelta(hours=7))
+        sold_day = datetime.fromisoformat(sale['sold_at'].replace('Z','+00:00')).astimezone(wib).replace(hour=0,minute=0,second=0,microsecond=0)
+        period = {'from':sold_day.isoformat(),'to':(sold_day+timedelta(days=1)).isoformat()}
+        report_path = f'organizations/{org}/reports/cash-sales'
+        query = urlencode(period)
+        report = api(base,'GET',report_path+'?'+query,token=lead_token)['data']
+        assert report['totals']['net_sales']==12000 and report['totals']['transaction_count']==1
+        assert sum(row['net_sales'] for row in report['by_store'])==12000
+        product_report = api(base,'GET',report_path+'/products?'+query,token=manager_token)
+        assert product_report['data'][0]['sold_pieces']==4 and product_report['data'][0]['gross_sales']==12000
+        for denied_token in [cashier_token,owner]:
+            for suffix in ['', '/products', '/export']:
+                api(base,'GET',report_path+suffix+'?'+query,token=denied_token,expected=403)
+        with urlopen(Request(base+'/api/v1/'+report_path+'/export?'+query,headers={'Authorization':'Bearer '+lead_token,'Accept':'text/csv'})) as response:
+            rows=list(csv.reader(io.StringIO(response.read().decode('utf-8-sig'))))
+            assert 'no-store' in response.headers['Cache-Control']
+        assert len(rows)==2 and rows[1][0]==sale['number'] and rows[1][8]=='12000'
+        opener=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        html=opener.open(web+'/login').read().decode()
+        csrf=re.search(r'name="_token" value="([^"]+)"',html).group(1)
+        opener.open(Request(web+'/login',data=urlencode({'_token':csrf,'email':lead['email'],'password':PASSWORD}).encode())).read()
+        web_period=urlencode({'from_day':sold_day.date().isoformat(),'to_day':sold_day.date().isoformat()})
+        html=opener.open(web+'/app/'+report_path+'?'+web_period).read().decode()
+        assert 'Rp 12.000' in html and '4 biji' in html
+        with opener.open(web+'/app/'+report_path+'/export?'+web_period) as response:
+            assert response.headers['Content-Type'].startswith('text/csv')
+            assert sale['number'] in response.read().decode('utf-8-sig')
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

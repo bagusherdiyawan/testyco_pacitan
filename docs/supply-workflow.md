@@ -37,7 +37,7 @@ Setiap formulir mutasi mempunyai UUID operasi. Gunakan UUID yang sama untuk meng
 
 ## API dan Flutter
 
-Kontrak OpenAPI 0.7.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
+Kontrak OpenAPI 0.8.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
 
 Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok yang menampilkan jumlah baik/karantina. `FEATURE_ORDERING=false` dan `FEATURE_INVENTORY=false` dapat menonaktifkan modul presentasi saat build. Aksi pengajuan/persetujuan/pengiriman/penerimaan Flutter belum dibuat; gunakan web.
 

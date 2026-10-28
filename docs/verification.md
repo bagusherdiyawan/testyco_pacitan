@@ -4,17 +4,17 @@ Dijalankan pada lingkungan onboarding, 28 Oktober 2026. Hasil lokal, bukan UAT b
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 110 tes lulus, 747 assertions |
-| Web PHPUnit | 43 tes lulus, 171 assertions |
-| Flutter | 42 tes lulus; kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 195 tes lulus |
+| API PHPUnit | 120 tes lulus, 838 assertions |
+| Web PHPUnit | 48 tes lulus, 195 assertions |
+| Flutter | 48 tes lulus; laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 216 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
-| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah lulus |
+| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai dan CSV privat lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.7.0 | 62 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.8.0 | 65 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -89,3 +89,16 @@ Suite akhir: 108 API/734 assertions, 43 web/171 assertions dan 29 Flutter; analy
 - Smoke HTTP nyata memverifikasi context pengelola vs peninjau dan denial pusat/kasir, bersama alur supply/proses/count/penjualan yang sudah ada. Ini bukan eksekusi aplikasi Flutter pada perangkat Android/iOS.
 
 Suite akhir irisan native: 110 API/747 assertions, 43 web/171 assertions, 42 Flutter; analyzer bersih, HTTP smoke dan metadata lulus. OpenAPI 0.7.0 mempunyai 62 operation ID; schema/path refs diperiksa secara lokal, bukan validator eksternal. Operasi native masih online dengan pending request dalam memori halaman; terminasi paksa memerlukan rekonsiliasi manual sebelum mencatat ulang. Offline/persistensi operasi lintas restart, concurrency PostgreSQL, backup/restore dan UAT perangkat tetap belum terverifikasi.
+
+## Bukti laporan tunai lintas toko
+
+- Total organisasi merekonsiliasi ke baris toko dari query yang sama; toko kosong bernilai nol dan riwayat toko nonaktif tetap berizin. Filter toko mengubah cakupan secara eksplisit.
+- Kepala toko hanya melihat assignment pada summary, product breakdown dan CSV. Filter toko lain, mitra lain, kasir, gudang dan owner pusat tanpa membership mitra ditolak. Kepala toko tanpa assignment tidak mendapat data toko apa pun. Organisasi nonaktif ditolak.
+- Awal periode inklusif/akhir eksklusif diuji di batas WIB; timestamp tanpa offset, periode terbalik/lebih dari 31 hari, query invalid dan halaman nol ditolak. Header laporan JSON private/no-store diverifikasi.
+- Konversi porsi historis tetap 8 biji untuk 2 porsi isi 4 walau master berubah/nonaktif. Nama snapshot lama/baru tetap terpisah, nilai historis tidak dihitung ulang dari harga master. Pagination 51 grup produk diuji.
+- CSV memakai nama toko/kasir saat sale, waktu UTC bertimezone dan integer uang. Teks formula-like pada nama diberi apostrof; nama master baru tidak menimpa snapshot export. Header attachment/private/no-store/nosniff dan audit persiapan ekspor diperiksa. Query ekspor menerima 10.000 transaksi dan menolak 10.001 tanpa truncation. Tes ini pemeriksaan batas fungsional, bukan benchmark production.
+- Web menguji login/denial, filter tanggal WIB menjadi interval eksplisit, pagination, escaping HTML, byte CSV/BOM tidak diubah dan cookie/kredensial upstream tidak diteruskan. Periode invalid tidak memanggil API; limit error terlihat dan respons JSON tidak salah diunduh sebagai CSV.
+- Flutter menguji repository scope/filter/page tanpa mengikuti next_page_url eksternal, rentang akhir bulan WIB, role/organization navigation, filter semua toko berizin, error/retry tanpa nol palsu, dan widget 390px dengan text scale 1,5 serta 1200px.
+- Smoke HTTP nyata memakai sale Rp12.000 yang sama dengan alur stok/shift. Kas keluar tidak mengurangi omzet: summary/breakdown/CSV tetap Rp12.000, produk 4 biji. Kasir dan pusat tanpa membership ditolak pada ketiga endpoint. Lead membaca halaman web dan mengunduh CSV via BFF; angka dan nomor sale sama dengan API.
+
+Hasil akhir: 120 API/838 assertions, 48 web/195 assertions, 48 Flutter (216 tes), analyzer bersih; smoke HTTP nyata dan metadata lulus. Kontrak 0.8.0: 65 operation ID unik, local refs/path parameters konsisten, operasi/schema lama tetap sama. Validator OpenAPI eksternal, PostgreSQL/concurrency, load production, UAT dan perangkat fisik belum diuji. Laporan ini hanya completed IDR cash POS; B2B, piutang, margin, refund/non-tunai, snapshot lintas request dan sinkronisasi offline belum diklaim.

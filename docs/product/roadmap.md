@@ -16,7 +16,7 @@ Gate: aplikasi fondasi dapat dijalankan dan diuji; batas implementasi tercatat; 
 
 ## Tahap 1 — Identitas, mitra, katalog
 
-Status implementasi: irisan identitas dan katalog per organisasi tersedia. Kontrak/consent mitra, paket/resep, gambar, price list efektif dan gate pilot belum selesai; katalog B2B pusat awal sudah tersedia. Tahap 2 telah mempunyai irisan awal; tahap 3 mempunyai irisan POS tunai/shift awal; tahap 4–5 belum diimplementasikan.
+Status implementasi: irisan identitas dan katalog per organisasi tersedia. Kontrak/consent mitra, paket/resep, gambar, price list efektif dan gate pilot belum selesai; katalog B2B pusat awal sudah tersedia. Tahap 2 telah mempunyai irisan awal; tahap 3 mempunyai irisan POS tunai/shift awal; pelaporan PRD 11 memiliki irisan tunai lintas toko/produk/CSV; modul komersial tahap 4 dan offline tahap 5 belum diimplementasikan.
 
 Cakupan: PRD 01–03, 13-SEC dan fondasi audit. Aktivasi mitra/toko, akun/peran/penugasan, katalog dengan konversi dan harga historis. Owner pusat, pimpinan mitra, kepala toko, gudang dan kasir diuji dengan izin positif/negatif.
 
@@ -39,6 +39,9 @@ Cakupan: PRD 06–07, ringkasan PRD 11, notifikasi 13-NOT. Keranjang, satuan/pak
 Gate: MVP-05/06/07 lulus pada perangkat nyata; total struk sama dengan transaksi; printer gagal tidak menggandakan transaksi. Semua MVP-01 s.d. MVP-10 yang relevan lulus termasuk restore backup. Pemilik produk, operasional dan wakil mitra menandatangani UAT. Jika koneksi lokasi tidak memadai, pilot ditahan sampai offline/prosedur cadangan yang disepakati terbukti; offline tidak otomatis ditunda demi jadwal.
 
 ## Tahap 4 — Penguatan komersial dan operasional
+
+Status pelaporan: ringkasan tunai per organisasi/toko, rincian produk historis serta CSV web tersedia melalui Reporting (docs/cash-reporting.md). Belum ada dashboard B2B/piutang/margin atau penjumlahan grosir dan eceran. Voucher, billing dan aset belum tersedia.
+
 
 Cakupan: PRD 08, 10, 12 dan pelaporan lanjutan PRD 11. Voucher B2B/B2C, kuota atomik, pembiayaan promo, invoice dan pembayaran parsial terverifikasi, kredit berizin, aset/serah-terima/perawatan, ekspor berizin dan indikator data terakhir diperbarui.
 

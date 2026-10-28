@@ -12,5 +12,6 @@ return ['providers' => [
     \App\Modules\Fulfillment\FulfillmentServiceProvider::class,
     \App\Modules\Shifts\ShiftsServiceProvider::class,
     \App\Modules\Sales\SalesServiceProvider::class,
+    \App\Modules\Reporting\ReportingServiceProvider::class,
     WorkspaceServiceProvider::class,
 ]];

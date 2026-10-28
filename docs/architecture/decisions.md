@@ -115,3 +115,15 @@ Flutter memisahkan DTO stok/count/process, StockControlRepository, controller da
 PendingStockOperation menyimpan path/body/UUID immutable di memori ketika hasil POST tidak diketahui. Tindakan baru tidak mengganti pending request; retry mengirim ulang identik. UI menahan pop selama busy/pending. Sukses POST dan kegagalan refresh dibedakan agar sukses tidak dianggap perlu proses baru. Idempotensi server dan revisi batch tetap guard final, bukan disable tombol saja.
 
 Tidak ada persistensi operasi native lintas restart atau antrean offline. Setelah terminasi paksa ketika hasil belum diketahui, rekonsiliasi saldo/riwayat/audit diperlukan sebelum mencatat ulang. Penyimpanan aman perangkat dan aturan offline tidak ditetapkan oleh irisan ini. Ledger, SOP mutu dan otorisasi independent-review tidak berubah. Widget mobile/tablet diverifikasi; build/perangkat fisik dan PostgreSQL concurrency masih belum diverifikasi.
+
+## ADR-013: laporan tunai melalui read model Sales
+
+Reporting memiliki access/period/presentation dan bergantung pada Identity/Sales. CashSalesReadModel milik Sales membaca fakta sale/line tanpa menulis domain stok/shift. Tidak ada materialized view atau migrasi baru. Scope mengikat organization_id dan daftar store yang diizinkan oleh membership/assignment aktif; filter asing ditolak dan onboarding pusat tidak menjadi override. Toko nonaktif tetap dapat dilaporkan; tidak ada agregasi pusat atas POS mitra tanpa membership.
+
+Summary menghitung total dari query grup toko yang sama; nol ditambahkan bagi toko dalam scope yang belum bertransaksi. Hanya completed cash IDR; tidak memasukkan draft, cash movement, B2B, transfer, utang atau refund/non-tunai yang belum tersedia. Produk memakai snapshot ID/SKU/nama/kondisi, jumlah base pieces dan line_total; receipt count per produk tidak aditif. Nama/status kartu toko adalah metadata terkini; export sale memakai nama historis.
+
+Periode immutable menjaga [from,to), offset wajib di boundary, maksimal 31 hari. Web/native menerjemahkan tanggal kalender WIB inklusif akhir ke interval eksplisit. Hari bisnis/rollover shift tidak ditetapkan. Summary/products/export adalah observasi request terpisah, bukan snapshot lintas query. Waktu server ditampilkan tanpa klaim offline backlog kosong.
+
+Ekspor materializes maksimal 10.001 fakta sale dan menolak bila di atas 10.000 sebelum streaming; tidak ada count-then-query race atau truncation diam-diam. CSV BOM/quoting standar, formula-like text diberi apostrof dan uang tetap integer. API/BFF private/no-store; CSV attachment nosniff. BFF menyalin body dan header yang ditentukan sendiri, tidak cookie/kredensial upstream. Audit mencatat export prepared dengan scope/count, bukan konten file atau bukti download selesai.
+
+Atomic organisms CashSalesMetrics pada Blade/Flutter menyajikan data server. Registry Laravel dan FEATURE_REPORTING pada Flutter mengatur aktivasi fitur, sementara izin tetap server. Initial reporting tidak meliputi B2B, piutang, margin, refund, async export atau native file download. PostgreSQL/concurrency, load dan UAT tetap gate tersendiri.

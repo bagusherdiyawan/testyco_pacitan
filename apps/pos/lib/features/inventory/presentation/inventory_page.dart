@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/inventory_repository.dart';
 import '../domain/stock_batch.dart';
+import 'stock_minimum_page.dart';
 import '../../../design_system/molecules/error_panel.dart';
 import '../../../design_system/molecules/stock_batch_card.dart';
 
@@ -49,6 +50,18 @@ class _InventoryPageState extends State<InventoryPage> {
               icon: const Icon(Icons.refresh),
             ),
           ],
+        ),
+      ),
+      TextButton.icon(
+        icon: const Icon(Icons.notifications_outlined),
+        label: const Text('Stok minimum dan peringatan'),
+        onPressed: () => Navigator.of(context).push(
+          MaterialPageRoute<void>(
+            builder: (_) => StockMinimumPage(
+              repository: widget.repository,
+              storeId: widget.storeId,
+            ),
+          ),
         ),
       ),
       const Padding(

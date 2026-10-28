@@ -191,6 +191,18 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base, 'POST', f'inventory/counts/{stale["id"]}/approve', {'operation_id':str(uuid.uuid4()),'version':1,'review_note':'Stale review must fail'}, lead_token, expected=409)
         html = opener.open(web + control_path).read().decode()
         assert 'Snapshot kedaluwarsa' in html
+        # Configure threshold through the real manager web session (CSRF enforced).
+        min_path = f'/app/stores/{store}/stock-minimums'
+        html = opener.open(web + min_path).read().decode()
+        config_path = min_path + '/' + local_product_id
+        minimum = fields(html, config_path)
+        minimum.update({'minimum_pieces':'140','reason':'Store buffer reviewed by manager'})
+        web_post(config_path, minimum).read()
+        web_post(config_path, minimum).read()
+        observed = api(base, 'GET', f'stores/{store}/inventory/minimums', token=lead_token)
+        assert observed['data'][0]['minimum_pieces'] == 140 and observed['data'][0]['version'] == 1
+        assert observed['data'][0]['available_pieces'] == 142 and not observed['data'][0]['is_low']
+        api(base, 'GET', f'stores/{store}/inventory/minimums', token=owner, expected=403)
         # Real cashier browser session: durable draft, cash sale/reprint, manager expense and closing.
         cashier = {'name':'Smoke Cashier','email':'cashier@smoke.test','password':PASSWORD,'role':'cashier','store_ids':[store]}
         api(base, 'POST', f'organizations/{org}/users', cashier, owner, 201)
@@ -217,6 +229,12 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert sale['total_amount']==12000 and sale['change_amount']==8000
         current=api(base,'GET',f'stores/{store}/inventory/batches',token=cashier_token)['data'][0]
         assert current['ready_pieces']==2 and current['quarantined_pieces']==16
+        warning = api(base,'GET',f'stores/{store}/inventory/minimums?low_only=1',token=cashier_token)
+        assert warning['total']==1 and warning['data'][0]['available_pieces']==138 and warning['data'][0]['shortfall_pieces']==2
+        assert not warning['can_manage'] and 'wholesale_price' not in warning['data'][0]
+        api(base,'POST',f'stores/{store}/inventory/minimums/{local_product_id}',{'operation_id':str(uuid.uuid4()),'version':1,'minimum_pieces':None,'reason':'Cashier must not configure'},cashier_token,expected=403)
+        html=opener.open(web+min_path+'?low_only=1').read().decode()
+        assert 'Kekurangan 2 biji' in html and 'Simpan ambang' not in html
         entries=api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']
         opener.open(web+f'/app/pos/sales/{sale_id}').read()
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==entries
@@ -233,7 +251,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',f'stores/{store}/pos/context',token=cashier_token)['data']['shift'] is None
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

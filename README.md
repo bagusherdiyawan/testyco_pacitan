@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.5.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.6.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -49,6 +49,10 @@ Buka tautan **Pesanan dan stok** pada toko atau **Pesanan pusat** pada navigasi.
 Ikuti [panduan operasional](docs/supply-workflow.md) untuk persiapan SKU pusat/lokal, stock intake dan batas penanganan selisih. Flutter pada tahap ini membaca status/stock; aksi operasional memakai web.
 
 Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan, kukus dan proposal hitung fisik. Snapshot lama tidak dapat menimpa pergerakan baru; approval opname memerlukan peninjau berwenang yang berbeda dari pengusul. Ikuti [panduan kontrol stok](docs/stock-control.md).
+
+## Stok minimum
+
+Pengelola dapat mengatur ambang biji per SKU/toko melalui web. Web dan Flutter menampilkan peringatan saat stok utuh + terbuka + siap berada di bawah ambang; karantina dan susut dikecualikan. Tidak ada pesanan otomatis atau push notification. Ikuti [panduan stok minimum](docs/stock-minimums.md).
 
 ## POS tunai dan kas shift
 
@@ -91,7 +95,7 @@ Blade memakai `resources/views/components/{atoms,molecules,organisms,templates}`
 
 Katalog lokal tetap milik organisasi; katalog B2B pusat kini tersedia untuk pemohon berwenang. SKU tujuan dipilih eksplisit per baris order dengan isi kemasan dan kondisi yang sama. Harga/konversi order sudah mempunyai snapshot. Kontrak harga khusus/bermasa berlaku, gambar, resep/paket, kontrak kemitraan dan PostgreSQL belum dibuat. Akun dinonaktifkan melalui API/web; reaktivasi akun, pemulihan password melalui email, MFA dan siklus pengelolaan anggota lintas organisasi belum tersedia.
 
-Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Perubahan setelah approval/reapproval, resolusi retur/kredit/pengganti, notifikasi stok minimum, refund, integrasi printer, voucher, invoice, pelaporan lanjutan, aset dan offline masih backlog. POS tunai, shift, struk digital dan ringkasan penjualan awal tersedia; QRIS/non-tunai belum tersedia. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
+Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Perubahan setelah approval/reapproval, resolusi retur/kredit/pengganti, refund, integrasi printer, voucher, invoice, pelaporan lanjutan, aset dan offline masih backlog. POS tunai, shift, struk digital dan ringkasan penjualan awal tersedia; QRIS/non-tunai belum tersedia. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
 
 Kebijakan konsinyasi, stok minus, offline, QRIS dan cakupan data mitra tetap mengikuti keputusan bisnis yang belum ditutup. Pembukaan/pengukusan memakai batch beku yang sama, bukan resep lintas SKU. Masa simpan siap jual tidak dihitung otomatis. Susut proses dicatat langsung bersama hasil fisik; susut terpisah menunggu review. Rollback migrasi kontrol stok ditolak setelah digunakan agar data tidak hilang.
 

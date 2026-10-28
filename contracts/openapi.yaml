@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Identity, Supply and Cash POS API",
-    "version": "0.5.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented."
+    "version": "0.6.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow."
   },
   "security": [
     {
@@ -6072,6 +6072,221 @@
           }
         ]
       }
+    },
+    "/api/v1/stores/{store}/inventory/minimums": {
+      "get": {
+        "operationId": "stockMinimumReport",
+        "summary": "Live low-stock warnings and per-store SKU thresholds",
+        "description": "Active products only, including SKUs without batches (zero stock). available_pieces sums intact + opened + ready from this store across batches; quarantine and waste are excluded. This is physical inventory availability, not food safety certification, expiry filtering or ready-to-serve quantity. is_low uses strict available < configured minimum; equality is healthy, null is unconfigured/disabled, and zero is enabled. No defaults, reservation, purchase/payment automation, historical crossing events, push/email or delivery/read receipts. All assigned operational roles may read; no wholesale/retail price is exposed. Refresh to observe new movements. Paginated 50 rows; each page is a live observation, not a cross-page stock snapshot.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "low_only",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ],
+              "default": 0
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StockMinimumReport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/store/role access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Scoped active product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Inactive store, stale configuration version or operation ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/inventory/minimums/{product}": {
+      "post": {
+        "operationId": "configureStockMinimum",
+        "summary": "Versioned and audited minimum-stock configuration",
+        "description": "Owner/admin/partner lead in own organization, or store manager assigned to this active store. No central onboarding override. Active product must belong to store organization. version 0 for first configuration, then latest returned version. minimum_pieces is required; null disables without deleting history, 0 is enabled. Integer base pieces, no pack conversion or inherited default. Reason required. Stable operation UUID replay returns original result once; stale versions conflict instead of silently overwriting another manager. Does not move stock or create orders.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "product",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StockMinimumInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/StockMinimumConfig"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/store/role access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Scoped active product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Inactive store, stale configuration version or operation ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8835,6 +9050,216 @@
           "cash_received",
           "change_amount",
           "sold_at"
+        ]
+      },
+      "StockMinimumRow": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "minimum_pieces": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "usable_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "opened_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ready_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "available_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "shortfall_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "is_low": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "product_id",
+          "sku",
+          "name",
+          "condition",
+          "minimum_pieces",
+          "version",
+          "usable_pieces",
+          "opened_pieces",
+          "ready_pieces",
+          "available_pieces",
+          "shortfall_pieces",
+          "is_low"
+        ]
+      },
+      "StockMinimumInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "minimum_pieces": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "minimum_pieces",
+          "reason"
+        ]
+      },
+      "StockMinimumConfig": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minimum_pieces": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "maximum": 1000000000
+          },
+          "updated_by": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "store_id",
+          "product_id",
+          "version",
+          "minimum_pieces",
+          "updated_by",
+          "reason"
+        ]
+      },
+      "StockMinimumReport": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockMinimumRow"
+            }
+          },
+          "current_page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "last_page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "per_page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "can_manage": {
+            "type": "boolean"
+          },
+          "store": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "data",
+          "current_page",
+          "last_page",
+          "total",
+          "can_manage",
+          "store",
+          "observed_at"
         ]
       }
     }

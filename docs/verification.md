@@ -4,17 +4,17 @@ Dijalankan pada lingkungan onboarding, 28 Oktober 2026. Hasil lokal, bukan UAT b
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 96 tes lulus, 649 assertions |
-| Web PHPUnit | 37 tes lulus, 144 assertions |
-| Flutter | 24 tes lulus; POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 157 tes lulus |
+| API PHPUnit | 108 tes lulus, 734 assertions |
+| Web PHPUnit | 43 tes lulus, 171 assertions |
+| Flutter | 29 tes lulus; peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 180 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
-| Migrasi kontrol stok dan POS pada DB development | Lulus tanpa reset saldo lama |
+| Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
-| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar dan tutup shift lulus |
+| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.5.0 | 59 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.6.0 | 61 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -47,7 +47,7 @@ Identity/token/password/revocation, scope organisasi/store, audit tanpa kredensi
 
 Compose mempertahankan environment override dengan --no-reload dan memakai NO_PROXY/no_proxy untuk API internal. CA host dipasang read-only; TLS/checksum tidak dimatikan. Lockfile dependensi tetap dipertahankan.
 
-Aksi proses/submit/review melalui web; Flutter masih membaca status/saldo. POS tunai/shift tersedia pada web/Flutter. Belum ada QRIS/refund, printer fisik, retur/kredit/penggantian, pembalikan proses, aturan masa simpan siap jual, pelepasan karantina bermutu, ambang susut, notifikasi minimum, FEFO otomatis, billing atau offline. Kontrol dua pelaku masih perlu validasi operasional/UAT. PostgreSQL/concurrency, backup/restore dan perangkat nyata tetap menjadi gate pilot.
+Aksi proses/submit/review melalui web; Flutter masih membaca status/saldo. POS tunai/shift tersedia pada web/Flutter. Belum ada QRIS/refund, printer fisik, retur/kredit/penggantian, pembalikan proses, aturan masa simpan siap jual, pelepasan karantina bermutu, ambang susut, push notifikasi minimum, FEFO otomatis, billing atau offline. Kontrol dua pelaku masih perlu validasi operasional/UAT. PostgreSQL/concurrency, backup/restore dan perangkat nyata tetap menjadi gate pilot.
 
 ## Bukti POS tunai dan shift
 
@@ -64,3 +64,16 @@ Aksi proses/submit/review melalui web; Flutter masih membaca status/saldo. POS t
 Smoke HTTP nyata memakai web dengan CSRF aktif dan API/SQLite sementara: shift Rp100.000, draft 4 biji Rp12.000, uang Rp20.000/kembali Rp8.000, replay tanpa debit ganda, saldo ready 6 → 2, karantina tetap 16. Kas keluar Rp2.000 menghasilkan expected Rp110.000. Tutup fisik Rp109.000 menyimpan selisih −Rp1.000 dan menghapus active lock. Semua container uji dibersihkan, DB development tidak diisi akun uji.
 
 Hasil di atas bukan bukti concurrency PostgreSQL, UAT kasir, klik interaktif browser nyata, offline atau dukungan printer/perangkat fisik. Tidak ada klaim CI remote lulus pada revisi ini.
+
+## Bukti ambang stok minimum
+
+- SKU aktif tanpa stok mempunyai available 0; tanpa ambang tidak dipantau. Ambang 20 pada saldo nol memberi kekurangan 20 tanpa membuat order, stock entry atau harga dalam respons.
+- Agregasi mencakup semua batch toko/SKU, memisahkan utuh/terbuka/siap dan mengecualikan stok toko lain, karantina serta susut. Sama dengan ambang tidak rendah; debit menampilkan peringatan, restock menghilangkannya pada pembacaan baru.
+- UUID identik mencatat konfigurasi/audit sekali. Konflik payload maupun versi lama ditolak; null mematikan tanpa menghapus row/riwayat, nol tetap threshold aktif.
+- Kasir/gudang assigned dapat membaca tetapi tidak mengatur. Kepala toko terbatas toko assigned. Mitra lain, pengguna tidak assigned dan owner pusat tanpa membership mitra ditolak. SKU nonaktif disembunyikan, SKU organisasi lain dan toko nonaktif ditolak.
+- Input negatif/fractional/berlebih, versi salah, alasan kosong, parameter query invalid ditolak. Query nama/SKU dan pagination 52 SKU diverifikasi.
+- Web menguji autentikasi, denial API, peringatan/breakdown, form sesuai izin, whitelist payload, null disable, pagination, escaping nama SKU serta penolakan validation/conflict. Nilai dan UUID dari form gagal tidak disalin ke formulir SKU lain.
+- Flutter menguji peringatan di 390px/1200px, refresh setelah saldo pulih, filter SKU belum dipantau, error/retry tanpa menyatakan stok sehat dan pagination scoped tanpa mengikuti URL eksternal.
+- Smoke HTTP nyata: pengelola mengatur ambang 140 melalui form web ber-CSRF; replay tetap version 1. Saldo 142 tidak rendah, penjualan 4 membuat 138 dengan shortfall 2. Kasir melihat warning di web/API tetapi konfigurasi ditolak; karantina 16 tidak masuk total.
+
+Suite akhir: 108 API/734 assertions, 43 web/171 assertions dan 29 Flutter; analyzer bersih. Tes ini memverifikasi peringatan saat halaman dimuat, bukan event/inbox/push notification, concurrency PostgreSQL atau UAT ambang bisnis. Kontrak 0.6.0 diperiksa 61 operation ID unik, local refs/path parameters konsisten; operasi/schema lama tetap sama. Validator OpenAPI eksternal belum dijalankan.

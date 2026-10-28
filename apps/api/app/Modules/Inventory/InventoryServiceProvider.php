@@ -7,6 +7,7 @@ use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Inventory\Presentation\InventoryController;
 use App\Modules\Inventory\Presentation\StockControlController;
+use App\Modules\Inventory\Presentation\StockMinimumController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -21,6 +22,8 @@ final class InventoryServiceProvider extends ServiceProvider
             throw new \LogicException('Inventory requires Catalog.');
         }
         Route::prefix('api/v1')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
+            Route::get('stores/{store}/inventory/minimums', [StockMinimumController::class, 'index']);
+            Route::post('stores/{store}/inventory/minimums/{product}', [StockMinimumController::class, 'configure']);
             $control = StockControlController::class;
             Route::get('stores/{store}/inventory/processes', [$control, 'processes']);
             Route::post('stores/{store}/inventory/processes', [$control, 'process']);

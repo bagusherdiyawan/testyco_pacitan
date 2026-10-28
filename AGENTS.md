@@ -12,5 +12,6 @@ Read README.md, docs/architecture/decisions.md and docs/product/requirements.md 
 - Identity/catalog and initial ordering, fulfillment, batch and inventory ledger (intake/dispatch/receipt) are implemented. Stock opening/cooking and independent count/waste review are implemented; see docs/stock-control.md. Online cash POS and cashier shifts are implemented; see docs/cash-pos.md. Refunds, returns/replacements, QRIS and offline remain unimplemented. Read docs/supply-workflow.md for the exact scope.
 - Run python3 scripts/smoke-identity.py for API/web identity or supply-workflow changes; it uses isolated temporary containers/database.
 - All stock balance changes must use StockLedger.apply inside a transaction and increment stock_revision; do not bypass snapshot guards or independent-review authorization.
+- Minimum-stock warnings are live read projections, not durable push notifications; see docs/stock-minimums.md. Do not introduce automatic ordering, payment requests or default business thresholds. Configuration changes require scoped manager permission, current version, UUID and audit.
 - Sales must use RetailPricing, SaleStock and ShiftBook; do not write stock/cash balances across modules directly. Pending sale intents are not reservations.
 - Development uses SQLite; do not claim PostgreSQL or device-release builds are verified.

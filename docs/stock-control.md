@@ -49,4 +49,4 @@ Semua mutasi memakai UUID operasi. Replay identik dengan UUID/aktor/scope sama m
 
 ## Batas
 
-Belum ada pembalikan pengolahan, relokasi SKU, pelepasan karantina melalui workflow mutu, rasio/ambang susut otomatis, masa simpan siap jual, notifikasi minimum, FEFO otomatis, refund/QRIS, retur/kredit atau offline. Aksi Flutter masih tahap berikutnya; gunakan web untuk proses dan review. PostgreSQL/concurrency multi-koneksi, backup/restore dan UAT belum diverifikasi.
+Belum ada pembalikan pengolahan, relokasi SKU, pelepasan karantina melalui workflow mutu, rasio/ambang susut otomatis, masa simpan siap jual, push notifikasi minimum, FEFO otomatis, refund/QRIS, retur/kredit atau offline. Aksi Flutter masih tahap berikutnya; gunakan web untuk proses dan review. PostgreSQL/concurrency multi-koneksi, backup/restore dan UAT belum diverifikasi.

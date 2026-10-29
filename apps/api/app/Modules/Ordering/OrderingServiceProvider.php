@@ -24,6 +24,7 @@ final class OrderingServiceProvider extends ServiceProvider
             Route::get('stores/{store}/operations-context', [$c, 'context']);
             Route::get('stores/{store}/supply-catalog', [$c, 'catalog']);
             Route::get('stores/{store}/orders', [$c, 'index']);
+            Route::post('stores/{store}/orders/preview', [$c, 'preview']);
             Route::post('stores/{store}/orders', [$c, 'create']);
             Route::get('supply/orders', [$c, 'inbox']);
             Route::get('orders/{order}', [$c, 'show']);

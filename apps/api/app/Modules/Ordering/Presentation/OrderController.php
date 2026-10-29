@@ -25,7 +25,7 @@ final class OrderController
         $s = $this->identity->store($r->user(), $store);
         $role = $this->identity->role($r->user(), $s->organization_id)?->value;
 
-        return ['data' => [...$s->toArray(), 'role' => $role, 'can_manage_stock' => app()->getProvider(InventoryServiceProvider::class) && in_array($role, StockAccess::STAFF, true), 'can_review_stock' => app()->getProvider(InventoryServiceProvider::class) && app(StockAccess::class)->canReview($r->user(), $s), 'can_pos' => app()->getProvider(SalesServiceProvider::class) && in_array($role, PosAccess::CASHIERS, true), 'can_order' => in_array($role, OrderAccess::RECIPIENT_ROLES, true), 'can_intake' => in_array($role, ['owner', 'admin', 'warehouse'], true) && Organization::findOrFail($s->organization_id)->type === 'center']];
+        return ['data' => [...$s->toArray(), 'role' => $role, 'can_manage_stock' => app()->getProvider(InventoryServiceProvider::class) && in_array($role, StockAccess::STAFF, true), 'can_review_stock' => app()->getProvider(InventoryServiceProvider::class) && app(StockAccess::class)->canReview($r->user(), $s), 'can_pos' => app()->getProvider(SalesServiceProvider::class) && in_array($role, PosAccess::CASHIERS, true), 'order_kind' => Organization::findOrFail($s->organization_id)->type === 'center' ? 'internal_transfer' : 'wholesale', 'can_order' => in_array($role, OrderAccess::RECIPIENT_ROLES, true), 'can_intake' => in_array($role, ['owner', 'admin', 'warehouse'], true) && Organization::findOrFail($s->organization_id)->type === 'center']];
     }
 
     public function catalog(Request $r, string $store, SupplyCatalog $catalog): mixed
@@ -64,9 +64,16 @@ final class OrderController
         return ['delivery_mode' => 'required|in:delivery,pickup', 'note' => 'nullable|string|max:2000', 'lines' => 'required|array|min:1|max:100', 'lines.*.supplier_product_id' => 'required|ulid|distinct', 'lines.*.local_product_id' => 'required|ulid|distinct', 'lines.*.quantity_packs' => 'required|integer|min:1|max:10000'];
     }
 
+    public function preview(Request $r, string $store): mixed
+    {
+        $v = $r->validate($this->items());
+
+        return response()->json(['data' => $this->workflow->preview($r->user(), $store, $v)])->header('Cache-Control', 'private, no-store');
+    }
+
     public function create(Request $r, string $store): mixed
     {
-        $v = $r->validate(['operation_id' => 'required|uuid', ...$this->items()]);
+        $v = $r->validate(['operation_id' => 'required|uuid', 'review_hash' => 'sometimes|required|string|size:64|regex:/^[a-f0-9]{64}$/', ...$this->items()]);
 
         return response()->json(['data' => $this->workflow->create($r->user(), $store, $v)], 201);
     }

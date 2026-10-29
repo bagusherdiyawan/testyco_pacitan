@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 29 Oktober 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 124 tes lulus, 886 assertions |
+| API PHPUnit | 129 tes lulus, 927 assertions |
 | Web PHPUnit | 48 tes lulus, 195 assertions |
-| Flutter | 61 tes lulus; penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 233 tes lulus |
+| Flutter | 74 tes lulus; composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 251 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
-| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan native lulus |
+| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create pengajuan native lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.9.0 | 65 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.10.0 | 66 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -116,3 +116,17 @@ Diverifikasi 29 Oktober 2026. API tambahan diuji untuk metadata recipient_action
 - Smoke HTTP nyata memverifikasi capability pimpinan sebelum approval, seluruh recipient flag false bagi pusat supplier-view, receive true sesudah dispatch, dan histori received_at/18 baik/2 rusak. Stok actual tetap 144/16 setelah replay. Ini bukan eksekusi Flutter pada perangkat fisik.
 
 Hasil terkini: 124 API/886 assertions, 48 web/195 assertions, 61 Flutter (233 tes), analyzer bersih, HTTP smoke serta metadata lulus. Kontrak 0.9.0 tetap 65 operation ID; perubahan additive pada SupplyOrder dan schema RecipientOrderActions, tanpa endpoint/migrasi/dependensi baru. Tidak ada klaim offline, pemulihan operasi lintas restart, build perangkat, UAT atau concurrency PostgreSQL.
+
+## Bukti composer pengajuan baru
+
+Diverifikasi 29 Oktober 2026. Pratinjau memakai snapshot builder server yang sama dengan create; spoofed unit_price/total tidak dipercaya. Preview tidak membuat order/claim/audit atau stok. Body dengan review_hash yang sesuai membuat satu awaiting_approval yang masih tersembunyi dari pemasok pusat; replay committed UUID tetap hasil awal meski harga master kemudian berubah.
+
+- Harga, kuantitas, pasangan SKU lokal dan alamat target berbeda dari tinjauan ditolak sebelum order/claim tersimpan. Target di-lock ulang saat snapshot. Role tanpa hak, mitra lain, pusat tanpa membership target, toko nonaktif dan konversi SKU tidak cocok ditolak. Delivery membutuhkan alamat nyata; malformed hash ditolak. Preview internal transfer memakai SKU identik dan nilai komersial nol.
+- Controller native mengharuskan mapping eksplisit, SKU lokal tidak duplikat, satu pusat, quantity packs integer 1–10000, note terbatas dan izin/kind context baru. Inactive/denied/legacy context tidak mengambil katalog komersial. Preview hanya server; create tidak membawa harga/total client.
+- Tinjauan mengunci editing; refresh mempertahankan intent ID/kuantitas tetapi membuang quote yang belum dikirim. Konflik definitif meminta review baru. Unknown response membekukan nested body/UUID, tetap identik sesudah refresh/harga berubah. Penolakan izin setelah unknown tidak memutar request; ACK tersimpan mencegah konfirmasi kedua membuat record baru.
+- Transfer internal hanya menawarkan local_id yang identik dan memakai nol server, tanpa mengarang harga. Delivery tanpa alamat tidak mengirim preview. Pagination katalog memakai scoped path dan tidak mengikuti URL eksternal.
+- Widget 390px text scale 1,5/1200px menjalankan daftar → tambah SKU pusat → pilih SKU lokal → quantity → preview Rp360.000 → konfirmasi → detail awaiting_approval. Skenario mobile kehilangan respons setelah commit, menahan back dan retry identik dengan satu record. Overflow dropdown mobile ditemukan dan diperbaiki sebelum final suite.
+- Auth-boundary navigator reset diuji: 401 dari route dengan PopScope(canPop:false) menampilkan login dan membuang route sesi lama; login berikutnya mengambil toko kembali. Ini bukan recovery pending lintas sesi; operator tetap perlu rekonsiliasi setelah sesi berubah.
+- Smoke HTTP nyata membuat preview Rp18.000 lalu pengajuan hash-bound/replay dengan satu ID. Target belum bertambah stok dan gudang tetap 160 biji sebelum dispatch; pusat tidak dapat melihat draft, perubahan quantity dengan hash lama ditolak. Alur web lama tanpa hash tetap melalui approval/dispatch/actual receipt yang sama.
+
+Hasil final: 129 API/927 assertions, 48 web/195 assertions, 74 Flutter (251 tes), analyzer bersih dan HTTP/metadata smoke lulus. Kontrak 0.10.0: 66 operation IDs; refs/path parameters diperiksa lokal. Tidak ada migrasi/dependensi baru. Validator OpenAPI eksternal, perangkat fisik, UAT, concurrency PostgreSQL dan persistensi operasi lintas restart belum diklaim.

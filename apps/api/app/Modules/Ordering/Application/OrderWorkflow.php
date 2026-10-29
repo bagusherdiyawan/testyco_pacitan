@@ -7,9 +7,11 @@ use App\Modules\Catalog\Application\SupplyCatalog;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
+use App\Modules\Identity\Infrastructure\Store;
 use App\Modules\Ordering\Domain\OrderState;
 use App\Modules\Ordering\Infrastructure\SupplyOrder;
 use App\Shared\Application\Operations;
+use Illuminate\Support\Facades\DB;
 
 final class OrderWorkflow
 {
@@ -34,13 +36,42 @@ final class OrderWorkflow
         return ['kind' => $internal ? 'internal_transfer' : 'wholesale', 'supplier_organization_id' => $supplier, 'total_amount' => array_sum(array_map(fn ($l) => $l['quantity_packs'] * $l['unit_price'], $lines)), 'lines' => $lines];
     }
 
+    private function review(Store $store, array $v, array $snapshot): array
+    {
+        return ['store_id' => $store->id, 'destination_name' => $store->name, 'destination_address' => $store->address, 'delivery_mode' => $v['delivery_mode'], 'note' => $v['note'] ?? null, ...$snapshot];
+    }
+
+    private function reviewHash(array $review): string
+    {
+        return hash('sha256', json_encode($review, JSON_THROW_ON_ERROR));
+    }
+
+    public function preview(User $user, string $store, array $v): array
+    {
+        $s = $this->orders->recipient($user, $store, true);
+
+        return DB::transaction(function () use ($s, $v) {
+            $s = Store::whereKey($s->id)->lockForUpdate()->firstOrFail();
+            abort_unless($s->active, 409, 'Toko tujuan nonaktif.');
+            abort_if($v['delivery_mode'] === 'delivery' && ! trim((string) $s->address), 422, 'Alamat toko wajib diisi untuk pengiriman.');
+            $snapshot = $this->review($s, $v, $this->snapshots($s->organization_id, $v['lines']));
+
+            return [...$snapshot, 'review_hash' => $this->reviewHash($snapshot), 'currency' => 'IDR', 'observed_at' => now()->toIso8601String()];
+        });
+    }
+
     public function create(User $user, string $store, array $v): array
     {
         $s = $this->orders->recipient($user, $store, true);
 
         return $this->operations->run($s->organization_id, $user->id, $v['operation_id'], 'order.create:'.$store, $v, function () use ($user, $s, $v) {
+            $s = Store::whereKey($s->id)->lockForUpdate()->firstOrFail();
+            abort_unless($s->active, 409, 'Toko tujuan nonaktif.');
             abort_if($v['delivery_mode'] === 'delivery' && ! trim((string) $s->address), 422, 'Alamat toko wajib diisi untuk pengiriman.');
             $snap = $this->snapshots($s->organization_id, $v['lines']);
+            if (isset($v['review_hash'])) {
+                abort_unless(hash_equals($this->reviewHash($this->review($s, $v, $snap)), $v['review_hash']), 409, 'Data pengajuan berubah setelah ditinjau. Muat ulang dan tinjau kembali sebelum mengirim.');
+            }
             $lines = $snap['lines'];
             unset($snap['lines']);
             $order = SupplyOrder::create([...$snap, 'organization_id' => $s->organization_id, 'store_id' => $s->id, 'destination_name' => $s->name, 'destination_address' => $s->address, 'created_by' => $user->id, 'status' => OrderState::Awaiting->value, 'version' => 1, 'delivery_mode' => $v['delivery_mode'], 'note' => $v['note'] ?? null]);

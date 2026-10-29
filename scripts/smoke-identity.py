@@ -133,6 +133,20 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         create_path = f'/app/stores/{store}/orders'
         data = fields(html, create_path)
         data.update({'delivery_mode':'pickup','lines[0][supplier_product_id]':supplier_id,'lines[0][local_product_id]':local_product_id,'lines[0][quantity_packs]':'20'})
+        # Native entry preview is read-only, then create is hash-bound and idempotent.
+        native_body = {'delivery_mode':'pickup','note':'Native reviewed request','lines':[{'supplier_product_id':supplier_id,'local_product_id':local_product_id,'quantity_packs':1}]}
+        native_preview = api(base,'POST',f'stores/{store}/orders/preview',native_body,lead_token)['data']
+        assert native_preview['total_amount']==18000 and len(native_preview['review_hash'])==64
+        native_request = {**native_body,'operation_id':str(uuid.uuid4()),'review_hash':native_preview['review_hash']}
+        native_draft = api(base,'POST',f'stores/{store}/orders',native_request,lead_token,201)['data']
+        assert native_draft['status']=='awaiting_approval'
+        assert api(base,'POST',f'stores/{store}/orders',native_request,lead_token,201)['data']['id']==native_draft['id']
+        assert api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']==[]
+        assert api(base,'GET',f'stores/{source}/inventory/batches',token=owner)['data'][0]['usable_pieces']==160
+        api(base,'GET',f'orders/{native_draft["id"]}',token=owner,expected=403)
+        altered={**native_request,'operation_id':str(uuid.uuid4()),'lines':[{**native_body['lines'][0],'quantity_packs':2}]}
+        api(base,'POST',f'stores/{store}/orders',altered,lead_token,expected=409)
+        assert api(base,'GET',f'stores/{store}/operations-context',token=lead_token)['data']['order_kind']=='wholesale'
         response = web_post(create_path, data); html = response.read().decode(); order_id = response.url.rsplit('/', 1)[1]
         assert 'awaiting_approval' in html
         native_order = api(base, 'GET', f'orders/{order_id}', token=lead_token)['data']
@@ -295,7 +309,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
             assert sale['number'] in response.read().decode('utf-8-sig')
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

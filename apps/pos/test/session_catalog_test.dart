@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -178,4 +179,64 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Belum ada produk aktif.'), findsOneWidget);
   });
+  testWidgets(
+    'Expired session resets protected navigation even when pending page blocks pop',
+    (tester) async {
+      var storeReads = 0;
+      final session = Session(
+        ApiClient(
+          baseUrl: Uri.parse('https://api.example.test/api/v1/'),
+          client: MockClient((r) async {
+            if (r.url.path.endsWith('auth/login')) {
+              return http.Response(
+                '{"token":"test-token","user":{"name":"Petugas"}}',
+                200,
+              );
+            }
+            if (r.url.path.endsWith('/stores')) {
+              storeReads++;
+              return http.Response('{"data":[]}', 200);
+            }
+            return http.Response('{}', 401);
+          }),
+        ),
+      );
+      addTearDown(session.dispose);
+      await session.login('staff@example.test', 'Password123456');
+      await tester.pumpWidget(TestycoApp(session: session));
+      await tester.pumpAndSettle();
+      final navigator = tester.state<NavigatorState>(
+        find.byType(Navigator).first,
+      );
+      unawaited(
+        navigator.push<void>(
+          MaterialPageRoute(
+            builder: (_) => const PopScope(
+              canPop: false,
+              child: Scaffold(body: Text('Pengajuan belum diketahui')),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Pengajuan belum diketahui'), findsOneWidget);
+      await expectLater(
+        session.api.request('GET', 'expired'),
+        throwsA(isA<ApiException>()),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Masuk'), findsOneWidget);
+      expect(find.text('Pengajuan belum diketahui'), findsNothing);
+      expect(session.authenticated, false);
+      expect(
+        tester.state<NavigatorState>(find.byType(Navigator).first).canPop(),
+        false,
+      );
+      await session.login('other@example.test', 'Password123456');
+      await tester.pumpAndSettle();
+      expect(storeReads, 2);
+      expect(find.text('Pengajuan belum diketahui'), findsNothing);
+      expect(tester.takeException(), isNull);
+    },
+  );
 }

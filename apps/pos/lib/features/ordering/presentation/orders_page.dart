@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../data/orders_repository.dart';
 import 'order_detail_page.dart';
+import 'order_entry_page.dart';
+import '../data/order_entry_repository.dart';
 import '../../../design_system/molecules/error_panel.dart';
 export 'order_detail_page.dart';
 
@@ -30,6 +32,32 @@ class _OrdersPageState extends State<OrdersPage> {
     });
   }
 
+  Future<void> _create() async {
+    final id = await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => OrderEntryPage(
+          repository: OrderEntryRepository(widget.repository.api),
+          storeId: widget.storeId,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    _reload();
+    if (id != null) {
+      await Navigator.of(context).push<void>(
+        MaterialPageRoute(
+          builder: (_) =>
+              OrderDetailPage(repository: widget.repository, id: id),
+        ),
+      );
+      if (mounted) {
+        _reload();
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) => Column(
     children: [
@@ -51,6 +79,14 @@ class _OrdersPageState extends State<OrdersPage> {
           ],
         ),
       ),
+      Align(
+        alignment: Alignment.centerLeft,
+        child: TextButton.icon(
+          onPressed: _create,
+          icon: const Icon(Icons.add_shopping_cart),
+          label: const Text('Buat pengajuan'),
+        ),
+      ),
       Expanded(
         child: FutureBuilder<List<Map<String, dynamic>>>(
           future: _orders,
@@ -67,8 +103,7 @@ class _OrdersPageState extends State<OrdersPage> {
             final orders = snapshot.data!;
             if (orders.isEmpty) {
               return ErrorPanel(
-                message:
-                    'Belum ada pesanan. Buat pengajuan melalui web operasional.',
+                message: 'Belum ada pesanan. Gunakan tombol Buat pengajuan.',
                 onRetry: _reload,
               );
             }

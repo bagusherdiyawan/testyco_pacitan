@@ -64,6 +64,7 @@ class _TestycoAppState extends State<TestycoApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
+    key: ValueKey(widget.session.authenticated),
     title: 'Testyco POS',
     debugShowCheckedModeBanner: false,
     theme: ThemeData(

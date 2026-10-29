@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.9.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows."
+    "version": "0.10.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent."
   },
   "security": [
     {
@@ -6669,6 +6669,104 @@
           }
         }
       }
+    },
+    "/api/v1/stores/{store}/orders/preview": {
+      "post": {
+        "operationId": "previewSupplyOrder",
+        "summary": "Review server-priced order without creating or reserving anything",
+        "description": "Recipient roles and active store only, with no central onboarding override. Uses same Catalog snapshots as create: one center supplier, active local SKU matching pack_size and condition; internal transfer must use the identical SKU and commercial price zero. Prices/totals supplied by client are ignored. Delivery requires actual store address. Store/product rows may be locked during this short transaction; no order, operation receipt, audit or stock movement/reservation is written. review_hash binds current destination name/address, delivery mode, note, kind/supplier, local/supplier identity and authoritative line snapshots. Not persistent quote storage, a signed price or expiry policy. Native client sends hash on create, and a different current review gives 409 without an order; legacy no-hash create remains compatible and server-priced.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderPreviewInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Private/no-store preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OrderPreview"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Recipient membership or assignment denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown active scoped product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Inactive store or changed reviewed snapshot on subsequent create",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid quantity, delivery address, mapping or mixed suppliers",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7365,6 +7463,11 @@
             "items": {
               "$ref": "#/components/schemas/SupplyLineInput"
             }
+          },
+          "review_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "Optional for legacy callers; native composer always sends the fingerprint returned by preview. Server recalculates snapshots and rejects changed reviewed facts with 409. Not a signed price, stock reservation, authorization or expiry policy. Replay of a committed UUID returns its saved result before checking changed product prices."
           }
         },
         "required": [
@@ -8136,6 +8239,13 @@
           },
           "can_pos": {
             "type": "boolean"
+          },
+          "order_kind": {
+            "enum": [
+              "wholesale",
+              "internal_transfer"
+            ],
+            "description": "Organization-derived kind for native entry. Native composer requires this metadata and active plus can_order; legacy response without order_kind must not be guessed from role or SKU names."
           }
         },
         "required": [
@@ -9950,6 +10060,155 @@
           "receive"
         ],
         "description": "GET order detail hints, never mutation authorization. Approve/reject require recipient approver role and awaiting_approval/rejected state; cancel additionally supports approved/processing before first dispatch. Receive requires recipient role, active target and Fulfillment enabled in dispatched/partially_received state; client still checks a shipment is unreceived. Supplier view and inactive target have all false. Internal transfers require center owner/admin approval, wholesale requires partner lead."
+      },
+      "OrderPreviewInput": {
+        "type": "object",
+        "properties": {
+          "delivery_mode": {
+            "enum": [
+              "delivery",
+              "pickup"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SupplyLineInput"
+            }
+          }
+        },
+        "required": [
+          "delivery_mode",
+          "lines"
+        ]
+      },
+      "OrderPreviewLine": {
+        "type": "object",
+        "properties": {
+          "supplier_product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "local_product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "local_sku": {
+            "type": "string"
+          },
+          "local_name": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "pack_size": {
+            "type": "integer"
+          },
+          "quantity_packs": {
+            "type": "integer"
+          },
+          "unit_price": {
+            "type": "integer",
+            "description": "IDR per kemasan snapshot; zero for internal transfer"
+          }
+        },
+        "required": [
+          "supplier_product_id",
+          "local_product_id",
+          "pack_size",
+          "quantity_packs",
+          "unit_price"
+        ]
+      },
+      "OrderPreview": {
+        "type": "object",
+        "properties": {
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "destination_name": {
+            "type": "string"
+          },
+          "destination_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "delivery_mode": {
+            "enum": [
+              "delivery",
+              "pickup"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "wholesale",
+              "internal_transfer"
+            ]
+          },
+          "supplier_organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "total_amount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderPreviewLine"
+            }
+          },
+          "review_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "currency": {
+            "const": "IDR"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "store_id",
+          "destination_name",
+          "destination_address",
+          "delivery_mode",
+          "kind",
+          "supplier_organization_id",
+          "total_amount",
+          "lines",
+          "review_hash",
+          "currency",
+          "observed_at"
+        ]
       }
     }
   }

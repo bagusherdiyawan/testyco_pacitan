@@ -191,7 +191,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 ),
             ],
             const Text(
-              'Pengajuan baru, perubahan item dan pengiriman gudang tetap melalui web operasional. Penerimaan/keputusan ini online; pemulihan otomatis setelah aplikasi ditutup paksa belum tersedia.',
+              'Pengajuan baru tersedia dari daftar Pesanan. Perubahan item pesanan tersimpan dan pengiriman gudang masih melalui web. Penerimaan/keputusan ini online; pemulihan otomatis setelah aplikasi ditutup paksa belum tersedia.',
             ),
           ],
         ),

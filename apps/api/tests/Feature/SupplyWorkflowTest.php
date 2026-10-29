@@ -451,4 +451,88 @@ class SupplyWorkflowTest extends TestCase
         $this->assertDatabaseMissing('operation_receipts', ['operation_id' => $operation]);
         $this->assertDatabaseHas('supply_orders', ['id' => $order['id'], 'status' => 'dispatched', 'version' => $dispatch['order']['version']]);
     }
+
+    public function test_preview_is_authoritative_and_never_creates_an_order_or_reserves_stock(): void
+    {
+        $body = $this->body();
+        unset($body['operation_id']);
+        $body['total_amount'] = 1;
+        $body['lines'][0]['unit_price'] = 1;
+        $preview = $this->act($this->manager)->postJson('/api/v1/stores/'.$this->target->id.'/orders/preview', $body)->assertOk()->json('data');
+        $this->assertSame(360000, $preview['total_amount']);
+        $this->assertSame(18000, $preview['lines'][0]['unit_price']);
+        $this->assertSame('wholesale', $preview['kind']);
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $preview['review_hash']);
+        foreach (['supply_orders', 'stock_entries', 'operation_receipts', 'audit_entries'] as $table) {
+            $this->assertDatabaseCount($table, 0);
+        }
+        $payload = [...$this->body(), 'review_hash' => $preview['review_hash']];
+        $order = $this->postJson('/api/v1/stores/'.$this->target->id.'/orders', $payload)->assertCreated()->json('data');
+        $this->assertSame('awaiting_approval', $order['status']);
+        $this->supplierProduct->update(['wholesale_price' => 19000]);
+        $this->postJson('/api/v1/stores/'.$this->target->id.'/orders', $payload)->assertCreated()->assertJsonPath('data.id', $order['id']);
+        $this->assertDatabaseCount('supply_orders', 1);
+        $this->act($this->owner)->getJson('/api/v1/supply/orders')->assertJsonCount(0, 'data');
+    }
+
+    public function test_review_hash_rejects_changed_price_quantity_mapping_and_store_snapshot(): void
+    {
+        $body = $this->body();
+        unset($body['operation_id']);
+        $preview = $this->act($this->manager)->postJson('/api/v1/stores/'.$this->target->id.'/orders/preview', $body)->assertOk()->json('data');
+        $changed = [...$this->body(), 'review_hash' => $preview['review_hash']];
+        $changed['lines'][0]['quantity_packs'] = 1;
+        $this->postJson('/api/v1/stores/'.$this->target->id.'/orders', $changed)->assertConflict();
+        $alternate = Product::create(['organization_id' => $this->partner->id, 'sku' => 'ALT8', 'name' => 'Alternatif', 'condition' => 'frozen', 'pack_size' => 8, 'portion_size' => 4, 'retail_price' => 3000, 'wholesale_price' => 18000]);
+        $mapping = [...$this->body(), 'review_hash' => $preview['review_hash']];
+        $mapping['lines'][0]['local_product_id'] = $alternate->id;
+        $this->postJson('/api/v1/stores/'.$this->target->id.'/orders', $mapping)->assertConflict();
+        $this->supplierProduct->update(['wholesale_price' => 19000]);
+        $this->postJson('/api/v1/stores/'.$this->target->id.'/orders', [...$this->body(), 'review_hash' => $preview['review_hash']])->assertConflict();
+        $this->supplierProduct->update(['wholesale_price' => 18000]);
+        $this->target->update(['address' => 'Alamat baru']);
+        $this->postJson('/api/v1/stores/'.$this->target->id.'/orders', [...$this->body(), 'review_hash' => $preview['review_hash']])->assertConflict();
+        $this->assertDatabaseCount('supply_orders', 0);
+        $this->assertDatabaseCount('operation_receipts', 0);
+    }
+
+    public function test_preview_rejects_denied_tenants_inactive_target_and_mismatched_units(): void
+    {
+        $body = $this->body();
+        unset($body['operation_id']);
+        foreach ([$this->cashier, $this->outsider, $this->owner] as $actor) {
+            $this->act($actor)->postJson('/api/v1/stores/'.$this->target->id.'/orders/preview', $body)->assertForbidden();
+        }
+        $this->localProduct->update(['pack_size' => 10]);
+        $this->act($this->manager)->postJson('/api/v1/stores/'.$this->target->id.'/orders/preview', $body)->assertUnprocessable();
+        $this->localProduct->update(['pack_size' => 8]);
+        $this->target->update(['active' => false]);
+        $this->postJson('/api/v1/stores/'.$this->target->id.'/orders/preview', $body)->assertConflict();
+        $this->assertDatabaseCount('supply_orders', 0);
+    }
+
+    public function test_entry_context_declares_internal_transfer_and_preview_has_zero_commercial_value(): void
+    {
+        $target = Store::create(['organization_id' => $this->center->id, 'name' => 'Toko sendiri', 'address' => 'Pacitan']);
+        $context = $this->act($this->owner)->getJson('/api/v1/stores/'.$target->id.'/operations-context')->assertOk()->json('data');
+        $this->assertSame('internal_transfer', $context['order_kind']);
+        $body = ['delivery_mode' => 'pickup', 'lines' => [['supplier_product_id' => $this->supplierProduct->id, 'local_product_id' => $this->supplierProduct->id, 'quantity_packs' => 3]]];
+        $preview = $this->postJson('/api/v1/stores/'.$target->id.'/orders/preview', $body)->assertOk()->json('data');
+        $this->assertSame(0, $preview['total_amount']);
+        $this->assertSame(0, $preview['lines'][0]['unit_price']);
+        $this->postJson('/api/v1/stores/'.$target->id.'/orders', [...$body, 'review_hash' => $preview['review_hash'], 'operation_id' => (string) Str::uuid()])->assertCreated()->assertJsonPath('data.kind', 'internal_transfer');
+    }
+
+    public function test_preview_delivery_needs_real_address_and_malformed_hash_never_creates(): void
+    {
+        $this->target->update(['address' => null]);
+        $body = $this->body();
+        unset($body['operation_id']);
+        $this->act($this->manager)->postJson('/api/v1/stores/'.$this->target->id.'/orders/preview', $body)->assertUnprocessable();
+        $body['delivery_mode'] = 'pickup';
+        $this->postJson('/api/v1/stores/'.$this->target->id.'/orders/preview', $body)->assertOk()->assertJsonPath('data.destination_address', null);
+        $this->postJson('/api/v1/stores/'.$this->target->id.'/orders', [...$body, 'operation_id' => (string) Str::uuid(), 'review_hash' => 'invalid'])->assertUnprocessable();
+        $this->assertDatabaseCount('supply_orders', 0);
+        $this->assertDatabaseCount('operation_receipts', 0);
+    }
 }

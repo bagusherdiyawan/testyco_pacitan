@@ -3,12 +3,14 @@
 namespace App\Modules\Ordering\Presentation;
 
 use App\Modules\Catalog\Application\SupplyCatalog;
+use App\Modules\Fulfillment\FulfillmentServiceProvider;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Inventory\Application\StockAccess;
 use App\Modules\Inventory\InventoryServiceProvider;
 use App\Modules\Ordering\Application\OrderAccess;
 use App\Modules\Ordering\Application\OrderWorkflow;
+use App\Modules\Ordering\Application\RecipientOrderActions;
 use App\Modules\Ordering\Infrastructure\SupplyOrder;
 use App\Modules\Sales\SalesServiceProvider;
 use App\Modules\Shifts\Application\PosAccess;
@@ -16,7 +18,7 @@ use Illuminate\Http\Request;
 
 final class OrderController
 {
-    public function __construct(private OrderAccess $access, private OrderWorkflow $workflow, private Access $identity) {}
+    public function __construct(private OrderAccess $access, private OrderWorkflow $workflow, private Access $identity, private RecipientOrderActions $recipientActions) {}
 
     public function context(Request $r, string $store): mixed
     {
@@ -52,7 +54,9 @@ final class OrderController
         $role = $this->identity->role($r->user(), $record->organization_id)?->value;
         $supplierRole = $this->identity->role($r->user(), $record->supplier_organization_id)?->value;
 
-        return ['data' => [...$record->toArray(), 'access_side' => $side, 'can_approve' => in_array($role, $record->kind === 'internal_transfer' ? ['owner', 'admin'] : ['partner_lead'], true), 'can_process' => $record->approved_at !== null && in_array($supplierRole, ['owner', 'admin'], true)]];
+        $fulfillment = app()->getProvider(FulfillmentServiceProvider::class) !== null;
+
+        return ['data' => [...$record->toArray(), 'fulfillment_enabled' => $fulfillment, 'recipient_actions' => $this->recipientActions->for($r->user(), $record, $side, $fulfillment), 'access_side' => $side, 'can_approve' => in_array($role, $record->kind === 'internal_transfer' ? ['owner', 'admin'] : ['partner_lead'], true), 'can_process' => $record->approved_at !== null && in_array($supplierRole, ['owner', 'admin'], true)]];
     }
 
     private function items(): array

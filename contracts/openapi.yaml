@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.8.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report."
+    "version": "0.9.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows."
   },
   "security": [
     {
@@ -7599,6 +7599,13 @@
           },
           "can_process": {
             "type": "boolean"
+          },
+          "recipient_actions": {
+            "$ref": "#/components/schemas/RecipientOrderActions"
+          },
+          "fulfillment_enabled": {
+            "type": "boolean",
+            "description": "Present on GET order detail. False means the client must not request the optional shipments endpoint or offer receipt. Legacy response without this field may still support existing shipments; no mutation capability is inferred from legacy can_approve."
           }
         },
         "required": [
@@ -9919,6 +9926,30 @@
           "observed_at",
           "currency"
         ]
+      },
+      "RecipientOrderActions": {
+        "type": "object",
+        "properties": {
+          "approve": {
+            "type": "boolean"
+          },
+          "reject": {
+            "type": "boolean"
+          },
+          "cancel": {
+            "type": "boolean"
+          },
+          "receive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "approve",
+          "reject",
+          "cancel",
+          "receive"
+        ],
+        "description": "GET order detail hints, never mutation authorization. Approve/reject require recipient approver role and awaiting_approval/rejected state; cancel additionally supports approved/processing before first dispatch. Receive requires recipient role, active target and Fulfillment enabled in dispatched/partially_received state; client still checks a shipment is unreceived. Supplier view and inactive target have all false. Internal transfers require center owner/admin approval, wholesale requires partner lead."
       }
     }
   }

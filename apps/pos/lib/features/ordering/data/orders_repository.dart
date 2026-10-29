@@ -16,4 +16,7 @@ class OrdersRepository {
               ))['data']
               as List)
           .cast<Map<String, dynamic>>();
+  Future<void> submit(String path, Map<String, dynamic> body) async {
+    await api.request('POST', path, body);
+  }
 }

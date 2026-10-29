@@ -1,6 +1,6 @@
 # Panduan pesanan dan penerimaan stok
 
-Cakupan awal PRD 04, 05-RCV/MOV dan 09. Web memiliki aksi operasional; Flutter menampilkan pesanan, pengiriman dan stok per batch melalui API. POS tunai dan shift tersedia terpisah; lihat [panduan POS](cash-pos.md).
+Cakupan awal PRD 04, 05-RCV/MOV dan 09. Web memiliki seluruh aksi supply awal. Flutter menampilkan pesanan/pengiriman/stok serta mendukung keputusan pesanan berizin dan penerimaan aktual melalui API yang sama. POS tunai dan shift tersedia terpisah; lihat [panduan POS](cash-pos.md).
 
 ## Persiapan
 
@@ -37,9 +37,9 @@ Setiap formulir mutasi mempunyai UUID operasi. Gunakan UUID yang sama untuk meng
 
 ## API dan Flutter
 
-Kontrak OpenAPI 0.8.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
+Kontrak OpenAPI 0.9.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
 
-Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok yang menampilkan jumlah baik/karantina. `FEATURE_ORDERING=false` dan `FEATURE_INVENTORY=false` dapat menonaktifkan modul presentasi saat build. Aksi pengajuan/persetujuan/pengiriman/penerimaan Flutter belum dibuat; gunakan web.
+Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok yang menampilkan jumlah baik/karantina. `FEATURE_ORDERING=false` dan `FEATURE_INVENTORY=false` dapat menonaktifkan modul presentasi saat build. Persetujuan/penolakan/pembatalan berizin dan penerimaan aktual kini tersedia pada Flutter; lihat [panduan native](native-ordering.md). Pengajuan baru, perubahan item dan pengiriman gudang masih melalui web.
 
 ## Batas berikutnya
 

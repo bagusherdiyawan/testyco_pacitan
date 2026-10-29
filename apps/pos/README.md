@@ -9,3 +9,5 @@ Ambang stok minimum per SKU/toko dan peringatan saat halaman dimuat tersedia; pe
 Pending operasi stok hanya disimpan di memori halaman. Jika aplikasi ditutup paksa ketika hasil belum diketahui, rekonsiliasi saldo/riwayat/audit sebelum mencatat ulang; pemulihan otomatis operasi stok lintas restart belum dibuat.
 
 Reporting menyediakan laporan POS tunai per organisasi/toko, produk historis dan filter periode. Ekspor CSV hanya web, maksimal 10.000 transaksi; semua output memakai scope server yang sama. Lihat docs/cash-reporting.md di root.
+
+Keputusan pesanan berizin dan penerimaan aktual mobile/tablet tersedia melalui API versi/idempotensi yang sama; lihat docs/native-ordering.md. Pengajuan baru, perubahan item dan dispatch masih web.

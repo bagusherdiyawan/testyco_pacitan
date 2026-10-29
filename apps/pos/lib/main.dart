@@ -10,6 +10,8 @@ import 'features/catalog/catalog_module.dart';
 import 'features/catalog/data/catalog_repository.dart';
 import 'features/sales/sales_module.dart';
 import 'features/sales/data/pos_repository.dart';
+import 'features/shifts/shifts_module.dart';
+import 'features/shifts/data/shifts_repository.dart';
 import 'features/inventory/inventory_module.dart';
 import 'features/inventory/data/inventory_repository.dart';
 import 'features/ordering/ordering_module.dart';
@@ -111,6 +113,15 @@ class _TestycoAppState extends State<TestycoApp> {
                   ))
                 SalesModule(
                   repository: PosRepository(widget.session.api),
+                  storeId: _store!.id,
+                ),
+              if (_store!.canManageShifts &&
+                  const bool.fromEnvironment(
+                    'FEATURE_SHIFTS',
+                    defaultValue: true,
+                  ))
+                ShiftsModule(
+                  repository: ShiftsRepository(widget.session.api),
                   storeId: _store!.id,
                 ),
               if (const bool.fromEnvironment(

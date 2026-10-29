@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 29 Oktober 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 132 tes lulus, 972 assertions |
+| API PHPUnit | 135 tes lulus, 1022 assertions |
 | Web PHPUnit | 48 tes lulus, 195 assertions |
-| Flutter | 82 tes lulus; perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 262 tes lulus |
+| Flutter | 93 tes lulus; kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 276 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
-| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native lulus |
+| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.11.0 | 67 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.12.0 | 67 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -143,3 +143,17 @@ Diverifikasi 29 Oktober 2026. API preview perubahan memeriksa approver, state da
 - HTTP smoke preview/PUT/replay mengubah draft native yang sama dari 1 ke 2 kemasan: ID tetap, version 2, awaiting_approval dan belum menambah stok. Web legacy tanpa hash, approval, dispatch serta actual receipt tetap lulus.
 
 Hasil final: 132 API/972 assertions, 48 web/195 assertions, 82 Flutter (262 tes), analyzer bersih, HTTP dan metadata smoke lulus. Kontrak 0.11.0: 67 unique operation IDs dan local refs/path parameter konsisten. Tidak ada migration/dependency baru. Pengujian belum mencakup PostgreSQL concurrency, perangkat fisik, UAT, dispatch native, postapproval reapproval atau antrean offline tahan restart.
+
+## Bukti kas masuk/keluar native
+
+Irisan PRD 07-CASH/01-ACL/AUD, 29 Oktober 2026; tidak menambah kebijakan refund, shift bersama atau izin kasir.
+
+- GET detail memberi can_record_movement hanya bagi pengelola scoped, toko aktif dan shift open; cashier, warehouse, toko tanpa assignment, mitra lain dan pusat tanpa membership tidak mendapat akses mutasi. Riwayat toko nonaktif tetap berizin; flag false dan POST ditolak. Respons detail private/no-store.
+- Kas keluar Rp20.000 dari opening Rp100.000 + sales Rp200.000 menghasilkan expected Rp280.000; sales tetap Rp200.000. Replay UUID/body identik setelah shift ditutup mengembalikan ID catatan awal tanpa kas/audit/ledger ganda. UUID sama dengan nominal berbeda, UUID baru pada shift tertutup serta versi lama ditolak.
+- Flutter memisahkan DTO/repository/controller/page serta summary/review reusable. Daftar memuat halaman eksplisit, tanpa mengikuti URL pagination eksternal. Missing capability, closed, wrong-store, read failure serta can_manage tanpa capability tidak mengaktifkan pencatatan.
+- Preview dialog tidak menulis. Nominal pecahan/nol/negatif/berlebih, overdraw, kategori/alasan kosong serta kategori terlalu panjang ditolak sebelum POST. Konfirmasi mengirim original shift ID/version, jenis, nominal, kategori, alasan dan UUID.
+- Respons hilang setelah commit mempertahankan path/body/UUID, menghalangi refresh/new operation; replay setelah closure memuat GET terkini (bukan versi lama dari replay). Denial sesudah respons tidak pasti tidak menghapus pending. ACK lalu GET gagal tetap menyatakan kas tersimpan dan tidak membuat mutasi baru.
+- Konflik versi tidak direbase diam-diam: refresh dan review baru diperlukan. Refresh mengosongkan isian lewat form epoch. Widget menguji daftar, pagination, dialog konfirmasi, perubahan saldo dan bukti tersimpan pada 390px/text scale 1,5 serta 1200px. Menu overflow mobile menguji akses seluruh modul dan selected index.
+- Smoke HTTP terisolasi menguji metadata kasir/pengelola, daftar shift, expense, penutupan, replay setelah closure, satu movement tersimpan, omzet tetap Rp12.000 serta ledger tetap. Smoke metadata Compose juga lulus.
+
+Hasil terkini: 135 API/1022 assertions, 48 web/195 assertions, 93 Flutter (276 tes). API/web dari scripts/check lulus; delapan temuan braces analyzer diperbaiki, lalu analyzer dan seluruh tes Flutter lulus. OpenAPI 0.12.0 memiliki 67 operation IDs unik; refs/path parameters dan required duplicates diperiksa lokal, tanpa validator eksternal. Tidak ada migrasi/dependensi baru. PostgreSQL concurrency, build/perangkat Android/iOS, UAT, refund, dispatch native serta antrean tahan restart belum diverifikasi/diimplementasikan sesuai scope masing-masing.

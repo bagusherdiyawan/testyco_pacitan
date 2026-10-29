@@ -353,6 +353,60 @@ class CashPosTest extends TestCase
         $this->assertSame(26, $this->batch->fresh()->ready_pieces);
     }
 
+    public function test_shift_movement_metadata_respects_role_status_and_inactive_store(): void
+    {
+        $s = $this->open();
+        $url = '/api/v1/shifts/'.$s['id'];
+        $this->getJson($url)->assertOk()->assertJsonPath('data.can_record_movement', false);
+        $this->act($this->manager)->getJson($url)->assertOk()->assertJsonPath('data.can_record_movement', true)->assertHeader('Cache-Control', 'no-store, private');
+        $this->store->update(['active' => false]);
+        $this->getJson($url)->assertOk()->assertJsonPath('data.can_record_movement', false);
+        $this->postJson($url.'/cash-movements', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'kind' => 'in', 'amount' => 100, 'category' => 'Modal', 'reason' => 'Tambah kas'])->assertConflict();
+        $this->store->update(['active' => true]);
+        $this->act($this->cashier)->postJson($url.'/close', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'counted_cash' => 100000])->assertOk();
+        $this->act($this->manager)->getJson($url)->assertOk()->assertJsonPath('data.can_record_movement', false);
+        $this->assertDatabaseCount('cash_movements', 0);
+    }
+
+    public function test_cash_movement_replay_after_close_preserves_original_record_and_never_changes_revenue_or_stock(): void
+    {
+        $s = $this->open();
+        $url = '/api/v1/shifts/'.$s['id'].'/cash-movements';
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => 1, 'kind' => 'out', 'amount' => 20000, 'category' => 'Operasional', 'reason' => 'Uang fisik keluar'];
+        $entries = DB::table('stock_entries')->count();
+        $record = $this->act($this->manager)->postJson($url, $v)->assertCreated()->assertJsonPath('data.shift.version', 2)->json('data');
+        $this->act($this->cashier)->postJson('/api/v1/shifts/'.$s['id'].'/close', ['operation_id' => (string) Str::uuid(), 'version' => 2, 'counted_cash' => 80000])->assertOk();
+        $this->act($this->manager)->postJson($url, $v)->assertCreated()->assertJsonPath('data.movement.id', $record['movement']['id'])->assertJsonPath('data.shift.version', 2);
+        $this->postJson($url, [...$v, 'amount' => 1])->assertConflict();
+        $this->postJson($url, [...$v, 'operation_id' => (string) Str::uuid()])->assertConflict();
+        $this->getJson('/api/v1/shifts/'.$s['id'])->assertJsonPath('data.status', 'closed')->assertJsonPath('data.version', 3)->assertJsonCount(1, 'data.movements');
+        $this->assertDatabaseCount('cash_movements', 1);
+        $this->assertDatabaseCount('sales', 0);
+        $this->assertDatabaseCount('stock_entries', $entries);
+        $this->assertDatabaseHas('cash_shifts', ['id' => $s['id'], 'expected_cash' => 80000, 'cash_sales' => 0, 'cash_out' => 20000]);
+        $this->assertSame(1, DB::table('audit_entries')->where('action', 'shift.cash_movement')->count());
+    }
+
+    public function test_shift_history_and_movements_enforce_assignment_and_tenant_scope(): void
+    {
+        $s = $this->open();
+        $unassigned = $this->user($this->org, 'store_manager');
+        $assigned = $this->user($this->org, 'store_manager', [$this->store]);
+        $center = Organization::create(['name' => 'Pusat', 'type' => 'center']);
+        $owner = $this->user($center, 'owner');
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => 1, 'kind' => 'in', 'amount' => 10000, 'category' => 'Modal', 'reason' => 'Uang fisik diterima'];
+        foreach ([$this->outside, $this->warehouse, $unassigned, $owner] as $actor) {
+            $this->act($actor)->getJson('/api/v1/stores/'.$this->store->id.'/shifts')->assertForbidden();
+            $this->getJson('/api/v1/shifts/'.$s['id'])->assertForbidden();
+            $this->postJson('/api/v1/shifts/'.$s['id'].'/cash-movements', $v)->assertForbidden();
+        }
+        $this->act($this->other)->getJson('/api/v1/stores/'.$this->store->id.'/shifts')->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/shifts/'.$s['id'])->assertForbidden();
+        $this->act($assigned)->getJson('/api/v1/stores/'.$this->store->id.'/shifts')->assertJsonPath('data.0.id', $s['id']);
+        $this->getJson('/api/v1/shifts/'.$s['id'])->assertJsonPath('data.can_record_movement', true);
+        $this->postJson('/api/v1/shifts/'.$s['id'].'/cash-movements', $v)->assertCreated()->assertJsonPath('data.shift.expected_cash', 110000);
+    }
+
     public function test_used_financial_schema_cannot_be_rolled_back(): void
     {
         $this->open();

@@ -275,7 +275,13 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==entries
         shift=api(base,'GET',f'shifts/{sale["cash_shift_id"]}',token=cashier_token)['data']
         assert shift['expected_cash']==112000 and shift['cash_sales']==12000
-        api(base,'POST',f'shifts/{shift["id"]}/cash-movements',{'operation_id':str(uuid.uuid4()),'version':shift['version'],'kind':'out','amount':2000,'category':'Operations','reason':'Physical drawer expense'},manager_token,201)
+        assert not shift['can_record_movement']
+        manager_shift=api(base,'GET',f'shifts/{shift["id"]}',token=manager_token)['data']
+        assert manager_shift['can_record_movement']
+        assert api(base,'GET',f'stores/{store}/shifts?page=1',token=manager_token)['data'][0]['id']==shift['id']
+        movement_body={'operation_id':str(uuid.uuid4()),'version':shift['version'],'kind':'out','amount':2000,'category':'Operations','reason':'Physical drawer expense'}
+        movement=api(base,'POST',f'shifts/{shift["id"]}/cash-movements',movement_body,manager_token,201)['data']
+        assert movement['shift']['expected_cash']==110000 and movement['shift']['cash_sales']==12000
         html=opener.open(web+f'/app/pos/shifts/{shift["id"]}').read().decode()
         close_path=f'/app/pos/shifts/{shift["id"]}/close'; closing=fields(html,close_path)
         closing.update({'counted_cash':'109000','closing_note':'Physical count differs by one thousand'})
@@ -283,6 +289,12 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert 'closed' in html and '-1000' in html
         shift=api(base,'GET',f'shifts/{shift["id"]}',token=cashier_token)['data']
         assert shift['expected_cash']==110000 and shift['difference_cash']==-1000 and shift['cash_sales']==12000
+        assert not api(base,'GET',f'shifts/{shift["id"]}',token=manager_token)['data']['can_record_movement']
+        replay=api(base,'POST',f'shifts/{shift["id"]}/cash-movements',movement_body,manager_token,201)['data']
+        assert replay['movement']['id']==movement['movement']['id']
+        current_shift=api(base,'GET',f'shifts/{shift["id"]}',token=manager_token)['data']
+        assert current_shift['status']=='closed' and len(current_shift['movements'])==1
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==entries
         assert api(base,'GET',f'stores/{store}/pos/context',token=cashier_token)['data']['shift'] is None
         # Cross-store cash reporting and CSV use the same stored sale, excluding cash expenses.
         import csv

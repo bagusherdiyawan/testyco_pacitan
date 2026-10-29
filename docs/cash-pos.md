@@ -31,7 +31,7 @@ Draft belum dibayar boleh dibatalkan dengan alasan. Penjualan lunas tidak bisa d
 
 ## Kas, penutupan dan laporan
 
-Pengelola berwenang membuka halaman shift melalui web untuk mencatat kas masuk/keluar dengan kategori dan alasan. Kas keluar tidak boleh melampaui kas diharapkan; versi lama ditolak. Flutter saat ini hanya menyediakan buka/tutup dan penjualan, bukan formulir kas manual.
+Pengelola berwenang membuka halaman shift melalui web atau modul **Kas shift** Flutter untuk mencatat kas masuk/keluar dengan kategori dan alasan. Kas keluar tidak boleh melampaui kas diharapkan; versi lama ditolak. Flutter menyediakan daftar/detail shift, review, riwayat dan retry immutable; lihat [panduan kas native](native-shift-cash.md).
 
 Kas diharapkan = uang awal + penjualan tunai neto + kas masuk − kas keluar. Uang diterima pembeli dikurangi kembalian, sehingga penjualan Rp12.000 dengan uang Rp20.000 menambah kas Rp12.000. Contoh uang awal Rp100.000 + penjualan Rp200.000 − kas keluar Rp20.000 = Rp280.000. Hitung fisik Rp275.000 berarti selisih −Rp5.000 dan wajib diberi catatan.
 

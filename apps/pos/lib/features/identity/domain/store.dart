@@ -10,6 +10,8 @@ class AssignedStore {
   final String name;
   final bool active;
   final String? role;
+  bool get canManageShifts =>
+      const {'owner', 'admin', 'partner_lead', 'store_manager'}.contains(role);
   bool get canViewReports =>
       organizationId.isNotEmpty &&
       const {'owner', 'admin', 'partner_lead', 'store_manager'}.contains(role);

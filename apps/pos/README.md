@@ -1,6 +1,6 @@
 # Testyco POS
 
-Flutter mobile/tablet: login, toko, katalog, stok per keadaan, pesanan dan rincian pengiriman melalui API. Modul Sales menyediakan POS tunai online, draft server/recovery, struk digital dan buka/tutup shift. Pengolahan stok, pengajuan opname/susut dan review tersedia bagi petugas berwenang pada Flutter. Kas masuk/keluar pengelola masih melalui web. Registry fitur berada di lib/main.dart; atomic design di lib/design_system.
+Flutter mobile/tablet: login, toko, katalog, stok per keadaan, pesanan dan rincian pengiriman melalui API. Modul Sales menyediakan POS tunai online, draft server/recovery, struk digital dan buka/tutup shift. Pengolahan stok, pengajuan opname/susut dan review tersedia bagi petugas berwenang pada Flutter. Kas masuk/keluar pengelola kini melalui web dan modul Kas shift Flutter; lihat docs/native-shift-cash.md. Registry fitur berada di lib/main.dart; atomic design di lib/design_system.
 
 Lihat README root, docs/cash-pos.md dan docs/stock-control.md. Token hanya di memori; login ulang lalu pulihkan draft/struk dari server setelah aplikasi ditutup. Belum ada offline, QRIS, refund, printer fisik atau build perangkat terverifikasi.
 

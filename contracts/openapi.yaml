@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.11.0",
+    "version": "0.12.0",
     "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
   },
   "security": [
@@ -5031,7 +5031,8 @@
               "description": "ULID"
             }
           }
-        ]
+        ],
+        "description": "Detail includes current can_record_movement and manual cash history. Response is private/no-store. Replayed writes may return old shift state: fetch current detail after acknowledgement."
       }
     },
     "/api/v1/shifts/{shift}/cash-movements": {
@@ -8852,6 +8853,10 @@
             "items": {
               "$ref": "#/components/schemas/CashMovement"
             }
+          },
+          "can_record_movement": {
+            "type": "boolean",
+            "description": "Present on GET detail only. True for a scoped manager, active store and open shift. Missing means no native mutation; can_manage alone is insufficient. Server reauthorizes every POST."
           }
         },
         "required": [

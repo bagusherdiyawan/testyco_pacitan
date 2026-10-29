@@ -40,7 +40,9 @@ final class ShiftController
         $store = $this->access->store($r->user(), $s->store_id, false);
         abort_unless((int) $s->cashier_id === $r->user()->id || $this->access->canManage($r->user(), $store->organization_id), 403);
 
-        return ['data' => [...$s->toArray(), 'is_owner' => (int) $s->cashier_id === $r->user()->id, 'can_manage' => $this->access->canManage($r->user(), $store->organization_id), 'movements' => CashMovement::where('cash_shift_id', $shift)->orderBy('id')->get()]];
+        $canManage = $this->access->canManage($r->user(), $store->organization_id);
+
+        return response()->json(['data' => [...$s->toArray(), 'is_owner' => (int) $s->cashier_id === $r->user()->id, 'can_manage' => $canManage, 'can_record_movement' => $canManage && $store->active && $s->status === 'open', 'movements' => CashMovement::where('cash_shift_id', $shift)->orderBy('id')->get()]])->header('Cache-Control', 'private, no-store');
     }
 
     public function open(Request $r, string $store): mixed

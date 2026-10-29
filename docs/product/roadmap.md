@@ -32,7 +32,7 @@ Gate: MVP-02/03/04/08/09 lulus; retry tidak menggandakan pergerakan; stok fisik 
 
 ## Tahap 3 — POS mobile/tablet dan shift, pilot terbatas
 
-Status: POS tunai online web/Flutter, draft server dapat dipulihkan, harga/konversi server, stok/kas atomik, struk digital, buka/tutup shift, kas masuk/keluar web dan ringkasan penjualan WIB tersedia. QRIS manual/otomatis, refund, promosi, printer fisik, offline dan gate pilot belum selesai. Lihat [panduan POS](../cash-pos.md).
+Status: POS tunai online web/Flutter, draft server dapat dipulihkan, harga/konversi server, stok/kas atomik, struk digital, buka/tutup shift, kas masuk/keluar web/Flutter (docs/native-shift-cash.md) dan ringkasan penjualan WIB tersedia. QRIS manual/otomatis, refund, promosi, printer fisik, offline dan gate pilot belum selesai. Lihat [panduan POS](../cash-pos.md).
 
 Cakupan: PRD 06–07, ringkasan PRD 11, notifikasi 13-NOT. Keranjang, satuan/paket, tunai dan pencatatan QRIS manual, transaksi idempoten, refund berizin, struk, kas masuk/keluar dan tutup shift. Layout tablet dapat memperlihatkan katalog dan keranjang bersamaan; mobile mempertahankan alur transaksi yang sama dengan navigasi sesuai ruang.
 

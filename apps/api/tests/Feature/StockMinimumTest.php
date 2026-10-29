@@ -194,6 +194,62 @@ class StockMinimumTest extends TestCase
         $this->assertDatabaseCount('inventory_minimums', 0);
     }
 
+    public function test_exact_detail_is_read_only_price_free_and_ignores_list_filters_or_page(): void
+    {
+        $this->seedStock($this->store, 'A', 2);
+        $path = $this->url.'/'.$this->product->id;
+        $before = DB::table('stock_entries')->count();
+        $response = $this->getJson($path.'?page=2&low_only=1&q=no-match')->assertOk()
+            ->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('store.id', $this->store->id)->assertJsonPath('can_manage', true)
+            ->assertJsonPath('data.product_id', $this->product->id)->assertJsonPath('data.version', 0)
+            ->assertJsonPath('data.minimum_pieces', null)->assertJsonPath('data.available_pieces', 20);
+        $this->assertArrayNotHasKey('wholesale_price', $response->json('data'));
+        $this->assertArrayNotHasKey('retail_price', $response->json('data'));
+        $this->product->update(['sku' => 'RENAMED']);
+        $this->getJson($path)->assertOk()->assertJsonPath('data.sku', 'RENAMED');
+        $this->assertDatabaseCount('inventory_minimums', 0);
+        $this->assertDatabaseCount('operation_receipts', 0);
+        $this->assertDatabaseCount('audit_entries', 0);
+        $this->assertDatabaseCount('stock_entries', $before);
+    }
+
+    public function test_detail_rejects_tenant_and_unassigned_access_but_read_only_roles_can_read(): void
+    {
+        $path = $this->url.'/'.$this->product->id;
+        foreach ([$this->cashier, $this->user($this->org, 'warehouse', $this->store)] as $u) {
+            Sanctum::actingAs($u);
+            $this->getJson($path)->assertOk()->assertJsonPath('can_manage', false);
+        }
+        $foreign = Organization::create(['name' => 'Lain', 'type' => 'partner']);
+        $center = Organization::create(['name' => 'Pusat', 'type' => 'center']);
+        foreach ([$this->user($foreign, 'partner_lead'), $this->user($center, 'owner'), $this->user($this->org, 'store_manager')] as $u) {
+            Sanctum::actingAs($u);
+            $this->getJson($path)->assertForbidden();
+        }
+        Sanctum::actingAs($this->user($this->org, 'store_manager', $this->store));
+        $this->getJson($path)->assertOk()->assertJsonPath('can_manage', true);
+        $this->getJson($this->url.'/'.$this->product('FOREIGN', $foreign)->id)->assertNotFound();
+        $this->product->update(['active' => false]);
+        $this->getJson($path)->assertNotFound();
+        $this->store->update(['active' => false]);
+        $this->getJson($path)->assertConflict();
+    }
+
+    public function test_detail_after_replay_reads_latest_configuration_instead_of_reverting_it(): void
+    {
+        $path = $this->url.'/'.$this->product->id;
+        $first = $this->payload(0);
+        $this->postJson($path, $first)->assertOk()->assertJsonPath('data.version', 1);
+        $this->postJson($path, $this->payload(null, 1))->assertOk()->assertJsonPath('data.version', 2);
+        $this->postJson($path, $first)->assertOk()->assertJsonPath('data.version', 1);
+        $this->getJson($path)->assertOk()->assertJsonPath('data.version', 2)->assertJsonPath('data.minimum_pieces', null)->assertJsonPath('data.is_low', false);
+        $this->assertDatabaseCount('inventory_minimums', 1);
+        $this->assertDatabaseCount('audit_entries', 2);
+        $this->assertDatabaseCount('stock_entries', 0);
+        $this->assertDatabaseCount('supply_orders', 0);
+    }
+
     public function test_filters_and_paginates_active_skus_without_losing_unstocked_products(): void
     {
         for ($i = 0; $i < 51; $i++) {

@@ -23,6 +23,7 @@ final class InventoryServiceProvider extends ServiceProvider
         }
         Route::prefix('api/v1')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
             Route::get('stores/{store}/inventory/minimums', [StockMinimumController::class, 'index']);
+            Route::get('stores/{store}/inventory/minimums/{product}', [StockMinimumController::class, 'show']);
             Route::post('stores/{store}/inventory/minimums/{product}', [StockMinimumController::class, 'configure']);
             $control = StockControlController::class;
             Route::get('stores/{store}/inventory/control-context', [$control, 'context']);

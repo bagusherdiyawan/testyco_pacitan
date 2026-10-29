@@ -22,4 +22,9 @@ final class StockMinimumController
 
         return ['data' => $this->minimums->configure($r->user(), $store, $product, $v)];
     }
+
+    public function show(Request $r, string $store, string $product): mixed
+    {
+        return response()->json($this->minimums->detail($r->user(), $store, $product))->header('Cache-Control', 'private, no-store');
+    }
 }

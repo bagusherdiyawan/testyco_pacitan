@@ -1,5 +1,7 @@
 class StockMinimum {
   const StockMinimum({
+    this.productId = '',
+    this.version,
     required this.sku,
     required this.name,
     required this.available,
@@ -11,6 +13,8 @@ class StockMinimum {
     required this.isLow,
   });
   factory StockMinimum.fromJson(Map<String, dynamic> j) => StockMinimum(
+    productId: j['product_id'] as String? ?? '',
+    version: j['version'] as int?,
     sku: j['sku'] as String,
     name: j['name'] as String,
     available: j['available_pieces'] as int,
@@ -21,8 +25,36 @@ class StockMinimum {
     shortfall: j['shortfall_pieces'] as int,
     isLow: j['is_low'] as bool,
   );
-  final String sku, name;
+  final String sku, name, productId;
+  final int? version;
   final int available, usable, opened, ready, shortfall;
   final int? minimum;
   final bool isLow;
+}
+
+class StockMinimumReport {
+  const StockMinimumReport({
+    required this.rows,
+    required this.storeId,
+    required this.canManage,
+    required this.observedAt,
+    this.page = 1,
+    this.lastPage = 1,
+  });
+  final List<StockMinimum> rows;
+  final String storeId, observedAt;
+  final bool canManage;
+  final int page, lastPage;
+}
+
+class StockMinimumDetail {
+  const StockMinimumDetail(
+    this.row,
+    this.storeId,
+    this.canManage,
+    this.observedAt,
+  );
+  final StockMinimum row;
+  final String storeId, observedAt;
+  final bool canManage;
 }

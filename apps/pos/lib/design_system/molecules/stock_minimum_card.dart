@@ -11,8 +11,10 @@ class StockMinimumCard extends StatelessWidget {
     required this.minimum,
     required this.shortfall,
     required this.isLow,
+    this.action,
     super.key,
   });
+  final Widget? action;
   final String sku, name;
   final int available, usable, opened, ready, shortfall;
   final int? minimum;
@@ -44,6 +46,7 @@ class StockMinimumCard extends StatelessWidget {
               ),
             ),
           if (!isLow && minimum != null) const Text('Stok memenuhi ambang.'),
+          if (action != null) action!,
         ],
       ),
     ),

@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 29 Oktober 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 135 tes lulus, 1022 assertions |
+| API PHPUnit | 138 tes lulus, 1065 assertions |
 | Web PHPUnit | 48 tes lulus, 195 assertions |
-| Flutter | 93 tes lulus; kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 276 tes lulus |
+| Flutter | 104 tes lulus; editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 290 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
-| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift lulus |
+| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.12.0 | 67 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.13.0 | 68 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -157,3 +157,16 @@ Irisan PRD 07-CASH/01-ACL/AUD, 29 Oktober 2026; tidak menambah kebijakan refund,
 - Smoke HTTP terisolasi menguji metadata kasir/pengelola, daftar shift, expense, penutupan, replay setelah closure, satu movement tersimpan, omzet tetap Rp12.000 serta ledger tetap. Smoke metadata Compose juga lulus.
 
 Hasil terkini: 135 API/1022 assertions, 48 web/195 assertions, 93 Flutter (276 tes). API/web dari scripts/check lulus; delapan temuan braces analyzer diperbaiki, lalu analyzer dan seluruh tes Flutter lulus. OpenAPI 0.12.0 memiliki 67 operation IDs unik; refs/path parameters dan required duplicates diperiksa lokal, tanpa validator eksternal. Tidak ada migrasi/dependensi baru. PostgreSQL concurrency, build/perangkat Android/iOS, UAT, refund, dispatch native serta antrean tahan restart belum diverifikasi/diimplementasikan sesuai scope masing-masing.
+
+## Bukti pengaturan stok minimum native
+
+Irisan PRD 05-MIN/01-ACL/AUD, 29 Oktober 2026. Pengaturan web tetap kompatibel; tidak ada migrasi/dependensi atau aturan pengadaan baru.
+
+- GET detail ID SKU berbagi proyeksi scoped/tanpa harga dengan daftar. SKU renamed tetap ditemukan berdasarkan ID; query page=2/low_only/q tidak menyembunyikan detail. SKU/toko nonaktif, foreign SKU, lintas tenant, pusat tanpa membership dan kepala toko unassigned ditolak. Kasir/gudang assigned membaca dengan can_manage=false; kepala toko assigned mendapat izin. GET private/no-store dan tidak membuat konfigurasi/operasi/audit/ledger.
+- Detail unconfigured memberi version 0/null. POST zero mengaktifkan, null menonaktifkan tanpa menghapus histori. Replay konfigurasi pertama setelah perubahan kedua mengembalikan versi historis, sementara GET tetap versi terbaru. Tidak ada pergerakan stok atau pesanan otomatis.
+- Native default-deny bila flag/store/product/version tidak cocok atau metadata hilang. Form tanpa angka default memerlukan threshold integer desimal 0–1 miliar saat enabled serta alasan. Kosong/pecahan/negatif/hex/exponent/overflow ditolak; disable mengirim explicit minimum_pieces=null.
+- Preview dialog tidak menulis. Konfirmasi mempertahankan path ID toko/produk, versi asli dan UUID/body immutable. Versi stale memerlukan reload/review baru, bukan rebase. Unknown diikuti denial tetap menyimpan pending; retry setelah perubahan lain membaca detail terkini dan tidak menimpa versi historis dari replay. ACK lalu GET gagal tidak mengirim POST pengganti.
+- Widget menguji daftar, pencarian, pagination/filter berizin (next_page_url eksternal tidak diikuti), editor zero/disable, review, serta read-only list/deep-link pada 390px text scale 1,5 dan 1200px. Layar 390×800 dengan inset keyboard 320px tetap dapat digulir tanpa overflow. Regresi refresh callback setState yang mengembalikan Future diperbaiki; tes refresh/filter/error lama tetap dipertahankan dan lulus.
+- Smoke HTTP terisolasi menambahkan GET ID/price-free/context, cashier read-only/center denial, zero→disable, replay konfigurasi lama, stale conflict serta ledger tidak berubah. Seluruh alur supply, POS, shift, laporan dan CSV sebelumnya tetap lulus; metadata Compose healthy/lulus.
+
+Hasil final scripts/check: 138 API/1065 assertions, 48 web/195 assertions, analyzer bersih dan 104 Flutter (290 tes). HTTP dan metadata smoke lulus. OpenAPI 0.13.0: 68 operation IDs unik, local refs/path parameters/required lists konsisten; belum memakai validator eksternal. SQLite/widget bukan bukti PostgreSQL concurrency, perangkat/build Android/iOS, UAT, ambang produksi yang disepakati atau antrean offline tahan restart.

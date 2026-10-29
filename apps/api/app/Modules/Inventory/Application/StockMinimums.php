@@ -35,10 +35,13 @@ final class StockMinimums
                 $query->where('p.sku', 'like', '%'.$filters['q'].'%')->orWhere('p.name', 'like', '%'.$filters['q'].'%');
             });
         }
+        if (isset($filters['product_id'])) {
+            $q->where('p.id', $filters['product_id']);
+        }
         if ($filters['low_only'] ?? false) {
             $q->whereNotNull('m.minimum_pieces')->whereRaw('COALESCE(b.usable_pieces, 0) + COALESCE(b.opened_pieces, 0) + COALESCE(b.ready_pieces, 0) < m.minimum_pieces');
         }
-        $page = $q->orderBy('p.sku')->orderBy('p.id')->paginate(50);
+        $page = $q->orderBy('p.sku')->orderBy('p.id')->paginate(50, ['*'], 'page', isset($filters['product_id']) ? 1 : null);
         $page->through(function ($row) {
             $r = (array) $row;
             foreach (['version', 'usable_pieces', 'opened_pieces', 'ready_pieces', 'available_pieces'] as $key) {
@@ -52,6 +55,15 @@ final class StockMinimums
         });
 
         return [...$page->toArray(), 'store' => $s->only(['id', 'name']), 'can_manage' => in_array($this->access->role($user, $s->organization_id)?->value, self::MANAGERS, true), 'observed_at' => now()->toIso8601String()];
+    }
+
+    public function detail(User $user, string $store, string $product): array
+    {
+        // Use the same scoped, price-free projection. Exact ID survives SKU renames.
+        $report = $this->report($user, $store, ['product_id' => $product]);
+        abort_unless(count($report['data']) === 1, 404);
+
+        return ['data' => $report['data'][0], 'store' => $report['store'], 'can_manage' => $report['can_manage'], 'observed_at' => $report['observed_at']];
     }
 
     public function configure(User $user, string $store, string $product, array $v): array

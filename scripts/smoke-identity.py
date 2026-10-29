@@ -232,6 +232,12 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert observed['data'][0]['minimum_pieces'] == 140 and observed['data'][0]['version'] == 1
         assert observed['data'][0]['available_pieces'] == 142 and not observed['data'][0]['is_low']
         api(base, 'GET', f'stores/{store}/inventory/minimums', token=owner, expected=403)
+        minimum_detail_path=f'stores/{store}/inventory/minimums/{local_product_id}'
+        exact=api(base,'GET',minimum_detail_path+'?page=2&low_only=1&q=not-found',token=manager_token)
+        assert exact['can_manage'] and exact['store']['id']==store and exact['data']['product_id']==local_product_id
+        assert exact['data']['version']==1 and exact['data']['minimum_pieces']==140
+        assert 'wholesale_price' not in exact['data'] and 'retail_price' not in exact['data']
+        api(base,'GET',minimum_detail_path,token=owner,expected=403)
         # Native clients use an Inventory-owned capability endpoint, without Ordering coupling.
         control_context = api(base, 'GET', f'stores/{store}/inventory/control-context', token=manager_token)['data']
         assert control_context['can_process'] and control_context['can_propose'] and not control_context['can_review']
@@ -242,6 +248,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base, 'POST', f'organizations/{org}/users', cashier, owner, 201)
         cashier_token = api(base, 'POST', 'auth/login', {'email':cashier['email'],'password':PASSWORD,'device_name':'smoke'})['token']
         api(base, 'GET', f'stores/{store}/inventory/control-context', token=cashier_token, expected=403)
+        assert not api(base,'GET',minimum_detail_path,token=cashier_token)['can_manage']
         opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
         html = opener.open(web + '/login').read().decode()
         csrf = re.search(r'name="_token" value="([^"]+)"', html).group(1)
@@ -327,6 +334,19 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         with opener.open(web+'/app/'+report_path+'/export?'+web_period) as response:
             assert response.headers['Content-Type'].startswith('text/csv')
             assert sale['number'] in response.read().decode('utf-8-sig')
+
+        # Native threshold mutation: explicit zero vs null, version conflict and immutable replay.
+        ledger_before=api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']
+        zero={'operation_id':str(uuid.uuid4()),'version':1,'minimum_pieces':0,'reason':'Explicit zero reviewed on native'}
+        assert api(base,'POST',minimum_detail_path,zero,manager_token)['data']['version']==2
+        disabled={'operation_id':str(uuid.uuid4()),'version':2,'minimum_pieces':None,'reason':'Explicitly stop monitoring'}
+        api(base,'POST',minimum_detail_path,disabled,manager_token)
+        replay=api(base,'POST',minimum_detail_path,zero,manager_token)['data']
+        assert replay['version']==2 and replay['minimum_pieces']==0
+        current=api(base,'GET',minimum_detail_path,token=manager_token)
+        assert current['data']['version']==3 and current['data']['minimum_pieces'] is None
+        api(base,'POST',minimum_detail_path,{**zero,'operation_id':str(uuid.uuid4())},manager_token,expected=409)
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
         print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, logout')

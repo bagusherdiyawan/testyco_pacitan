@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.12.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.13.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -52,7 +52,7 @@ Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan
 
 ## Stok minimum
 
-Pengelola dapat mengatur ambang biji per SKU/toko melalui web. Web dan Flutter menampilkan peringatan saat stok utuh + terbuka + siap berada di bawah ambang; karantina dan susut dikecualikan. Tidak ada pesanan otomatis atau push notification. Ikuti [panduan stok minimum](docs/stock-minimums.md).
+Pengelola dapat mengatur ambang biji per SKU/toko melalui web dan Flutter; lihat [panduan pengaturan native](docs/native-stock-minimum.md). Web dan Flutter menampilkan peringatan saat stok utuh + terbuka + siap berada di bawah ambang; karantina dan susut dikecualikan. Tidak ada pesanan otomatis atau push notification. Ikuti [panduan stok minimum](docs/stock-minimums.md).
 
 ## POS tunai dan kas shift
 

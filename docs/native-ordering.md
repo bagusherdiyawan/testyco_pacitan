@@ -1,6 +1,6 @@
 # Persetujuan dan penerimaan pesanan di Flutter
 
-Irisan PRD 04-APR, 05-RCV dan 09 penerimaan aktual. Flutter mobile/tablet kini dapat menyetujui, menolak atau membatalkan pesanan sesuai izin/status serta menerima kiriman berdasarkan barang fisik. Pengajuan baru kini tersedia pada [composer Flutter](native-order-entry.md). Perubahan jumlah/item pesanan tersimpan, pemilihan gudang dan dispatch masih memakai web. Tidak ada kebijakan finansial/retur baru pada irisan ini.
+Irisan PRD 04-APR, 05-RCV dan 09 penerimaan aktual. Flutter mobile/tablet kini dapat menyetujui, menolak atau membatalkan pesanan sesuai izin/status serta menerima kiriman berdasarkan barang fisik. Pengajuan baru kini tersedia pada [composer Flutter](native-order-entry.md). Perubahan sebelum persetujuan kini tersedia di [alur perubahan native](native-order-amend.md); pemilihan gudang dan dispatch masih memakai web. Tidak ada kebijakan finansial/retur baru pada irisan ini.
 
 ## Izin dan navigasi
 
@@ -41,4 +41,4 @@ Ordering mengekspos metadata recipient_actions; Fulfillment/Inventory tetap memi
 
 DTO, repository, controller dan page/form terpisah. Molecule ShipmentReceiptFields menerima nilai/controller tampilan tanpa mengubah ledger. Domain stock/cash tetap di API. Tidak ada migrasi/dependensi baru.
 
-Widget mobile 390px dengan text scale 1,5 dan tablet 1200px, akses API, retry dan atomic receipt sudah diuji. Ini belum build/perangkat Android/iOS, UAT gudang/toko, PostgreSQL concurrency atau bukti kualitas pangan. QRIS, refund, retur/kredit/pengganti, perubahan item/dispatch native dan offline tetap belum tersedia.
+Widget mobile 390px dengan text scale 1,5 dan tablet 1200px, akses API, retry dan atomic receipt sudah diuji. Ini belum build/perangkat Android/iOS, UAT gudang/toko, PostgreSQL concurrency atau bukti kualitas pangan. QRIS, refund, retur/kredit/pengganti, perubahan setelah approval/dispatch native dan offline tetap belum tersedia.

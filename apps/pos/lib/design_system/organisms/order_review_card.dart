@@ -10,9 +10,11 @@ class OrderReviewCard extends StatelessWidget {
     required this.total,
     required this.observedAt,
     required this.children,
+    this.notice =
+        'Belum membuat pesanan atau mereservasi stok. Setelah dikirim, pengajuan menunggu persetujuan yang berwenang.',
     super.key,
   });
-  final String destination, address, mode, kind, observedAt;
+  final String destination, address, mode, kind, observedAt, notice;
   final int total;
   final List<Widget> children;
   @override
@@ -35,9 +37,7 @@ class OrderReviewCard extends StatelessWidget {
             style: Theme.of(context).textTheme.titleLarge,
           ),
           Text('Dimuat ${formatWib(observedAt)}'),
-          const Text(
-            'Belum membuat pesanan atau mereservasi stok. Setelah dikirim, pengajuan menunggu persetujuan yang berwenang.',
-          ),
+          Text(notice),
         ],
       ),
     ),

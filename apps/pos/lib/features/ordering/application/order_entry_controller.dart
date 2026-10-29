@@ -6,9 +6,14 @@ import '../data/order_entry_repository.dart';
 import '../domain/order_entry.dart';
 
 class OrderEntryController extends ChangeNotifier {
-  OrderEntryController(this.repository, this.store);
+  OrderEntryController(this.repository, this.store, {this.orderId});
   final OrderEntryRepository repository;
   final String store;
+  final String? orderId;
+  bool get isAmend => orderId != null;
+  int? _amendVersion;
+  int compositionEpoch = 0;
+  bool orderChanged = false;
   OrderEntryContext? context;
   List<OrderProductChoice> suppliers = [], locals = [];
   final cart = <DraftOrderLine>[];
@@ -52,6 +57,23 @@ class OrderEntryController extends ChangeNotifier {
 
   Future<bool> load() => _run(() async {
     fresh = false;
+    EditableOrderSeed? seed;
+    if (isAmend && pending == null && createdId == null) {
+      seed = await repository.seed(orderId!);
+      if (seed.store != store || !seed.canAmend) {
+        throw const ApiException(
+          'Pengajuan tidak lagi dapat diubah oleh akun ini.',
+          status: 403,
+        );
+      }
+      if (_amendVersion != null && seed.version != _amendVersion) {
+        orderChanged = true;
+        throw const ApiException(
+          'Versi pengajuan berubah. Mulai ulang dari versi terbaru sebelum mengedit.',
+          status: 409,
+        );
+      }
+    }
     final next = await repository.context(store);
     if (!next.canCreate) {
       context = next;
@@ -67,12 +89,34 @@ class OrderEntryController extends ChangeNotifier {
     context = next;
     suppliers = choices[0];
     locals = choices[1];
+    if (seed != null && _amendVersion == null) {
+      cart.clear();
+      cart.addAll(seed.lines);
+      mode = seed.mode;
+      note = seed.note;
+      _amendVersion = seed.version;
+      compositionEpoch++;
+      orderChanged = false;
+    }
     fresh = true;
     if (pending == null && createdId == null) {
       preview = null;
       _reviewBody = null;
     }
   });
+  Future<bool> restartFromServer() async {
+    if (!isAmend || busy || pending != null || createdId != null) {
+      return false;
+    }
+    _amendVersion = null;
+    orderChanged = false;
+    cart.clear();
+    preview = null;
+    _reviewBody = null;
+    fresh = false;
+    return load();
+  }
+
   OrderProductChoice? supplier(String id) =>
       suppliers.where((p) => p.id == id).firstOrNull;
   List<OrderProductChoice> candidates(DraftOrderLine line) {
@@ -236,14 +280,18 @@ class OrderEntryController extends ChangeNotifier {
   }
 
   Future<bool> review() => _run(() async {
-    final body = _body();
-    final result = await repository.preview(store, body);
+    final body = {..._body(), if (isAmend) 'version': _amendVersion};
+    final result = isAmend
+        ? await repository.previewAmend(orderId!, body)
+        : await repository.preview(store, body);
     preview = result;
     _reviewBody = jsonEncode(body);
   });
   Future<void> _send(OrderSubmission submission) async {
     try {
-      createdId = await repository.create(store, submission.body);
+      createdId = isAmend
+          ? await repository.amend(orderId!, submission.body)
+          : await repository.create(store, submission.body);
     } catch (e) {
       final uncertain = e is! ApiException || e.status == 0 || e.status >= 500;
       if (uncertain) {
@@ -260,7 +308,9 @@ class OrderEntryController extends ChangeNotifier {
     }
     pending = null;
     _unknown = false;
-    message = 'Pengajuan tersimpan. Periksa detail untuk status terbaru.';
+    message = isAmend
+        ? 'Perubahan pengajuan tersimpan. Periksa detail untuk status terbaru.'
+        : 'Pengajuan tersimpan. Periksa detail untuk status terbaru.';
   }
 
   Future<bool> confirm() => _run(() async {

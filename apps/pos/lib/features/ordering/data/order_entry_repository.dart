@@ -32,4 +32,26 @@ class OrderEntryRepository {
   Future<String> create(String store, Map<String, dynamic> body) async =>
       (await api.request('POST', '${_store(store)}/orders', body))['data']['id']
           as String;
+  Future<EditableOrderSeed> seed(String id) async => EditableOrderSeed.fromJson(
+    (await api.request('GET', 'orders/${Uri.encodeComponent(id)}'))['data']
+        as Map<String, dynamic>,
+  );
+  Future<OrderEntryPreview> previewAmend(
+    String id,
+    Map<String, dynamic> body,
+  ) async => OrderEntryPreview.fromJson(
+    (await api.request(
+          'POST',
+          'orders/${Uri.encodeComponent(id)}/preview',
+          body,
+        ))['data']
+        as Map<String, dynamic>,
+  );
+  Future<String> amend(String id, Map<String, dynamic> body) async =>
+      (await api.request(
+            'PUT',
+            'orders/${Uri.encodeComponent(id)}',
+            body,
+          ))['data']['id']
+          as String;
 }

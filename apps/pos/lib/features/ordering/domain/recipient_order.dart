@@ -1,6 +1,7 @@
 class RecipientOrder {
   RecipientOrder.fromJson(Map<String, dynamic> j)
-    : id = j['id'] as String,
+    : storeId = j['store_id'] as String? ?? '',
+      id = j['id'] as String,
       destination = j['destination_name'] as String,
       status = j['status'] as String,
       version = j['version'] as int,
@@ -16,7 +17,7 @@ class RecipientOrder {
           (l) => RecipientOrderLine.fromJson(l as Map<String, dynamic>),
         ),
       );
-  final String id, destination, status, kind;
+  final String id, storeId, destination, status, kind;
   final String? decisionNote;
   final int version, total;
   final bool fulfillmentEnabled;

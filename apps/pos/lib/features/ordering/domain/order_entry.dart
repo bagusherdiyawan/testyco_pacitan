@@ -67,3 +67,29 @@ class OrderSubmission {
   final String _json;
   Map<String, dynamic> get body => jsonDecode(_json) as Map<String, dynamic>;
 }
+
+class EditableOrderSeed {
+  EditableOrderSeed.fromJson(Map<String, dynamic> j)
+    : store = j['store_id'] as String? ?? '',
+      version = j['version'] as int,
+      mode = j['delivery_mode'] as String? ?? 'pickup',
+      note = j['note'] as String? ?? '',
+      canAmend =
+          (j['recipient_actions'] as Map<String, dynamic>?)?['amend'] == true,
+      lines =
+          ((j['recipient_actions'] as Map<String, dynamic>?)?['amend'] == true
+          ? (j['lines'] as List)
+                .map(
+                  (l) => DraftOrderLine(
+                    l['supplier_product_id'] as String,
+                    localId: l['local_product_id'] as String,
+                    quantity: '${l['quantity_packs']}',
+                  ),
+                )
+                .toList()
+          : <DraftOrderLine>[]);
+  final String store, mode, note;
+  final int version;
+  final bool canAmend;
+  final List<DraftOrderLine> lines;
+}

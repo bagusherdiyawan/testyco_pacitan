@@ -1,6 +1,6 @@
 # Pengajuan pesanan baru di Flutter
 
-Irisan PRD 04-REQ, terkait harga/kemasan PRD 02 dan pemisahan akses PRD 01. Flutter kini membuat pengajuan dengan pilihan SKU pusat, SKU lokal, jumlah kemasan, ambil/antar dan catatan. [Keputusan/penerimaan native](native-ordering.md) tetap alur terpisah. Perubahan item pesanan yang sudah ada dan dispatch gudang masih melalui web.
+Irisan PRD 04-REQ, terkait harga/kemasan PRD 02 dan pemisahan akses PRD 01. Flutter kini membuat pengajuan dengan pilihan SKU pusat, SKU lokal, jumlah kemasan, ambil/antar dan catatan. [Keputusan/penerimaan native](native-ordering.md) tetap alur terpisah. Perubahan sebelum persetujuan kini tersedia di [composer perubahan](native-order-amend.md); dispatch gudang masih melalui web.
 
 ## Alur
 

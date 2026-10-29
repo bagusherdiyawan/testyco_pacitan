@@ -19,6 +19,6 @@ final class RecipientOrderActions
         $decide = $operating && in_array($role, $order->kind === 'internal_transfer' ? ['owner', 'admin'] : ['partner_lead'], true);
         $state = OrderState::from($order->status);
 
-        return ['approve' => $decide && $state->allows('approve'), 'reject' => $decide && $state->allows('reject'), 'cancel' => $decide && $state->allows('cancel'), 'receive' => $operating && $fulfillment && $state->allows('receive')];
+        return ['amend' => $decide && $state->allows('amend'), 'approve' => $decide && $state->allows('approve'), 'reject' => $decide && $state->allows('reject'), 'cancel' => $decide && $state->allows('cancel'), 'receive' => $operating && $fulfillment && $state->allows('receive')];
     }
 }

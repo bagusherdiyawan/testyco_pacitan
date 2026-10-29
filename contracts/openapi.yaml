@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.10.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent."
+    "version": "0.11.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
   },
   "security": [
     {
@@ -6767,6 +6767,104 @@
           }
         }
       }
+    },
+    "/api/v1/orders/{order}/preview": {
+      "post": {
+        "operationId": "previewSupplyAmendment",
+        "summary": "Review a permitted preapproval amendment without changing the order",
+        "description": "Approver policy is identical to existing PUT: wholesale partner lead, internal-transfer center owner/admin with recipient access. Store manager/cashier/outsider/supplier-only access does not grant amend. Only awaiting_approval/rejected with matching original version; approved and later states rejected. Locks original order, target and products while reading same snapshot builder as amendment. No lines/audits/operation receipts/stock are changed. review_hash additionally binds original order_id/version; cannot reuse another order/create quote. Native PUT sends original version/hash and immutable operation UUID/body. Existing no-hash PUT remains compatible and server-priced. Save returns same order ID, increments version once and returns to awaiting_approval. Replay returns stored mutation result without overwriting later status or recalculating changed prices.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderAmendPreviewInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Private/no-store preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OrderAmendPreview"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Recipient approver permission denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown scoped order/product",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale original version, invalid state, inactive target or changed review at save",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid items, address, conversion or mixed supplier",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7507,6 +7605,11 @@
           "version": {
             "type": "integer",
             "minimum": 1
+          },
+          "review_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "description": "Optional for legacy PUT callers; native sends hash from POST orders/{order}/preview. Binds original order ID/version plus reviewed target and authoritative commercial snapshots. Server validates before replacing any lines."
           }
         },
         "required": [
@@ -10051,15 +10154,20 @@
           },
           "receive": {
             "type": "boolean"
+          },
+          "amend": {
+            "type": "boolean",
+            "description": "Recipient approver only, active target and awaiting_approval/rejected. This does not authorize postapproval reapproval."
           }
         },
         "required": [
           "approve",
           "reject",
           "cancel",
-          "receive"
+          "receive",
+          "amend"
         ],
-        "description": "GET order detail hints, never mutation authorization. Approve/reject require recipient approver role and awaiting_approval/rejected state; cancel additionally supports approved/processing before first dispatch. Receive requires recipient role, active target and Fulfillment enabled in dispatched/partially_received state; client still checks a shipment is unreceived. Supplier view and inactive target have all false. Internal transfers require center owner/admin approval, wholesale requires partner lead."
+        "description": "GET order detail hints, never mutation authorization. Approve/reject require recipient approver role and awaiting_approval/rejected state; cancel additionally supports approved/processing before first dispatch. Receive requires recipient role, active target and Fulfillment enabled in dispatched/partially_received state; client still checks a shipment is unreceived. Supplier view and inactive target have all false. Internal transfers require center owner/admin approval, wholesale requires partner lead. Amend follows the existing approver policy and OrderState, not the permission to create a request."
       },
       "OrderPreviewInput": {
         "type": "object",
@@ -10208,6 +10316,125 @@
           "review_hash",
           "currency",
           "observed_at"
+        ]
+      },
+      "OrderAmendPreviewInput": {
+        "type": "object",
+        "properties": {
+          "delivery_mode": {
+            "enum": [
+              "delivery",
+              "pickup"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/SupplyLineInput"
+            }
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "delivery_mode",
+          "lines",
+          "version"
+        ]
+      },
+      "OrderAmendPreview": {
+        "type": "object",
+        "properties": {
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "destination_name": {
+            "type": "string"
+          },
+          "destination_address": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "delivery_mode": {
+            "enum": [
+              "delivery",
+              "pickup"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "wholesale",
+              "internal_transfer"
+            ]
+          },
+          "supplier_organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "total_amount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderPreviewLine"
+            }
+          },
+          "review_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "currency": {
+            "const": "IDR"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "order_id": {
+            "type": "string",
+            "description": "Original order ULID"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "store_id",
+          "destination_name",
+          "destination_address",
+          "delivery_mode",
+          "kind",
+          "supplier_organization_id",
+          "total_amount",
+          "lines",
+          "review_hash",
+          "currency",
+          "observed_at",
+          "order_id",
+          "version"
         ]
       }
     }

@@ -78,9 +78,16 @@ final class OrderController
         return response()->json(['data' => $this->workflow->create($r->user(), $store, $v)], 201);
     }
 
+    public function previewAmend(Request $r, string $order): mixed
+    {
+        $v = $r->validate(['version' => 'required|integer|min:1', ...$this->items()]);
+
+        return response()->json(['data' => $this->workflow->previewAmend($r->user(), $order, $v)])->header('Cache-Control', 'private, no-store');
+    }
+
     public function amend(Request $r, string $order): mixed
     {
-        $v = $r->validate(['operation_id' => 'required|uuid', 'version' => 'required|integer|min:1', ...$this->items()]);
+        $v = $r->validate(['operation_id' => 'required|uuid', 'version' => 'required|integer|min:1', 'review_hash' => 'sometimes|required|string|size:64|regex:/^[a-f0-9]{64}$/', ...$this->items()]);
 
         return ['data' => $this->workflow->amend($r->user(), $order, $v)];
     }

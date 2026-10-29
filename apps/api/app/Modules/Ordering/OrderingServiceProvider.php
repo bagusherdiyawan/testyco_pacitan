@@ -28,6 +28,7 @@ final class OrderingServiceProvider extends ServiceProvider
             Route::post('stores/{store}/orders', [$c, 'create']);
             Route::get('supply/orders', [$c, 'inbox']);
             Route::get('orders/{order}', [$c, 'show']);
+            Route::post('orders/{order}/preview', [$c, 'previewAmend']);
             Route::put('orders/{order}', [$c, 'amend']);
             Route::post('orders/{order}/{action}', [$c, 'transition'])->where('action', 'approve|reject|cancel|process');
         });

@@ -388,12 +388,12 @@ class SupplyWorkflowTest extends TestCase
     {
         $order = $this->create();
         $url = '/api/v1/orders/'.$order['id'];
-        $this->act($this->manager)->getJson($url)->assertOk()->assertJsonPath('data.recipient_actions', ['approve' => false, 'reject' => false, 'cancel' => false, 'receive' => false]);
-        $this->act($this->lead)->getJson($url)->assertOk()->assertJsonPath('data.fulfillment_enabled', true)->assertJsonPath('data.recipient_actions', ['approve' => true, 'reject' => true, 'cancel' => true, 'receive' => false]);
+        $this->act($this->manager)->getJson($url)->assertOk()->assertJsonPath('data.recipient_actions', ['amend' => false, 'approve' => false, 'reject' => false, 'cancel' => false, 'receive' => false]);
+        $this->act($this->lead)->getJson($url)->assertOk()->assertJsonPath('data.fulfillment_enabled', true)->assertJsonPath('data.recipient_actions', ['amend' => true, 'approve' => true, 'reject' => true, 'cancel' => true, 'receive' => false]);
         $order = $this->transition($order, 'approve', $this->lead);
-        $this->act($this->lead)->getJson($url)->assertJsonPath('data.recipient_actions', ['approve' => false, 'reject' => false, 'cancel' => true, 'receive' => false]);
+        $this->act($this->lead)->getJson($url)->assertJsonPath('data.recipient_actions', ['amend' => false, 'approve' => false, 'reject' => false, 'cancel' => true, 'receive' => false]);
         $this->target->update(['active' => false]);
-        $this->getJson($url)->assertOk()->assertJsonPath('data.recipient_actions', ['approve' => false, 'reject' => false, 'cancel' => false, 'receive' => false]);
+        $this->getJson($url)->assertOk()->assertJsonPath('data.recipient_actions', ['amend' => false, 'approve' => false, 'reject' => false, 'cancel' => false, 'receive' => false]);
     }
 
     public function test_native_receive_action_never_grants_supplier_or_foreign_access(): void
@@ -402,7 +402,7 @@ class SupplyWorkflowTest extends TestCase
         $dispatch = $this->dispatch($order, $batch);
         $url = '/api/v1/orders/'.$order['id'];
         $this->act($this->manager)->getJson($url)->assertOk()->assertJsonPath('data.recipient_actions.receive', true)->assertJsonPath('data.recipient_actions.cancel', false);
-        $this->act($this->owner)->getJson($url)->assertOk()->assertJsonPath('data.access_side', 'supplier')->assertJsonPath('data.recipient_actions', ['approve' => false, 'reject' => false, 'cancel' => false, 'receive' => false]);
+        $this->act($this->owner)->getJson($url)->assertOk()->assertJsonPath('data.access_side', 'supplier')->assertJsonPath('data.recipient_actions', ['amend' => false, 'approve' => false, 'reject' => false, 'cancel' => false, 'receive' => false]);
         foreach ([$this->cashier, $this->outsider] as $actor) {
             $this->act($actor)->getJson($url)->assertForbidden();
         }
@@ -534,5 +534,71 @@ class SupplyWorkflowTest extends TestCase
         $this->postJson('/api/v1/stores/'.$this->target->id.'/orders', [...$body, 'operation_id' => (string) Str::uuid(), 'review_hash' => 'invalid'])->assertUnprocessable();
         $this->assertDatabaseCount('supply_orders', 0);
         $this->assertDatabaseCount('operation_receipts', 0);
+    }
+
+    public function test_amend_preview_binds_order_version_and_keeps_original_until_confirmation(): void
+    {
+        $order = $this->create();
+        $body = $this->body(10);
+        unset($body['operation_id']);
+        $body['version'] = $order['version'];
+        $before = SupplyOrder::with('lines')->findOrFail($order['id'])->toArray();
+        $preview = $this->act($this->lead)->postJson('/api/v1/orders/'.$order['id'].'/preview', $body)->assertOk()->json('data');
+        $this->assertSame($order['id'], $preview['order_id']);
+        $this->assertSame(180000, $preview['total_amount']);
+        $this->assertSame($before, SupplyOrder::with('lines')->findOrFail($order['id'])->toArray());
+        $this->assertDatabaseCount('audit_entries', 1);
+        $this->assertDatabaseCount('operation_receipts', 1);
+        $payload = [...$body, 'review_hash' => $preview['review_hash'], 'operation_id' => (string) Str::uuid()];
+        $saved = $this->putJson('/api/v1/orders/'.$order['id'], $payload)->assertOk()->assertJsonPath('data.version', 2)->assertJsonPath('data.status', 'awaiting_approval')->json('data');
+        $this->assertSame($order['id'], $saved['id']);
+        $this->assertSame(10, $saved['lines'][0]['quantity_packs']);
+        $this->supplierProduct->update(['wholesale_price' => 19000]);
+        $this->putJson('/api/v1/orders/'.$order['id'], $payload)->assertOk()->assertJsonPath('data.version', 2)->assertJsonPath('data.total_amount', 180000);
+        $this->assertDatabaseCount('supply_orders', 1);
+        $this->assertDatabaseCount('audit_entries', 2);
+        $this->assertDatabaseCount('stock_entries', 0);
+    }
+
+    public function test_amend_review_rejects_cross_order_stale_version_and_price_without_deleting_lines(): void
+    {
+        $one = $this->create();
+        $two = $this->create();
+        $body = $this->body(10);
+        unset($body['operation_id']);
+        $body['version'] = 1;
+        $preview = $this->act($this->lead)->postJson('/api/v1/orders/'.$one['id'].'/preview', $body)->assertOk()->json('data');
+        $payload = [...$body, 'review_hash' => $preview['review_hash'], 'operation_id' => (string) Str::uuid()];
+        $this->putJson('/api/v1/orders/'.$two['id'], $payload)->assertConflict();
+        $this->supplierProduct->update(['wholesale_price' => 19000]);
+        $this->putJson('/api/v1/orders/'.$one['id'], [...$payload, 'operation_id' => (string) Str::uuid()])->assertConflict();
+        $this->supplierProduct->update(['wholesale_price' => 18000]);
+        $this->transition($one, 'reject', $this->lead, ['reason' => 'Hitung ulang']);
+        $this->postJson('/api/v1/orders/'.$one['id'].'/preview', $body)->assertConflict();
+        $this->putJson('/api/v1/orders/'.$one['id'], [...$payload, 'operation_id' => (string) Str::uuid()])->assertConflict();
+        foreach ([$one, $two] as $original) {
+            $current = SupplyOrder::with('lines')->findOrFail($original['id']);
+            $this->assertSame($original['lines'][0]['id'], $current->lines[0]->id);
+            $this->assertSame(20, $current->lines[0]->quantity_packs);
+        }
+        $this->assertDatabaseCount('operation_receipts', 3);
+    }
+
+    public function test_amend_preview_and_save_deny_unapproved_roles_and_approved_order(): void
+    {
+        $order = $this->create();
+        $body = $this->body(10);
+        unset($body['operation_id']);
+        $body['version'] = 1;
+        foreach ([$this->manager, $this->cashier, $this->outsider, $this->owner] as $actor) {
+            $this->act($actor)->postJson('/api/v1/orders/'.$order['id'].'/preview', $body)->assertForbidden();
+            $this->putJson('/api/v1/orders/'.$order['id'], [...$body, 'operation_id' => (string) Str::uuid()])->assertForbidden();
+        }
+        $order = $this->transition($order, 'approve', $this->lead);
+        $body['version'] = $order['version'];
+        $this->act($this->lead)->getJson('/api/v1/orders/'.$order['id'])->assertJsonPath('data.recipient_actions.amend', false);
+        $this->postJson('/api/v1/orders/'.$order['id'].'/preview', $body)->assertConflict();
+        $this->putJson('/api/v1/orders/'.$order['id'], [...$body, 'operation_id' => (string) Str::uuid()])->assertConflict();
+        $this->assertDatabaseCount('supply_orders',1);
     }
 }

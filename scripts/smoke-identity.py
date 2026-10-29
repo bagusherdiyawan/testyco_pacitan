@@ -147,17 +147,25 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         altered={**native_request,'operation_id':str(uuid.uuid4()),'lines':[{**native_body['lines'][0],'quantity_packs':2}]}
         api(base,'POST',f'stores/{store}/orders',altered,lead_token,expected=409)
         assert api(base,'GET',f'stores/{store}/operations-context',token=lead_token)['data']['order_kind']=='wholesale'
+        amend_body={**native_body,'version':native_draft['version'],'lines':[{**native_body['lines'][0],'quantity_packs':2}],'note':'Reviewed amendment'}
+        amend_preview=api(base,'POST',f'orders/{native_draft["id"]}/preview',amend_body,lead_token)['data']
+        assert amend_preview['order_id']==native_draft['id'] and amend_preview['total_amount']==36000
+        amend_request={**amend_body,'operation_id':str(uuid.uuid4()),'review_hash':amend_preview['review_hash']}
+        amended=api(base,'PUT',f'orders/{native_draft["id"]}',amend_request,lead_token)['data']
+        assert amended['id']==native_draft['id'] and amended['version']==2 and amended['status']=='awaiting_approval'
+        assert api(base,'PUT',f'orders/{native_draft["id"]}',amend_request,lead_token)['data']['version']==2
+        assert api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']==[]
         response = web_post(create_path, data); html = response.read().decode(); order_id = response.url.rsplit('/', 1)[1]
         assert 'awaiting_approval' in html
         native_order = api(base, 'GET', f'orders/{order_id}', token=lead_token)['data']
-        assert native_order['recipient_actions'] == {'approve':True,'reject':True,'cancel':True,'receive':False} and native_order['fulfillment_enabled']
+        assert native_order['recipient_actions'] == {'amend':True,'approve':True,'reject':True,'cancel':True,'receive':False} and native_order['fulfillment_enabled']
         assert api(base, 'GET', 'supply/orders', token=owner)['data'] == []
         api(base, 'GET', f'orders/{order_id}', token=owner, expected=403)
         approve_path = f'/app/orders/{order_id}/approve'
         response = web_post(approve_path, fields(html, approve_path)); html = response.read().decode()
         order = api(base, 'GET', f'orders/{order_id}', token=owner)['data']
         assert order['status'] == 'approved' and order['total_amount'] == 360000
-        assert order['recipient_actions'] == {'approve':False,'reject':False,'cancel':False,'receive':False}
+        assert order['recipient_actions'] == {'amend':False,'approve':False,'reject':False,'cancel':False,'receive':False}
         order = api(base, 'POST', f'orders/{order_id}/process', {'operation_id':str(uuid.uuid4()),'version':order['version'],'source_store_id':source}, owner)['data']
         dispatch = {'operation_id':str(uuid.uuid4()),'version':order['version'],'handler':'Smoke warehouse','lines':[{'order_line_id':order['lines'][0]['id'],'allocations':[{'batch_id':batch['id'],'quantity_packs':20}]}]}
         shipment = api(base, 'POST', f'orders/{order_id}/shipments', dispatch, owner, 201)['data']['shipment']
@@ -309,7 +317,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
             assert sale['number'] in response.read().decode('utf-8-sig')
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

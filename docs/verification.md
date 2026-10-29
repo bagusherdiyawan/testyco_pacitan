@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 29 Oktober 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 129 tes lulus, 927 assertions |
+| API PHPUnit | 132 tes lulus, 972 assertions |
 | Web PHPUnit | 48 tes lulus, 195 assertions |
-| Flutter | 74 tes lulus; composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 251 tes lulus |
+| Flutter | 82 tes lulus; perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 262 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
-| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create pengajuan native lulus |
+| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.10.0 | 66 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.11.0 | 67 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -130,3 +130,16 @@ Diverifikasi 29 Oktober 2026. Pratinjau memakai snapshot builder server yang sam
 - Smoke HTTP nyata membuat preview Rp18.000 lalu pengajuan hash-bound/replay dengan satu ID. Target belum bertambah stok dan gudang tetap 160 biji sebelum dispatch; pusat tidak dapat melihat draft, perubahan quantity dengan hash lama ditolak. Alur web lama tanpa hash tetap melalui approval/dispatch/actual receipt yang sama.
 
 Hasil final: 129 API/927 assertions, 48 web/195 assertions, 74 Flutter (251 tes), analyzer bersih dan HTTP/metadata smoke lulus. Kontrak 0.10.0: 66 operation IDs; refs/path parameters diperiksa lokal. Tidak ada migrasi/dependensi baru. Validator OpenAPI eksternal, perangkat fisik, UAT, concurrency PostgreSQL dan persistensi operasi lintas restart belum diklaim.
+
+## Bukti perubahan pengajuan pra-persetujuan native
+
+Diverifikasi 29 Oktober 2026. API preview perubahan memeriksa approver, state dan original version sebelum membaca snapshot. Preview tidak mengganti item/audit/claim. PUT hash-bound mempertahankan ID order, menambah versi satu kali dan kembali awaiting_approval. Replay committed UUID tidak mengambil harga baru atau menambah audit/versi kedua.
+
+- Hash order lain, versi stale dan harga berubah ditolak sebelum line deletion. Item ID/jumlah lama serta operation claims tetap utuh pada konflik. Manager tanpa hak approval, kasir, mitra lain dan supplier-only owner ditolak; order approved tidak mempunyai capability amend dan kedua endpoint menolak perubahan.
+- Controller native memuat supplier/local product ID, quantity, mode dan note dari seed berizin; wrong-store/denied seed tidak mengambil katalog komersial. Preview dan PUT selalu membawa original version; create POST tidak dipanggil saat amend.
+- Refresh saat versi berubah mempertahankan intent lokal tetapi menahan tindakan. Reset eksplisit mengambil seluruh seed terbaru; composition epoch dan sinkronisasi note membuang field state lama setelah konfirmasi pengguna. Konflik harga pada versi sama meminta tinjauan server baru.
+- Unknown PUT mempertahankan immutable nested body/original version/UUID, termasuk setelah status kemudian berubah. Reset tidak dapat membuang pending request. Penolakan setelah unknown tetap mempertahankan request sampai retry terkonfirmasi; satu amend/kenaikan versi.
+- Widget 390px text scale 1,5/1200px memulai dari detail, membuka composer prefill, meninjau/simpan perubahan dan kembali membaca detail dengan jumlah baru. Skenario mobile melakukan concurrent update lalu reset yang disetujui pengguna dan memverifikasi quantity form benar-benar berganti.
+- HTTP smoke preview/PUT/replay mengubah draft native yang sama dari 1 ke 2 kemasan: ID tetap, version 2, awaiting_approval dan belum menambah stok. Web legacy tanpa hash, approval, dispatch serta actual receipt tetap lulus.
+
+Hasil final: 132 API/972 assertions, 48 web/195 assertions, 82 Flutter (262 tes), analyzer bersih, HTTP dan metadata smoke lulus. Kontrak 0.11.0: 67 unique operation IDs dan local refs/path parameter konsisten. Tidak ada migration/dependency baru. Pengujian belum mencakup PostgreSQL concurrency, perangkat fisik, UAT, dispatch native, postapproval reapproval atau antrean offline tahan restart.

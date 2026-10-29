@@ -10,10 +10,12 @@ class OrderEntryPage extends StatefulWidget {
   const OrderEntryPage({
     required this.repository,
     required this.storeId,
+    this.orderId,
     super.key,
   });
   final OrderEntryRepository repository;
   final String storeId;
+  final String? orderId;
   @override
   State<OrderEntryPage> createState() => _OrderEntryPageState();
 }
@@ -24,7 +26,12 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   @override
   void initState() {
     super.initState();
-    model = OrderEntryController(widget.repository, widget.storeId);
+    model = OrderEntryController(
+      widget.repository,
+      widget.storeId,
+      orderId: widget.orderId,
+    );
+    model.addListener(_syncSeed);
     model.load();
   }
 
@@ -32,8 +39,42 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
   void dispose() {
     search.dispose();
     note.dispose();
+    model.removeListener(_syncSeed);
     model.dispose();
     super.dispose();
+  }
+
+  int _seenEpoch = 0;
+  void _syncSeed() {
+    if (_seenEpoch != model.compositionEpoch) {
+      _seenEpoch = model.compositionEpoch;
+      note.text = model.note;
+    }
+  }
+
+  Future<void> restart() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Muat versi pengajuan terbaru?'),
+        content: const Text(
+          'Pilihan dan jumlah lokal yang belum disimpan akan dibuang. Periksa ulang seluruh item setelah memuat versi terbaru.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Kembali'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Muat versi terbaru'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true && mounted) {
+      await model.restartFromServer();
+    }
   }
 
   Widget catalogue() => Column(
@@ -102,7 +143,7 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
         ? line.localId
         : null;
     return OrderLineEditor(
-      key: ValueKey('draft-${line.supplierId}'),
+      key: ValueKey('draft-${line.supplierId}:${model.compositionEpoch}'),
       title: p == null
           ? 'SKU pusat tidak tersedia; hapus atau muat ulang.'
           : '${p.sku} · ${p.packSize} biji/kemasan · ${p.condition}',
@@ -123,7 +164,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
       canPop: !model.busy && model.pending == null,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text('Buat pengajuan'),
+          title: Text(
+            widget.orderId == null ? 'Buat pengajuan' : 'Ubah pengajuan',
+          ),
           actions: [
             IconButton(
               tooltip: 'Muat ulang katalog pengajuan',
@@ -158,6 +201,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               const Text(
                 'Data belum terbaru. Muat ulang sebelum membuat pengajuan.',
               ),
+            if (model.orderChanged && model.pending == null)
+              OutlinedButton(
+                onPressed: model.busy ? null : restart,
+                child: const Text('Mulai ulang dari versi terbaru'),
+              ),
             if (model.pending != null)
               Card(
                 child: Padding(
@@ -185,6 +233,9 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
               ),
             ] else if (model.preview case final preview?) ...[
               OrderReviewCard(
+                notice: model.isAmend
+                    ? 'Pratinjau belum mengubah pengajuan. Perubahan tersimpan kembali menunggu persetujuan.'
+                    : 'Belum membuat pesanan atau mereservasi stok. Setelah dikirim, pengajuan menunggu persetujuan yang berwenang.',
                 destination: preview.name,
                 address: preview.address,
                 mode: preview.mode == 'delivery'
@@ -220,7 +271,11 @@ class _OrderEntryPageState extends State<OrderEntryPage> {
                               model.context?.canCreate == true
                           ? model.confirm
                           : null,
-                      child: const Text('Konfirmasi pengajuan'),
+                      child: Text(
+                        model.isAmend
+                            ? 'Konfirmasi perubahan'
+                            : 'Konfirmasi pengajuan',
+                      ),
                     ),
                   ],
                 ),

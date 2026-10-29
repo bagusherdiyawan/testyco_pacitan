@@ -60,6 +60,29 @@ final class OrderWorkflow
         });
     }
 
+    private function amendReview(Store $store, SupplyOrder $order, array $v, array $snapshot): array
+    {
+        return ['order_id' => $order->id, 'version' => $order->version, ...$this->review($store, $v, $snapshot)];
+    }
+
+    public function previewAmend(User $user, string $id, array $v): array
+    {
+        $initial = SupplyOrder::findOrFail($id);
+        $this->orders->approver($user, $initial);
+
+        return DB::transaction(function () use ($user, $id, $v) {
+            $order = $this->lock($id);
+            $this->requireState($order, 'amend', (int) $v['version']);
+            $destination = $this->orders->recipient($user, $order->store_id, true);
+            $destination = Store::whereKey($destination->id)->lockForUpdate()->firstOrFail();
+            abort_unless($destination->active, 409, 'Toko tujuan nonaktif.');
+            abort_if($v['delivery_mode'] === 'delivery' && ! trim((string) $destination->address), 422, 'Alamat toko wajib diisi untuk pengiriman.');
+            $snapshot = $this->amendReview($destination, $order, $v, $this->snapshots($order->organization_id, $v['lines']));
+
+            return [...$snapshot, 'review_hash' => $this->reviewHash($snapshot), 'currency' => 'IDR', 'observed_at' => now()->toIso8601String()];
+        });
+    }
+
     public function create(User $user, string $store, array $v): array
     {
         $s = $this->orders->recipient($user, $store, true);
@@ -144,8 +167,13 @@ final class OrderWorkflow
             $this->requireState($order, 'amend', (int) $v['version']);
             $before = $order->toArray();
             $destination = $this->orders->recipient($user, $order->store_id, true);
+            $destination = Store::whereKey($destination->id)->lockForUpdate()->firstOrFail();
+            abort_unless($destination->active, 409, 'Toko tujuan nonaktif.');
             abort_if($v['delivery_mode'] === 'delivery' && ! trim((string) $destination->address), 422, 'Alamat toko wajib diisi untuk pengiriman.');
             $snap = $this->snapshots($order->organization_id, $v['lines']);
+            if (isset($v['review_hash'])) {
+                abort_unless(hash_equals($this->reviewHash($this->amendReview($destination, $order, $v, $snap)), $v['review_hash']), 409, 'Data perubahan berbeda dari tinjauan. Muat ulang dan tinjau kembali.');
+            }
             $lines = $snap['lines'];
             unset($snap['lines']);
             $order->lines()->delete();

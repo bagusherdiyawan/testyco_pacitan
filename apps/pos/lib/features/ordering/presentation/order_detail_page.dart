@@ -3,6 +3,8 @@ import '../application/recipient_order_controller.dart';
 import '../data/orders_repository.dart';
 import '../domain/recipient_order.dart';
 import 'shipment_receipt_form.dart';
+import 'order_entry_page.dart';
+import '../data/order_entry_repository.dart';
 
 class OrderDetailPage extends StatefulWidget {
   const OrderDetailPage({
@@ -38,6 +40,21 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
     );
     if (reason != null && mounted) {
       await model.transition(action, reason, version: snapshot.version);
+    }
+  }
+
+  Future<void> amend(RecipientOrder order) async {
+    await Navigator.of(context).push<String>(
+      MaterialPageRoute(
+        builder: (_) => OrderEntryPage(
+          repository: OrderEntryRepository(widget.repository.api),
+          storeId: order.storeId,
+          orderId: order.id,
+        ),
+      ),
+    );
+    if (mounted) {
+      await model.load();
     }
   }
 
@@ -118,6 +135,11 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
+                  if (o.allows('amend') && o.storeId.isNotEmpty)
+                    OutlinedButton(
+                      onPressed: model.canAct ? () => amend(o) : null,
+                      child: const Text('Ubah pengajuan'),
+                    ),
                   if (o.allows('approve'))
                     FilledButton(
                       onPressed: model.canAct
@@ -191,7 +213,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 ),
             ],
             const Text(
-              'Pengajuan baru tersedia dari daftar Pesanan. Perubahan item pesanan tersimpan dan pengiriman gudang masih melalui web. Penerimaan/keputusan ini online; pemulihan otomatis setelah aplikasi ditutup paksa belum tersedia.',
+              'Pengajuan baru tersedia dari daftar Pesanan. Perubahan sebelum persetujuan tersedia bagi pimpinan berwenang. Pengiriman gudang masih melalui web. Penerimaan/keputusan ini online; pemulihan otomatis setelah aplikasi ditutup paksa belum tersedia.',
             ),
           ],
         ),

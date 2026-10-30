@@ -21,6 +21,8 @@ final class FulfillmentServiceProvider extends ServiceProvider
         }
         Route::prefix('api/v1')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
             $c = FulfillmentController::class;
+            Route::get('stores/{store}/fulfillment/orders', [$c, 'warehouseInbox']);
+            Route::get('stores/{store}/fulfillment/orders/{order}', [$c, 'warehouseContext']);
             Route::get('orders/{order}/shipments', [$c, 'index']);
             Route::post('orders/{order}/shipments', [$c, 'dispatch']);
             Route::post('shipments/{shipment}/receive', [$c, 'receive']);

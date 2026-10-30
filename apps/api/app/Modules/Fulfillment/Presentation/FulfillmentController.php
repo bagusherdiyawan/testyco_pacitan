@@ -11,6 +11,18 @@ final class FulfillmentController
 {
     public function __construct(private FulfillmentWorkflow $workflow) {}
 
+    public function warehouseInbox(Request $r, string $store, \App\Modules\Fulfillment\Application\WarehouseReadModel $read): mixed
+    {
+        $r->validate(['page' => 'sometimes|integer|min:1']);
+
+        return response()->json($read->inbox($r->user(), $store))->header('Cache-Control', 'private, no-store');
+    }
+
+    public function warehouseContext(Request $r, string $store, string $order, \App\Modules\Fulfillment\Application\WarehouseReadModel $read): mixed
+    {
+        return response()->json(['data' => $read->context($r->user(), $store, $order)])->header('Cache-Control', 'private, no-store');
+    }
+
     public function index(Request $r, string $order, OrderAccess $access): mixed
     {
         $access->view($r->user(), SupplyOrder::findOrFail($order));

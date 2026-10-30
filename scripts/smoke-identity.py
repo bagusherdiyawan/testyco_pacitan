@@ -166,7 +166,18 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         order = api(base, 'GET', f'orders/{order_id}', token=owner)['data']
         assert order['status'] == 'approved' and order['total_amount'] == 360000
         assert order['recipient_actions'] == {'amend':False,'approve':False,'reject':False,'cancel':False,'receive':False}
-        order = api(base, 'POST', f'orders/{order_id}/process', {'operation_id':str(uuid.uuid4()),'version':order['version'],'source_store_id':source}, owner)['data']
+        warehouse_path=f'stores/{source}/fulfillment/orders'
+        assert api(base,'GET',warehouse_path,token=owner)['data'][0]['id']==order_id
+        warehouse=api(base,'GET',warehouse_path+'/'+order_id,token=owner)['data']
+        assert warehouse['can_process'] and not warehouse['can_dispatch'] and warehouse['source']['id']==source
+        assert warehouse['order']['lines'][0]['sku']=='AYAM-8'
+        api(base,'GET',warehouse_path,token=lead_token,expected=403)
+        process={'operation_id':str(uuid.uuid4()),'version':warehouse['order']['version'],'source_store_id':source}
+        order=api(base,'POST',f'orders/{order_id}/process',process,owner)['data']
+        api(base,'POST',f'orders/{order_id}/process',process,owner)
+        warehouse=api(base,'GET',warehouse_path+'/'+order_id,token=owner)['data']
+        assert not warehouse['can_process'] and warehouse['can_dispatch']
+        assert warehouse['order']['lines'][0]['remaining_packs']==20 and warehouse['batches'][0]['id']==batch['id']
         dispatch = {'operation_id':str(uuid.uuid4()),'version':order['version'],'handler':'Smoke warehouse','lines':[{'order_line_id':order['lines'][0]['id'],'allocations':[{'batch_id':batch['id'],'quantity_packs':20}]}]}
         shipment = api(base, 'POST', f'orders/{order_id}/shipments', dispatch, owner, 201)['data']['shipment']
         api(base, 'POST', f'orders/{order_id}/shipments', dispatch, owner, 201)
@@ -181,6 +192,10 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         web_post(receive_path, data).read()  # Same operation replay must not double stock.
         batch = api(base, 'GET', f'stores/{store}/inventory/batches', token=lead_token)['data'][0]
         assert batch['usable_pieces'] == 144 and batch['quarantined_pieces'] == 16
+        warehouse=api(base,'GET',warehouse_path+'/'+order_id,token=owner)['data']
+        assert not warehouse['can_dispatch'] and warehouse['order']['lines'][0]['remaining_packs']==0
+        assert warehouse['order']['lines'][0]['sent_packs']==20 and warehouse['batches']==[] and len(warehouse['shipments'])==1
+        api(base,'POST',f'orders/{order_id}/shipments',dispatch,owner,201)
         confirmed = api(base, 'GET', f'orders/{order_id}/shipments', token=lead_token)['data'][0]
         assert confirmed['received_at'] and confirmed['lines'][0]['good_packs'] == 18 and confirmed['lines'][0]['damaged_packs'] == 2
         html = opener.open(web + f'/app/stores/{store}/operations').read().decode()

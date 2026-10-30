@@ -7,6 +7,8 @@ import 'features/identity/domain/store.dart';
 import 'features/identity/presentation/login_page.dart';
 import 'features/identity/presentation/store_picker_page.dart';
 import 'features/catalog/catalog_module.dart';
+import 'features/fulfillment/fulfillment_module.dart';
+import 'features/fulfillment/data/warehouse_repository.dart';
 import 'features/catalog/data/catalog_repository.dart';
 import 'features/sales/sales_module.dart';
 import 'features/sales/data/pos_repository.dart';
@@ -141,6 +143,15 @@ class _TestycoAppState extends State<TestycoApp> {
                 OrderingModule(
                   repository: OrdersRepository(widget.session.api),
                   storeId: _store!.id,
+                ),
+              if (_store!.canFulfill &&
+                  const bool.fromEnvironment(
+                    'FEATURE_FULFILLMENT',
+                    defaultValue: true,
+                  ))
+                FulfillmentModule(
+                  repository: WarehouseRepository(widget.session.api),
+                  store: _store!.id,
                 ),
               if (_store!.canViewReports &&
                   const bool.fromEnvironment(

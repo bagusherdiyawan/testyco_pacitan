@@ -114,6 +114,108 @@ class SupplyWorkflowTest extends TestCase
         return ['operation_id' => (string) Str::uuid(), 'version' => $version, 'lines' => [['shipment_line_id' => $shipment['lines'][0]['id'], 'good_packs' => $good, 'damaged_packs' => $damaged, 'condition_note' => 'Hasil pemeriksaan fisik']]];
     }
 
+    public function test_native_warehouse_inbox_and_process_context_hide_unapproved_and_unassigned_work(): void
+    {
+        $order = $this->create();
+        $path = '/api/v1/stores/'.$this->source->id.'/fulfillment/orders';
+        $this->act($this->owner)->getJson($path)->assertOk()->assertJsonCount(0, 'data');
+        $this->getJson($path.'/'.$order['id'])->assertForbidden();
+        $order = $this->transition($order, 'approve', $this->lead);
+        $this->act($this->owner)->getJson($path)->assertJsonPath('data.0.id', $order['id'])->assertHeader('Cache-Control', 'no-store, private');
+        $this->getJson($path.'/'.$order['id'])->assertOk()->assertJsonPath('data.can_process', true)->assertJsonPath('data.can_dispatch', false)->assertJsonCount(0, 'data.batches');
+        $this->act($this->warehouse)->getJson($path)->assertJsonCount(0, 'data');
+        $this->getJson($path.'/'.$order['id'])->assertForbidden();
+        $this->act($this->owner)->getJson('/api/v1/stores')->assertJsonPath('data.0.organization_type', 'center');
+        $this->act($this->manager)->getJson('/api/v1/stores')->assertJsonPath('data.0.organization_type', 'partner');
+        $order = $this->transition($order, 'process', $this->owner, ['source_store_id' => $this->source->id]);
+        $this->act($this->warehouse)->getJson($path)->assertJsonPath('data.0.id', $order['id']);
+        $this->getJson($path.'/'.$order['id'])->assertOk()->assertJsonPath('data.can_process', false)->assertJsonPath('data.can_dispatch', true);
+        $this->assertDatabaseCount('shipments', 0);
+        $this->assertDatabaseCount('stock_entries', 0);
+    }
+
+    public function test_warehouse_context_is_read_only_and_batches_are_exact_source_product_and_pack_size(): void
+    {
+        [$order, $batch] = $this->ready();
+        $otherSource = Store::create(['name' => 'Gudang lain', 'organization_id' => $this->center->id]);
+        $foreign = InventoryBatch::findOrFail($batch['id'])->replicate();
+        $foreign->store_id = $otherSource->id;
+        $foreign->save();
+        $wrongPack = InventoryBatch::findOrFail($batch['id'])->replicate();
+        $wrongPack->fill(['pack_size' => 10, 'batch_code' => 'WrongPack', 'usable_pieces' => 100]);
+        $wrongPack->save();
+        $before = [DB::table('operation_receipts')->count(), DB::table('audit_entries')->count(), DB::table('stock_entries')->count()];
+        $url = '/api/v1/stores/'.$this->source->id.'/fulfillment/orders/'.$order['id'];
+        $r = $this->act($this->warehouse)->getJson($url)->assertOk()->assertHeader('Cache-Control', 'no-store, private')
+            ->assertJsonPath('data.source.id', $this->source->id)->assertJsonPath('data.order.version', $order['version'])
+            ->assertJsonPath('data.order.lines.0.remaining_packs', 20)->assertJsonPath('data.order.lines.0.sent_packs', 0)
+            ->assertJsonCount(1, 'data.batches')->assertJsonPath('data.batches.0.id', $batch['id']);
+        $this->assertArrayNotHasKey('wholesale_price', $r->json('data.batches.0'));
+        $this->assertSame($before, [DB::table('operation_receipts')->count(), DB::table('audit_entries')->count(), DB::table('stock_entries')->count()]);
+        foreach ([$this->lead, $this->manager, $this->cashier, $this->outsider, $this->user($this->center, 'warehouse')] as $user) {
+            $this->act($user)->getJson($url)->assertForbidden();
+            $this->getJson('/api/v1/stores/'.$this->source->id.'/fulfillment/orders')->assertForbidden();
+        }
+        $this->act($this->owner)->getJson('/api/v1/stores/'.$otherSource->id.'/fulfillment/orders/'.$order['id'])->assertForbidden();
+        $this->getJson('/api/v1/stores/'.$this->target->id.'/fulfillment/orders')->assertForbidden();
+    }
+
+    public function test_native_warehouse_multi_batch_allocation_has_one_shipment_and_exact_remaining_quota(): void
+    {
+        [$order, $first] = $this->ready();
+        $second = $this->act($this->warehouse)->postJson('/api/v1/stores/'.$this->source->id.'/inventory/intakes', ['operation_id' => (string) Str::uuid(), 'product_id' => $this->supplierProduct->id, 'batch_code' => 'B-002', 'expires_on' => '2030-02-01', 'quantity_packs' => 10, 'note' => 'Second physical batch'])->assertCreated()->json('data');
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => $order['version'], 'handler' => 'Petugas', 'lines' => [['order_line_id' => $order['lines'][0]['id'], 'allocations' => [['batch_id' => $first['id'], 'quantity_packs' => 5], ['batch_id' => $second['id'], 'quantity_packs' => 3]]]]];
+        $url = '/api/v1/orders/'.$order['id'].'/shipments';
+        $result = $this->postJson($url, $v)->assertCreated()->json('data');
+        $this->postJson($url, $v)->assertCreated()->assertJsonPath('data.shipment.id', $result['shipment']['id']);
+        $this->getJson('/api/v1/stores/'.$this->source->id.'/fulfillment/orders/'.$order['id'])->assertOk()->assertJsonPath('data.order.lines.0.sent_packs', 8)->assertJsonPath('data.order.lines.0.remaining_packs', 12);
+        $this->assertDatabaseCount('shipments', 1);
+        $this->assertDatabaseCount('shipment_lines', 2);
+        $this->assertSame(120, InventoryBatch::findOrFail($first['id'])->usable_pieces);
+        $this->assertSame(56, InventoryBatch::findOrFail($second['id'])->usable_pieces);
+        $this->assertSame(0, InventoryBatch::where('store_id', $this->target->id)->count());
+    }
+
+    public function test_native_warehouse_remaining_counts_sent_not_good_and_replay_never_reopens_quota(): void
+    {
+        [$order, $batch] = $this->ready();
+        $url = '/api/v1/stores/'.$this->source->id.'/fulfillment/orders/'.$order['id'];
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => $order['version'], 'handler' => 'Petugas fisik', 'lines' => [['order_line_id' => $order['lines'][0]['id'], 'allocations' => [['batch_id' => $batch['id'], 'quantity_packs' => 10]]]]];
+        $result = $this->act($this->warehouse)->postJson('/api/v1/orders/'.$order['id'].'/shipments', $v)->assertCreated()->json('data');
+        $this->getJson($url)->assertJsonPath('data.can_dispatch', true)->assertJsonPath('data.order.lines.0.remaining_packs', 10);
+        $last = $this->dispatch($result['order'], $batch, 10);
+        $this->act($this->manager)->postJson('/api/v1/shipments/'.$last['shipment']['id'].'/receive', $this->receipt($last['shipment'], $last['order']['version'], 8, 2))->assertOk();
+        $this->act($this->warehouse)->postJson('/api/v1/orders/'.$order['id'].'/shipments', $v)->assertCreated()->assertJsonPath('data.shipment.id', $result['shipment']['id']);
+        $this->getJson($url)->assertJsonPath('data.order.status', 'partially_received')->assertJsonPath('data.can_dispatch', false)->assertJsonCount(0, 'data.batches')->assertJsonPath('data.order.lines.0.sent_packs', 20)->assertJsonPath('data.order.lines.0.remaining_packs', 0)->assertJsonCount(2, 'data.shipments');
+        $this->assertDatabaseCount('shipments', 2);
+        $this->assertSame(0, InventoryBatch::findOrFail($batch['id'])->usable_pieces);
+    }
+
+    public function test_inactive_target_or_source_disables_native_warehouse_actions_without_exposing_batches(): void
+    {
+        [$order, $batch] = $this->ready();
+        $url = '/api/v1/stores/'.$this->source->id.'/fulfillment/orders/'.$order['id'];
+        $this->target->update(['active' => false]);
+        $this->act($this->warehouse)->getJson($url)->assertOk()->assertJsonPath('data.can_dispatch', false)->assertJsonCount(0, 'data.batches');
+        $this->target->update(['active' => true]);
+        $this->source->update(['active' => false]);
+        $this->getJson($url)->assertOk()->assertJsonPath('data.can_dispatch', false)->assertJsonCount(0, 'data.batches');
+        $this->assertSame(160, InventoryBatch::findOrFail($batch['id'])->usable_pieces);
+    }
+
+    public function test_native_warehouse_supports_internal_transfer_without_self_source_or_commercial_value(): void
+    {
+        $target = Store::create(['name' => 'Toko sendiri', 'organization_id' => $this->center->id]);
+        $v = $this->body(2);
+        $v['delivery_mode'] = 'pickup';
+        $v['lines'][0]['local_product_id'] = $this->supplierProduct->id;
+        $order = $this->act($this->owner)->postJson('/api/v1/stores/'.$target->id.'/orders', $v)->assertCreated()->json('data');
+        $order = $this->transition($order, 'approve', $this->owner);
+        $this->getJson('/api/v1/stores/'.$this->source->id.'/fulfillment/orders/'.$order['id'])->assertOk()->assertJsonPath('data.can_process', true)->assertJsonPath('data.order.total_amount', 0);
+        $this->getJson('/api/v1/stores/'.$target->id.'/fulfillment/orders/'.$order['id'])->assertForbidden();
+        $this->getJson('/api/v1/stores/'.$target->id.'/fulfillment/orders')->assertJsonCount(0, 'data');
+    }
+
     public function test_proposal_requires_lead_approval_before_visible_to_center_and_never_reserves_stock(): void
     {
         $order = $this->create();

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.13.0",
+    "version": "0.14.0",
     "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
   },
   "security": [
@@ -6953,6 +6953,188 @@
           }
         }
       }
+    },
+    "/api/v1/stores/{store}/fulfillment/orders": {
+      "get": {
+        "operationId": "warehouseOrders",
+        "summary": "Supplier inbox scoped to selected warehouse",
+        "description": "Center owner/admin can see approved unsourced orders for this candidate source; warehouse staff only assigned source orders. Recipient store cannot equal source. Unapproved drafts stay hidden. Inactive source retains authorized history. Page size50; never grants tenant override. Responses private/no-store.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarehouseInbox"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/store/role access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Scoped active product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Inactive store, stale configuration version or operation ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/fulfillment/orders/{order}": {
+      "get": {
+        "operationId": "warehouseOrderContext",
+        "summary": "Read-only source, remaining quota and dispatch context",
+        "description": "Requires supplier access and exact selected source scope. Only center owner/admin process approved orders. Active source/recipient and legal status required for capabilities; flags are UI hints and POST reauthorizes. remaining_packs subtracts quantities sent, not good receipts; damage never reopens quota. Batches include only positive intact source stock matching supplier product/pack snapshots, only if can_dispatch. No FEFO, expiry enforcement, reservation, mutation or new replacement policy. Order version binds workflow; stock_revision is informational and dispatch rechecks current stock atomically. GET after acknowledged writes/replays reads current state; no reliance on historical mutation response. Responses private/no-store.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/WarehouseContext"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/store/role access denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Scoped active product not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Inactive store, stale configuration version or operation ID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -7073,6 +7255,13 @@
               "string",
               "null"
             ]
+          },
+          "organization_type": {
+            "enum": [
+              "center",
+              "partner"
+            ],
+            "description": "Present on authenticated GET /stores; identity metadata for navigation only, never authorization. Missing legacy metadata hides native warehouse module."
           }
         },
         "required": [
@@ -10563,6 +10752,184 @@
           "data",
           "store",
           "can_manage",
+          "observed_at"
+        ]
+      },
+      "WarehouseSource": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "active"
+        ]
+      },
+      "WarehouseOrderLine": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/OrderLine"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "sent_packs": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "remaining_packs": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "sku",
+              "name",
+              "sent_packs",
+              "remaining_packs"
+            ]
+          }
+        ]
+      },
+      "WarehouseOrder": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SupplyOrder"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "lines": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/WarehouseOrderLine"
+                }
+              }
+            }
+          }
+        ]
+      },
+      "WarehouseBatch": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "batch_code": {
+            "type": "string"
+          },
+          "expires_on": {
+            "type": "string"
+          },
+          "pack_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "usable_pieces": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "stock_revision": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "product_id",
+          "batch_code",
+          "expires_on",
+          "pack_size",
+          "usable_pieces",
+          "stock_revision"
+        ]
+      },
+      "WarehouseContext": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/WarehouseOrder"
+          },
+          "source": {
+            "$ref": "#/components/schemas/WarehouseSource"
+          },
+          "can_process": {
+            "type": "boolean"
+          },
+          "can_dispatch": {
+            "type": "boolean"
+          },
+          "batches": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/WarehouseBatch"
+            }
+          },
+          "shipments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Shipment"
+            }
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "order",
+          "source",
+          "can_process",
+          "can_dispatch",
+          "batches",
+          "shipments",
+          "observed_at"
+        ]
+      },
+      "WarehouseInbox": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SupplyOrder"
+            }
+          },
+          "source": {
+            "$ref": "#/components/schemas/WarehouseSource"
+          },
+          "current_page": {
+            "type": "integer"
+          },
+          "last_page": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "data",
+          "source",
+          "current_page",
+          "last_page",
+          "total",
           "observed_at"
         ]
       }

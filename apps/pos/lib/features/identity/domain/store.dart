@@ -5,8 +5,12 @@ class AssignedStore {
     required this.active,
     this.role,
     this.organizationId = '',
+    this.organizationType = '',
   });
-  final String id, organizationId;
+  final String id, organizationId, organizationType;
+  bool get canFulfill =>
+      organizationType == 'center' &&
+      const {'owner', 'admin', 'warehouse'}.contains(role);
   final String name;
   final bool active;
   final String? role;
@@ -33,6 +37,7 @@ class AssignedStore {
   factory AssignedStore.fromJson(Map<String, dynamic> json) => AssignedStore(
     id: json['id'] as String,
     organizationId: json['organization_id'] as String? ?? '',
+    organizationType: json['organization_type'] as String? ?? '',
     name: json['name'] as String,
     active: json['active'] as bool,
     role: json['role'] as String?,

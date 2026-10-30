@@ -68,7 +68,10 @@ final class IdentityController
 
     public function stores(Request $r): mixed
     {
-        return $this->access->stores($r->user())->orderBy('name')->paginate(100)->through(fn ($s) => [...$s->toArray(), 'role' => $this->access->role($r->user(), $s->organization_id)?->value]);
+        $stores = $this->access->stores($r->user())->orderBy('name')->paginate(100);
+        $types = Organization::whereIn('id', $stores->getCollection()->pluck('organization_id'))->pluck('type', 'id');
+
+        return $stores->through(fn ($s) => [...$s->toArray(), 'organization_type' => $types[$s->organization_id], 'role' => $this->access->role($r->user(), $s->organization_id)?->value]);
     }
 
     public function organizationStores(Request $r, string $organization): mixed

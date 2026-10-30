@@ -21,3 +21,5 @@ Penerimaan awal gudang pusat kini juga melalui Flutter dengan katalog tanpa harg
 Riwayat ledger stok native kini memiliki filter periode WIB, batch, sumber/bucket dan pencarian snapshot historis; read-only dan staff-scoped. Lihat docs/native-stock-ledger.md. Referensi sumber bukan UUID request dan delta bukan saldo terkini.
 
 Riwayat struk: POS → Riwayat struk, periode WIB/nomor dan pagination 50, scope API, pembukaan struk historis tanpa checkout. Lihat [panduan](../../docs/native-receipt-history.md).
+
+Ganti sandi: ikon Ganti kata sandi pada pilih toko/toolbar toko, verifikasi sandi lama, ACK mencabut seluruh sesi, lalu login ulang. Hasil belum pasti tidak diulang otomatis; lihat [panduan](../../docs/native-password-change.md).

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'password_change_page.dart';
 import '../application/session.dart';
 import '../domain/store.dart';
 import '../../../design_system/molecules/error_panel.dart';
@@ -48,6 +49,7 @@ class _StorePickerPageState extends State<StorePickerPage> {
     appBar: AppBar(
       title: const Text('Pilih toko'),
       actions: [
+        PasswordChangeAction(session: widget.session),
         TextButton(
           onPressed: () async {
             try {

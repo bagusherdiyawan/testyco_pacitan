@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../design_system/molecules/password_field.dart';
 import '../application/session.dart';
 
 class LoginPage extends StatefulWidget {
@@ -55,6 +56,11 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   const SizedBox(height: 16),
                   const Text('Masuk untuk membuka toko yang ditugaskan.'),
+                  if (widget.session.notice != null)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      child: Text(widget.session.notice!),
+                    ),
                   const SizedBox(height: 24),
                   TextFormField(
                     controller: _email,
@@ -67,13 +73,13 @@ class _LoginPageState extends State<LoginPage> {
                         : 'Masukkan email yang valid.',
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
+                  PasswordField(
+                    label: 'Kata sandi',
                     controller: _password,
                     enabled: !_busy,
-                    decoration: const InputDecoration(labelText: 'Kata sandi'),
-                    obscureText: true,
                     autofillHints: const [AutofillHints.password],
-                    onFieldSubmitted: (_) => _submit(),
+                    action: TextInputAction.done,
+                    onSubmitted: (_) => _submit(),
                     validator: (v) => v == null || v.isEmpty
                         ? 'Kata sandi wajib diisi.'
                         : null,

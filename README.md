@@ -38,7 +38,7 @@ Web menggunakan port 8080 dan API 8000 pada loopback untuk pengujian lokal. Buka
 3. Pimpinan membuat kasir/kepala toko dan memilih toko yang ditugaskan. Perubahan role/penugasan mencabut seluruh token pengguna yang diubah.
 4. Kasir masuk lewat Flutter, memilih toko aktif yang ditugaskan dan melihat/mencari produk aktif. Harga grosir tidak dikirim pada endpoint katalog toko.
 5. Pengelola dapat menonaktifkan toko/akun tanpa menghapus riwayat. Pusat dapat mengaktifkan/nonaktifkan mitra. Pemilik pusat tidak dapat menonaktifkan pusat lewat API ini agar jalur pengelolaan tidak terkunci.
-6. Web menyediakan pergantian kata sandi dengan verifikasi kata sandi lama; seluruh token dicabut setelah berhasil. Logout mencabut token saat ini.
+6. Web dan Flutter menyediakan [pergantian kata sandi](docs/native-password-change.md) dengan verifikasi kata sandi lama; seluruh token dicabut setelah berhasil. Logout mencabut token saat ini.
 
 Admin pusat dapat mengelola metadata onboarding mitra; hak ini tidak otomatis membuka katalog operasional mitra. Audit yang dilihat pusat tanpa keanggotaan mitra terbatas pada perubahan identitas/onboarding, sehingga harga tidak bocor lewat audit.
 

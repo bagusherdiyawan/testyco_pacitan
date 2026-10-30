@@ -390,9 +390,20 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
         api(base,'POST',f'stores/{source}/inventory/intakes',intake_request,owner,201)
         assert api(base,'GET',f'stores/{source}/inventory/batches',token=owner)['data'][0]['usable_pieces']==0
+        # Native password change uses the existing authenticated endpoint: revoke every token.
+        other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
+        new_password=secrets.token_urlsafe(24)+'Aa7'
+        api(base,'POST','auth/password',{'current_password':PASSWORD,'password':new_password,'password_confirmation':new_password},cashier_token,204)
+        for revoked in [cashier_token,other_cashier_token]:
+            api(base,'GET','auth/me',token=revoked,expected=401)
+        api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'old-denied'},expected=422)
+        changed_session=api(base,'POST','auth/login',{'email':cashier['email'],'password':new_password,'device_name':'new-session'})['token']
+        assert api(base,'GET','auth/me',token=changed_session)['data']['email']==cashier['email']
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
+        api(base,'POST','auth/logout',{},changed_session,204)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, password rotation/revoked sessions, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

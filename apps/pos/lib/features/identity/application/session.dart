@@ -7,9 +7,11 @@ class Session extends ChangeNotifier {
   }
   final ApiClient api;
   String? name;
+  String? notice;
   bool get authenticated => api.authenticated && name != null;
   Future<void> login(String email, String password) async {
     name = await api.login(email, password);
+    notice = null;
     notifyListeners();
   }
 
@@ -21,7 +23,8 @@ class Session extends ChangeNotifier {
     }
   }
 
-  void clear() {
+  void clear({String? message}) {
+    notice = message;
     name = null;
     api.clearToken();
     notifyListeners();

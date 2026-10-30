@@ -16,7 +16,7 @@ Gate: aplikasi fondasi dapat dijalankan dan diuji; batas implementasi tercatat; 
 
 ## Tahap 1 — Identitas, mitra, katalog
 
-Status implementasi: irisan identitas dan katalog per organisasi tersedia. Kontrak/consent mitra, paket/resep, gambar, price list efektif dan gate pilot belum selesai; katalog B2B pusat awal sudah tersedia. Tahap 2 telah mempunyai irisan awal; tahap 3 mempunyai irisan POS tunai/shift awal; pelaporan PRD 11 memiliki irisan tunai lintas toko/produk/CSV; modul komersial tahap 4 dan offline tahap 5 belum diimplementasikan.
+Status implementasi: irisan identitas dan katalog per organisasi tersedia. Ganti sandi mandiri kini melalui web/Flutter dengan pencabutan sesi dan login ulang (docs/native-password-change.md). Kontrak/consent mitra, paket/resep, gambar, price list efektif dan gate pilot belum selesai; katalog B2B pusat awal sudah tersedia. Tahap 2 telah mempunyai irisan awal; tahap 3 mempunyai irisan POS tunai/shift awal; pelaporan PRD 11 memiliki irisan tunai lintas toko/produk/CSV; modul komersial tahap 4 dan offline tahap 5 belum diimplementasikan.
 
 Cakupan: PRD 01–03, 13-SEC dan fondasi audit. Aktivasi mitra/toko, akun/peran/penugasan, katalog dengan konversi dan harga historis. Owner pusat, pimpinan mitra, kepala toko, gudang dan kasir diuji dengan izin positif/negatif.
 

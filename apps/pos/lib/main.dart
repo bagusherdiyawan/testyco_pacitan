@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'features/identity/presentation/password_change_page.dart';
 import 'core/modules/feature_module.dart';
 import 'core/network/api_client.dart';
 import 'features/identity/application/session.dart';
@@ -86,6 +87,7 @@ class _TestycoAppState extends State<TestycoApp> {
             key: ValueKey(_store!.id),
             title: _store!.name,
             actions: [
+              PasswordChangeAction(session: widget.session),
               IconButton(
                 tooltip: 'Ganti toko',
                 icon: const Icon(Icons.store),

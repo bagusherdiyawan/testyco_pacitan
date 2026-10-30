@@ -1,0 +1,17 @@
+# Ganti kata sandi Flutter
+
+Irisan Identity/PRD 13-SEC menggunakan endpoint `POST /auth/password` yang sebelumnya tersedia melalui web. Tekan ikon **Ganti kata sandi** pada halaman pilih toko atau toolbar toko. Fitur akun ini tidak memerlukan toko yang ditugaskan dan tetap tersedia saat daftar toko kosong. Identity merupakan fondasi autentikasi, bukan modul transaksi yang dapat dimatikan dengan flag fitur.
+
+Isi sandi saat ini, sandi baru, dan konfirmasi sandi baru. Sandi baru minimal 12 karakter dengan huruf besar, huruf kecil, dan angka; server tetap memeriksa aturan, konfirmasi, sandi saat ini, serta sesi aktif. Client hanya memeriksa isian kosong/panjang minimum/kecocokan sebelum mengirim. Input tidak dipangkas, sehingga spasi dalam sandi tidak berubah.
+
+Tombol **Ubah dan keluar dari seluruh sesi** memanggil API sekali. Setelah ACK berhasil, backend menyimpan hash baru, mencabut seluruh token akun dan mencatat audit tanpa sandi dalam satu transaksi. Flutter menghapus token lokal dan mengganti batas autentikasi MaterialApp; halaman turunan dan input sandi dibuang, lalu login menampilkan penjelasan keberhasilan. Tidak ada request logout tambahan atau login otomatis menggunakan sandi baru. Login berikutnya membersihkan pesan status.
+
+Selama request berjalan, input/tombol dinonaktifkan dan navigasi kembali ditahan untuk mencegah pengiriman ganda. Penolakan validasi/izin/rate limit yang diketahui tetap pada form dengan pesan generik; respons server mentah tidak ditampilkan karena dapat mengandung input sensitif. Sesi kedaluwarsa mengarah ke login.
+
+Jika koneksi putus, respons tidak valid atau server gagal, hasil perubahan belum pasti. Aplikasi menghapus sesi lokal, menampilkan penjelasan tersebut pada login, dan tidak mengirim perubahan ulang otomatis. Keluar lokal pada kasus ini **tidak membuktikan** perubahan maupun pencabutan sesi lain berhasil di server. Pengguna masuk kembali untuk memeriksa akun. Tidak ada retry UUID untuk endpoint sandi ini, antrean offline, atau penyimpanan payload sandi. Selesaikan transaksi dan operasi yang hasilnya belum pasti sebelum mengganti sandi; draft transaksi server tetap tersimpan, sedangkan pending request native yang hanya ada di memori tidak dipersistenkan oleh fitur ini.
+
+`PasswordField` adalah molekul reusable pada login dan form perubahan: input tersamarkan secara default, toggle tampil/sembunyi berlabel, tanpa autocorrect/suggestions. Form perubahan membatalkan konteks autofill saat ditutup agar sandi yang belum dipastikan tidak otomatis dikomit oleh form. Controller teks dibersihkan dan dibuang saat halaman ditutup. Aplikasi tidak menulis sandi ke log/file/local storage; perilaku password manager sistem tetap di luar penyimpanan aplikasi.
+
+Arsitektur: repository Identity hanya mengirim request, `PasswordChangeController` mengatur status dan transisi sesi tanpa menyimpan payload, page menyusun form dan molekul, Session menyimpan pesan status non-sensitif. API, kontrak endpoint dan skema data tidak diubah. Fitur tidak menyediakan reset sandi melalui email, MFA, secure storage atau sesi persisten.
+
+Validasi: unit/widget native memeriksa body persis tanpa trim, validasi lokal, 422/403/429, 401, respons hilang/malformed/500, larangan submit ganda, penghapusan route stack, pesan tanpa sandi, tampilan 390px text scale 1,5 dengan keyboard dan 1200px. Smoke HTTP terisolasi membuktikan dua token lama ditolak, sandi lama ditolak, sandi baru dapat login, serta ledger tetap sama. Perangkat Android/iOS dan UAT belum diverifikasi.

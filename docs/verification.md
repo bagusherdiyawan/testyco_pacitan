@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 30 Oktober 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 157 tes lulus, 1381 assertions |
+| API PHPUnit | 160 tes lulus, 1424 assertions |
 | Web PHPUnit | 48 tes lulus, 195 assertions |
-| Flutter | 150 tes lulus; perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 355 tes lulus |
+| Flutter | 157 tes lulus; audit organisasi/filter/snapshot 390px (text scale 1,5 + keyboard)/1200px dan delapan modul navigasi, perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 365 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
 | Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound serta ledger scoped/filter/snapshot UTC lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.17.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.18.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -234,3 +234,11 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - HTTP smoke terisolasi lulus dengan dua token untuk kasir yang sama: ACK perubahan sandi membuat kedua token ditolak, login sandi lama ditolak, login sandi baru berhasil, dan ledger tidak berubah. Sandi pengujian dihasilkan acak dan tidak dicetak. Database/container dibuang setelah smoke; tidak mengubah akun development.
 - Endpoint/server policy, OpenAPI 0.17.0 dengan 72 operasi, migrasi dan dependensi tidak berubah. Tes API sebelumnya tetap memverifikasi audit user.password_changed dengan before/after null. UI memakai pesan tetap tanpa password/echo server dan tidak menyimpan payload untuk retry.
 - Gagal jaringan hanya membuktikan hasil belum pasti dan logout lokal, bukan bukti sesi remote telah dicabut. Sandi tidak dipersistenkan oleh aplikasi; secure storage, reset email, MFA, perangkat Android/iOS dan UAT belum diverifikasi.
+
+
+## Jejak audit organisasi Flutter — 30 Oktober 2026
+
+- Tiga tes API tambahan (43 assertions) lulus: pengelola mitra/tenant lain, deny kasir/kepala toko/gudang meski ada assignment, central onboarding allowlist sebelum semua filter, explicit membership pengelola, organisasi nonaktif, event global/null yang tetap tersembunyi, filter exact gabungan, awal inklusif/akhir eksklusif WIB, timestamp UTC, snapshot/actor ID, GET tanpa mutasi audit, legacy all-history 51 baris (50+1) dan validasi input/rentang.
+- Tujuh tes native tambahan lulus: hint pengelola organisasi, kalender/filter/ID, pagination scoped tanpa URL eksternal, snapshot JSON/UTC, stale/error/retry/wrong-organization, navigasi delapan modul dengan overflow mobile dan rail tablet, 390px text scale 1,5 dengan keyboard dan 1200px, applied versus unsent filters, before/after, denial bukan empty serta label onboarding.
+- Final checks ekuivalen scripts/check menggunakan SDK host yang sama: 160 API/1424 assertions, 48 web/195, 157 Flutter, total 365 tes lulus. Analyzer tanpa issue dan formatter lulus. Pengujian HTTP terisolasi lulus: sale.completed exact period/subject/actor menunjukkan snapshot Rp12.000 kepada pimpinan mitra, onboarding pusat mengembalikan nol untuk aksi operasional, kasir/kepala toko ditolak dan GET tidak menambah audit. Alur/password/ledger/report sebelumnya tetap lulus; tidak ada fixture pada DB development.
+- OpenAPI 0.18.0 tetap 72 operasi unik, referensi lokal/path parameters/required fields diperiksa tanpa validator eksternal. Tidak ada migrasi/dependensi atau perubahan allowlist/role server. Modul native memakai FEATURE_AUDIT, bukan otorisasi client. Ekspor audit, global security-event viewer, inbox/push, PostgreSQL/concurrency, perangkat nyata dan UAT belum diverifikasi/diimplementasikan sebagaimana cakupan.

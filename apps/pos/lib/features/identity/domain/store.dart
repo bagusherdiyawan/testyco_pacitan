@@ -8,6 +8,9 @@ class AssignedStore {
     this.organizationType = '',
   });
   final String id, organizationId, organizationType;
+  bool get canViewAudit =>
+      organizationId.isNotEmpty &&
+      const {'owner', 'admin', 'partner_lead'}.contains(role);
   bool get canFulfill =>
       organizationType == 'center' &&
       const {'owner', 'admin', 'warehouse'}.contains(role);

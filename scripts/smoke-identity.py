@@ -390,6 +390,19 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
         api(base,'POST',f'stores/{source}/inventory/intakes',intake_request,owner,201)
         assert api(base,'GET',f'stores/{source}/inventory/batches',token=owner)['data'][0]['usable_pieces']==0
+        # Read-only scoped native audit: filters cannot expose operational data through onboarding.
+        audit_path=f'organizations/{org}/audit'
+        audit_total=api(base,'GET',audit_path,token=lead_token)['total']
+        audit_query=urlencode({**period,'action':'sale.completed','subject_id':sale_id,'actor_id':sale['cashier_id']})
+        history=api(base,'GET',audit_path+'?'+audit_query,token=lead_token)
+        assert history['organization']['id']==org and history['visibility']=='organization' and history['total']==1
+        assert history['data'][0]['subject_id']==sale_id and history['data'][0]['occurred_at'].endswith('+00:00')
+        assert json.loads(history['data'][0]['after'])['total_amount']==12000
+        central_audit=api(base,'GET',audit_path+'?'+audit_query,token=owner)
+        assert central_audit['visibility']=='onboarding' and central_audit['data']==[]
+        for denied in [manager_token,cashier_token]:
+            api(base,'GET',audit_path,token=denied,expected=403)
+        assert api(base,'GET',audit_path,token=lead_token)['total']==audit_total
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

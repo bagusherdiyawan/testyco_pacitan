@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.17.0",
+    "version": "0.18.0",
     "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
   },
   "security": [
@@ -1761,6 +1761,32 @@
                         "string",
                         "null"
                       ]
+                    },
+                    "organization": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name"
+                      ]
+                    },
+                    "visibility": {
+                      "type": "string",
+                      "enum": [
+                        "organization",
+                        "onboarding"
+                      ]
+                    },
+                    "observed_at": {
+                      "type": "string",
+                      "format": "date-time"
                     }
                   },
                   "required": [
@@ -1768,7 +1794,10 @@
                     "current_page",
                     "last_page",
                     "per_page",
-                    "total"
+                    "total",
+                    "organization",
+                    "visibility",
+                    "observed_at"
                   ]
                 }
               }
@@ -1815,7 +1844,7 @@
             }
           },
           "422": {
-            "description": "Validation failed",
+            "description": "Invalid exact filters/page, unpaired or timezone-less dates, reversed interval, or range exceeding 31 days.",
             "content": {
               "application/json": {
                 "schema": {
@@ -1835,7 +1864,7 @@
             }
           }
         },
-        "description": "Central administrators without membership see only onboarding/identity audit, excluding catalog prices. No audit-write HTTP endpoint.",
+        "description": "Read-only organization audit, 50 rows/page ordered by descending ID (legacy ordering preserved). Without paired dates, legacy all-history pagination remains. from/to must be paired timezone-explicit [from,to) bounds, at most 31 days. action, subject_id and actor_id are exact filters; AND with existing organization/onboarding authorization. Organization managers read operational events; central administrators without a managing membership retain only the existing onboarding allowlist. Global events with null organization_id (including password changes) are outside this view. Before/after are historical JSON snapshots, not current master data; null means no stored snapshot. Each page is a live read, not a frozen snapshot. Private/no-store.",
         "parameters": [
           {
             "in": "path",
@@ -1852,6 +1881,51 @@
               "type": "integer",
               "minimum": 1
             }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Paired timezone interval, maximum 31 days; from inclusive, to exclusive."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Paired timezone interval, maximum 31 days; from inclusive, to exclusive."
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "description": "Exact value; does not broaden visibility."
+          },
+          {
+            "in": "query",
+            "name": "subject_id",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "description": "Exact value; does not broaden visibility."
+          },
+          {
+            "in": "query",
+            "name": "actor_id",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Exact actor user ID; no lookup of other organizations."
           }
         ]
       }
@@ -8006,13 +8080,19 @@
           },
           "created_at": {
             "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Explicit UTC representation of raw created_at."
           }
         },
         "required": [
           "id",
           "action",
           "subject_id",
-          "created_at"
+          "created_at",
+          "occurred_at"
         ]
       },
       "OrganizationPatch": {

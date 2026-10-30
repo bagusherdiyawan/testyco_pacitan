@@ -23,3 +23,5 @@ Riwayat ledger stok native kini memiliki filter periode WIB, batch, sumber/bucke
 Riwayat struk: POS → Riwayat struk, periode WIB/nomor dan pagination 50, scope API, pembukaan struk historis tanpa checkout. Lihat [panduan](../../docs/native-receipt-history.md).
 
 Ganti sandi: ikon Ganti kata sandi pada pilih toko/toolbar toko, verifikasi sandi lama, ACK mencabut seluruh sesi, lalu login ulang. Hasil belum pasti tidak diulang otomatis; lihat [panduan](../../docs/native-password-change.md).
+
+Audit: modul berizin pengelola organisasi, filter periode WIB/aksi/pelaku/objek dan snapshot sebelum/sesudah. Flag FEATURE_AUDIT bukan izin API; lihat [panduan](../../docs/native-audit.md).

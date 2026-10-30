@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.17.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.18.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -65,6 +65,10 @@ Pengelola berwenang mencatat kas masuk/keluar melalui web atau modul **Kas shift
 ## Laporan penjualan tunai
 
 Web dan Flutter menyediakan filter periode/toko, perbandingan toko dan rincian produk dengan snapshot historis. Web dapat mengekspor CSV hingga 10.000 transaksi; akses mengikuti membership organisasi dan assignment toko. Laporan ini khusus POS tunai tersimpan. Ikuti [panduan laporan](docs/cash-reporting.md).
+
+## Jejak audit
+
+Pengelola organisasi kini dapat menelusuri perubahan melalui [modul Audit Flutter](docs/native-audit.md), dengan filter periode WIB, aksi, pelaku dan objek serta snapshot sebelum/sesudah. Akses mengikuti API; audit organisasi tidak tersedia bagi kasir/kepala toko/gudang.
 
 ## Flutter pada perangkat
 

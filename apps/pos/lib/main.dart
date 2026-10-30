@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'features/identity/presentation/password_change_page.dart';
+import 'features/audit/audit_module.dart';
+import 'features/audit/data/audit_repository.dart';
 import 'core/modules/feature_module.dart';
 import 'core/network/api_client.dart';
 import 'features/identity/application/session.dart';
@@ -165,6 +167,15 @@ class _TestycoAppState extends State<TestycoApp> {
                   repository: CashReportRepository(widget.session.api),
                   organizationId: _store!.organizationId,
                   storeId: _store!.id,
+                ),
+              if (_store!.canViewAudit &&
+                  const bool.fromEnvironment(
+                    'FEATURE_AUDIT',
+                    defaultValue: true,
+                  ))
+                AuditModule(
+                  repository: AuditRepository(widget.session.api),
+                  organization: _store!.organizationId,
                 ),
             ]),
           ),

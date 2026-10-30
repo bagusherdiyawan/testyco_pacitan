@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 30 Oktober 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 149 tes lulus, 1248 assertions |
+| API PHPUnit | 154 tes lulus, 1315 assertions |
 | Web PHPUnit | 48 tes lulus, 195 assertions |
-| Flutter | 124 tes lulus; penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 321 tes lulus |
+| Flutter | 132 tes lulus; riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 334 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
-| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound lulus |
+| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound serta ledger scoped/filter/snapshot UTC lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.15.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.16.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -200,3 +200,18 @@ Irisan PRD 05-RCV/MOV dan 01/02, 30 Oktober 2026. Inventory mengekstrak service 
 - Smoke HTTP nyata menguji katalog price-free, preview tanpa batch, hash-bound record/replay, altered quantity conflict, partner denial serta replay intake awal sesudah seluruh stok sumber dikirim: stok sumber tetap 0, tanpa kredit kedua. Semua supply/POS/kas/minimum/report/CSV sebelumnya serta metadata Compose tetap lulus.
 
 Hasil final scripts/check: 149 API/1248 assertions, 48 web/195 assertions, 124 Flutter (321 tes), analyzer bersih. OpenAPI 0.15.0 memiliki 72 operation IDs unik; local refs/path parameters/required lists valid, tanpa validator eksternal. PostgreSQL concurrency, Android/iOS/release devices, UAT, expiry/quality enforcement, reapproval/retur/refund serta pemulihan offline tetap belum diverifikasi/diimplementasikan sesuai scope masing-masing.
+
+## Bukti riwayat ledger stok native
+
+Irisan PRD 05-MOV/01-ACL, 30 Oktober 2026. Tidak ada migrasi/dependensi atau mutasi stok/audit dari fitur riwayat.
+
+- Endpoint ledger lama mempertahankan field entry, created_at dan pagination 100; enrichment SKU/nama/pack/batch berasal snapshot InventoryBatch. Rename/pack change/nonaktif master tidak mengubah label/konversi historis. quantity_pieces tetap delta bertanda (-8, +8, +16 pada fixture buka kemasan/penerimaan), bukan running/current balance.
+- Query scoped pada entry dan batch store yang sama. Cashier, kepala toko unassigned, partner lain serta pusat tanpa membership ditolak. Kepala toko/warehouse assigned membaca. Toko nonaktif tetap berizin dalam organisasi aktif; organisasi nonaktif ditolak. Foreign batch ID ditolak 404, bukan hasil nol yang menutupi scope salah.
+- Filter gabungan batch/source/bucket/q, SKU/nama/batch historis, pagination 101 entry tanpa duplikasi pada dataset tetap dan input invalid diuji. Pasangan waktu ISO timezone [from,to) memetakan tanggal WIB: 29 Okt 16:59:59 UTC dikecualikan dari 30 Okt WIB, 17:00 disertakan, 30 Okt 17:00 dikecualikan. Lebih dari 31 hari/tanpa zona/pasangan tidak lengkap ditolak.
+- occurred_at menambahkan UTC eksplisit, tanpa mengubah created_at legacy. Native mengartikan raw UTC legacy dengan zona eksplisit, bukan zona lokal perangkat; assertion DateTime.isUtc dan WIB midnight diuji. Store metadata/observed_at/filter scope serta private/no-store tersedia; harga tidak ditambahkan.
+- GET berulang tidak menambah entry/claim/audit atau mengubah saldo/revisi batch. Source ID dan entry ID dapat disalin, tanpa menafsirkan source sebagai request UUID atau melewati izin objek sumber.
+- Native DTO/filter-domain/repository/controller/page/card dipisahkan. Filter exception tidak bergantung transport HTTP. Page baru menghapus data lama saat loading/error, retry memakai filter diterapkan dan wrong-store response ditolak. Pagination hanya path lokal dan mempertahankan periode/batch/query. Menghapus batch filter mengembalikan page 1 dengan filter lain tetap.
+- Widget 390px text scale 1,5/1200px menguji Stock→Riwayat batch, signed quantity, actor #ID, UTC→WIB, filter/pagination/all-batches. Kasir tanpa hint tidak melihat entry; forged deep-link tetap menerima denial API. Error tidak dipresentasikan sebagai riwayat kosong; retry kembali menampilkan entry. Seluruh request native pada tes ledger adalah GET.
+- Smoke HTTP terisolasi memfilter shipment_receipt/quarantined/batch aktual menjadi satu entry +16 biji isi historis 8, UTC eksplisit dan tanpa harga. Owner pusat tanpa membership partner serta kasir ditolak. Seluruh alur supply/intake/POS/kas/minimum/report/CSV dan Compose metadata lama tetap lulus.
+
+Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions dan 132 Flutter (334 tes), analyzer bersih. Setelah finalisasi exception filter dan assertion UTC, analyzer serta 8 tes riwayat diulang dan lulus. OpenAPI 0.16.0 tetap 72 operation IDs unik; local refs/path parameters/required lists valid tanpa validator eksternal. PostgreSQL concurrency, Android/iOS/release devices dan UAT belum diverifikasi. Tidak ada ekspor ledger, running balance, pemulihan UUID/offline, reapproval/retur/refund atau kebijakan mutu baru.

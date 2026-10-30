@@ -1,6 +1,6 @@
 # Testyco API
 
-Laravel JSON API dengan modul Identity, Catalog, Ordering, Inventory, Fulfillment, Shifts dan Sales. Registry provider pada config/modules.php; database development SQLite. Kontrak OpenAPI 0.15.0 mencakup POS tunai online dan shift kasir, selain supply/stock-control. Lihat README root dan docs/cash-pos.md. Refund, QRIS, billing dan offline belum tersedia.
+Laravel JSON API dengan modul Identity, Catalog, Ordering, Inventory, Fulfillment, Shifts dan Sales. Registry provider pada config/modules.php; database development SQLite. Kontrak OpenAPI 0.16.0 mencakup POS tunai online dan shift kasir, selain supply/stock-control. Lihat README root dan docs/cash-pos.md. Refund, QRIS, billing dan offline belum tersedia.
 
 Ambang stok minimum per SKU/toko dan peringatan saat halaman dimuat tersedia; pengaturan dan pembacaan melalui web/Flutter, dengan GET detail ID SKU untuk editor native (docs/native-stock-minimum.md). Lihat docs/stock-minimums.md di root. Belum ada push/email atau pesanan otomatis.
 
@@ -15,3 +15,5 @@ Lihat docs/native-order-entry.md untuk pengajuan baru, kondisi hasil belum diket
 Lihat docs/native-order-amend.md untuk preview/PUT sebelum approval, binding versi/ID, serta reset lokal eksplisit saat versi berubah.
 
 Penerimaan awal gudang pusat kini juga melalui Flutter dengan katalog tanpa harga, preview konversi server dan retry immutable; lihat docs/native-warehouse-intake.md. Stok mitra tetap melalui penerimaan pesanan yang disetujui.
+
+Riwayat ledger stok native kini memiliki filter periode WIB, batch, sumber/bucket dan pencarian snapshot historis; read-only dan staff-scoped. Lihat docs/native-stock-ledger.md. Referensi sumber bukan UUID request dan delta bukan saldo terkini.

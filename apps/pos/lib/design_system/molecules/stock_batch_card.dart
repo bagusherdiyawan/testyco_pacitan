@@ -13,8 +13,10 @@ class StockBatchCard extends StatelessWidget {
     this.ready = 0,
     this.waste = 0,
     this.revision = 0,
+    this.action,
     super.key,
   });
+  final Widget? action;
   final String sku, name, batch, expiry;
   final int packSize, usable, quarantined, opened, ready, waste, revision;
   @override
@@ -37,6 +39,7 @@ class StockBatchCard extends StatelessWidget {
             'Total di luar karantina/susut: ${usable + opened + ready} biji',
           ),
           Text('Revisi stok: $revision'),
+          if (action != null) action!,
         ],
       ),
     ),

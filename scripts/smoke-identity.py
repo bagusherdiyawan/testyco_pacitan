@@ -203,6 +203,12 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         web_post(receive_path, data).read()  # Same operation replay must not double stock.
         batch = api(base, 'GET', f'stores/{store}/inventory/batches', token=lead_token)['data'][0]
         assert batch['usable_pieces'] == 144 and batch['quarantined_pieces'] == 16
+        ledger_query=urlencode({'batch_id':batch['id'],'source_type':'shipment_receipt','bucket':'quarantined','q':'SMOKE-BATCH'})
+        history=api(base,'GET',f'stores/{store}/inventory/ledger?'+ledger_query,token=lead_token)
+        assert history['store']['id']==store and history['total']==1 and history['data'][0]['quantity_pieces']==16
+        assert history['data'][0]['pack_size']==8 and history['data'][0]['batch_code']=='SMOKE-BATCH'
+        assert history['data'][0]['occurred_at'].endswith('+00:00') and 'retail_price' not in history['data'][0]
+        api(base,'GET',f'stores/{store}/inventory/ledger',token=owner,expected=403)
         warehouse=api(base,'GET',warehouse_path+'/'+order_id,token=owner)['data']
         assert not warehouse['can_dispatch'] and warehouse['order']['lines'][0]['remaining_packs']==0
         assert warehouse['order']['lines'][0]['sent_packs']==20 and warehouse['batches']==[] and len(warehouse['shipments'])==1
@@ -274,6 +280,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base, 'POST', f'organizations/{org}/users', cashier, owner, 201)
         cashier_token = api(base, 'POST', 'auth/login', {'email':cashier['email'],'password':PASSWORD,'device_name':'smoke'})['token']
         api(base, 'GET', f'stores/{store}/inventory/control-context', token=cashier_token, expected=403)
+        api(base,'GET',f'stores/{store}/inventory/ledger',token=cashier_token,expected=403)
         assert not api(base,'GET',minimum_detail_path,token=cashier_token)['can_manage']
         opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
         html = opener.open(web + '/login').read().decode()

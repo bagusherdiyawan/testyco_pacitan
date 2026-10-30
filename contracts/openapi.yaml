@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.15.0",
+    "version": "0.16.0",
     "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
   },
   "security": [
@@ -3524,37 +3524,14 @@
     "/api/v1/stores/{store}/inventory/ledger": {
       "get": {
         "operationId": "inventoryLedger",
-        "summary": "Authorized immutable stock entry history; cashier denied",
+        "summary": "Scoped read-only stock ledger with batch snapshots and filters",
         "responses": {
           "200": {
             "description": "Success",
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/StockEntry"
-                      }
-                    },
-                    "current_page": {
-                      "type": "integer"
-                    },
-                    "last_page": {
-                      "type": "integer"
-                    },
-                    "per_page": {
-                      "type": "integer"
-                    },
-                    "total": {
-                      "type": "integer"
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ]
+                  "$ref": "#/components/schemas/StockLedgerHistory"
                 }
               }
             }
@@ -3627,8 +3604,69 @@
               "type": "integer",
               "minimum": 1
             }
+          },
+          {
+            "in": "query",
+            "name": "batch_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_type",
+            "schema": {
+              "enum": [
+                "warehouse_intake",
+                "shipment_dispatch",
+                "shipment_receipt",
+                "inventory_open",
+                "inventory_cook",
+                "stock_count",
+                "stock_waste",
+                "pos_sale"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "bucket",
+            "schema": {
+              "enum": [
+                "usable",
+                "opened",
+                "ready",
+                "quarantined",
+                "waste"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            }
           }
-        ]
+        ],
+        "description": "Staff roles owner/admin/partner lead/assigned store manager/warehouse only; cashier and central onboarding without tenant membership denied. Inactive store history allowed within active organization. Original signed stock_entries preserved; enrichment uses immutable batch snapshots, never current Catalog master or prices. Optional batch_id must belong to requested store or 404. q searches historical SKU/name/batch. Optional from/to must be paired ISO timezone instants with [from,to), max31 days; omitting both preserves legacy paginated all-history. UI inclusive calendar WIB converts end to next-day start. No running balance, stock mutation/audit write or cross-page snapshot guarantee. Sorted created_at descending then id descending, 100 per page. Original created_at stays compatible; occurred_at adds explicit UTC for device-independent WIB display. Private/no-store."
       }
     },
     "/api/v1/stores/{store}/inventory/intakes": {
@@ -8398,7 +8436,8 @@
             ]
           },
           "quantity_pieces": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Signed change in base pieces for this bucket; not a running or current balance."
           },
           "source_type": {
             "enum": [
@@ -8424,6 +8463,30 @@
           },
           "created_at": {
             "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "batch_code": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "pack_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expires_on": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Explicit UTC instant derived from original ledger created_at. created_at remains unchanged for legacy clients."
           }
         },
         "required": [
@@ -8432,7 +8495,15 @@
           "quantity_pieces",
           "bucket",
           "source_type",
-          "source_id"
+          "source_id",
+          "sku",
+          "name",
+          "batch_code",
+          "condition",
+          "pack_size",
+          "expires_on",
+          "occurred_at",
+          "actor_id"
         ]
       },
       "IntakeInput": {
@@ -11294,6 +11365,118 @@
           "last_page",
           "total",
           "observed_at"
+        ]
+      },
+      "LedgerFilters": {
+        "type": "object",
+        "properties": {
+          "from": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "to": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "q": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 100
+          },
+          "batch_id": {
+            "type": "string"
+          },
+          "bucket": {
+            "enum": [
+              "usable",
+              "opened",
+              "ready",
+              "quarantined",
+              "waste"
+            ]
+          },
+          "source_type": {
+            "enum": [
+              "warehouse_intake",
+              "shipment_dispatch",
+              "shipment_receipt",
+              "inventory_open",
+              "inventory_cook",
+              "stock_count",
+              "stock_waste",
+              "pos_sale"
+            ]
+          },
+          "page": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "StockLedgerHistory": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StockEntry"
+            }
+          },
+          "store": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "active"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/LedgerFilters"
+          },
+          "current_page": {
+            "type": "integer"
+          },
+          "last_page": {
+            "type": "integer"
+          },
+          "per_page": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "data",
+          "store",
+          "observed_at",
+          "filters",
+          "current_page",
+          "last_page",
+          "total"
         ]
       }
     }

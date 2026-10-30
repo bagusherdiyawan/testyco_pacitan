@@ -31,13 +31,15 @@ Contoh: dikirim 20 kemasan isi 8; baik 18, rusak 2 → 144 biji usable dan 16 bi
 
 Jika 20 sudah dikirim tetapi 2 hilang/rusak, kuota pengganti tidak bertambah otomatis. Resolusi retur/kredit/pengganti belum tersedia; catatan dan selisih dipertahankan untuk tindak lanjut. Sistem tidak membuat penerimaan fiktif atau perubahan invoice otomatis.
 
+Ledger kini dapat dibaca melalui [riwayat stok Flutter](native-stock-ledger.md) oleh petugas berizin, dengan snapshot batch dan filter periode/sumber/bucket. Referensi sumber ledger berbeda dari UUID request.
+
 ## Pengulangan dan status berubah
 
 Setiap formulir mutasi mempunyai UUID operasi. Gunakan UUID yang sama untuk mengulang request identik setelah koneksi terputus. UUID sama dengan isi/tindakan/aktor berbeda ditolak. Tidak perlu membuat transaksi baru hanya untuk mencetak ulang atau mencoba request lagi. Jika versi order berubah, muat ulang dan tinjau status terkini. Jangan mengubah payload lama lalu memakai ulang UUID-nya.
 
 ## API dan Flutter
 
-Kontrak OpenAPI 0.15.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
+Kontrak OpenAPI 0.16.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
 
 Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok yang menampilkan jumlah baik/karantina. `FEATURE_ORDERING=false` dan `FEATURE_INVENTORY=false` dapat menonaktifkan modul presentasi saat build. Persetujuan/penolakan/pembatalan berizin dan penerimaan aktual kini tersedia pada Flutter; lihat [panduan native](native-ordering.md). [Pengajuan baru Flutter](native-order-entry.md) memakai tinjauan harga server dan UUID yang tetap. Perubahan sebelum persetujuan kini tersedia pada [Flutter](native-order-amend.md), dengan versi awal dan tinjauan server. Pemilihan sumber dan dispatch kini juga melalui modul Gudang Flutter; lihat [panduan native](native-warehouse.md).
 

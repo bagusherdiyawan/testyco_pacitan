@@ -6,7 +6,6 @@ use App\Modules\Identity\Application\Access;
 use App\Modules\Inventory\Application\WarehouseIntake;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 final class InventoryController
 {
@@ -19,11 +18,18 @@ final class InventoryController
         return InventoryBatch::where('store_id', $store)->orderBy('expires_on')->orderBy('id')->paginate(100);
     }
 
-    public function ledger(Request $r, string $store): mixed
+    public function ledger(Request $r, string $store, \App\Modules\Inventory\Application\LedgerHistory $history): mixed
     {
-        $this->access->store($r->user(), $store, ['owner', 'admin', 'warehouse', 'partner_lead', 'store_manager']);
+        $v = $r->validate([
+            'page' => 'sometimes|integer|min:1', 'batch_id' => 'sometimes|required|ulid',
+            'q' => 'sometimes|nullable|string|max:100',
+            'source_type' => ['sometimes', 'required', \Illuminate\Validation\Rule::in(\App\Modules\Inventory\Application\LedgerHistory::SOURCES)],
+            'bucket' => 'sometimes|required|in:usable,opened,ready,quarantined,waste',
+            'from' => ['required_with:to', 'nullable', 'string', 'date', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'],
+            'to' => ['required_with:from', 'nullable', 'string', 'date', 'after:from', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'],
+        ]);
 
-        return DB::table('stock_entries')->where('store_id', $store)->orderByDesc('id')->paginate(100);
+        return response()->json($history->read($r->user(), $store, $v))->header('Cache-Control', 'private, no-store');
     }
 
     private function intakeRules(): array

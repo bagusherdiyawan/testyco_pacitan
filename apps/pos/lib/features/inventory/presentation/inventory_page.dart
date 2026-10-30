@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../data/inventory_repository.dart';
 import '../domain/stock_batch.dart';
 import 'stock_minimum_page.dart';
+import 'stock_ledger_page.dart';
+import '../data/stock_ledger_repository.dart';
 import 'warehouse_intake_page.dart';
 import '../data/warehouse_intake_repository.dart';
 import 'stock_control_page.dart';
@@ -71,6 +73,19 @@ class _InventoryPageState extends State<InventoryPage> {
           ),
         ),
       ),
+      if (widget.canControl)
+        TextButton.icon(
+          icon: const Icon(Icons.history),
+          label: const Text('Riwayat pergerakan stok'),
+          onPressed: () => Navigator.of(context).push<void>(
+            MaterialPageRoute(
+              builder: (_) => StockLedgerHistoryPage(
+                repository: StockLedgerRepository(widget.repository.api),
+                store: widget.storeId,
+              ),
+            ),
+          ),
+        ),
       if (widget.canIntake)
         TextButton.icon(
           icon: const Icon(Icons.add_box_outlined),
@@ -149,6 +164,22 @@ class _InventoryPageState extends State<InventoryPage> {
                     ready: b.ready,
                     waste: b.waste,
                     revision: b.revision,
+                    action: widget.canControl && b.id.isNotEmpty
+                        ? TextButton(
+                            onPressed: () => Navigator.of(context).push<void>(
+                              MaterialPageRoute(
+                                builder: (_) => StockLedgerHistoryPage(
+                                  repository: StockLedgerRepository(
+                                    widget.repository.api,
+                                  ),
+                                  store: widget.storeId,
+                                  batchId: b.id,
+                                ),
+                              ),
+                            ),
+                            child: const Text('Riwayat batch ini'),
+                          )
+                        : null,
                   ),
               ],
             );

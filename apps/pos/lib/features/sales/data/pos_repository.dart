@@ -1,3 +1,5 @@
+import '../../../core/domain/wib_date_range.dart';
+import '../domain/receipt_history.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/paged_records.dart';
 import '../../catalog/domain/catalog_product.dart';
@@ -24,4 +26,35 @@ class PosRepository {
           as Map<String, dynamic>;
   Future<Map<String, dynamic>> receipt(String id) async =>
       (await api.request('GET', 'sales/$id'))['data'] as Map<String, dynamic>;
+  Future<ReceiptHistory> history(
+    String store,
+    WibDateRange range,
+    String query,
+    int page,
+  ) async {
+    final path = Uri(
+      path: 'stores/$store/sales',
+      queryParameters: {
+        ...range.params,
+        if (query.isNotEmpty) 'q': query,
+        'page': '$page',
+      },
+    );
+    final r = await api.request('GET', path.toString());
+    if ((r['store'] as Map?)?['id'] != store ||
+        !['own', 'store'].contains(r['scope'])) {
+      throw const ApiException('Riwayat bukan milik toko yang dipilih.');
+    }
+    final rows = (r['data'] as List).cast<Map<String, dynamic>>();
+    if (rows.any((row) => row['store_id'] != store)) {
+      throw const ApiException('Struk bukan milik toko yang dipilih.');
+    }
+    return ReceiptHistory(
+      rows,
+      (r['store'] as Map)['name'] as String,
+      r['scope'] as String,
+      r['current_page'] as int,
+      r['last_page'] as int,
+    );
+  }
 }

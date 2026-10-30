@@ -23,6 +23,7 @@ class PosController extends ChangeNotifier {
   Map<String, dynamic>? get shift => context?['shift'] as Map<String, dynamic>?;
   bool get cartLocked => busy || intent != null || _createRequest != null;
   bool get creatingUncertain => _createRequest != null;
+  bool get closingUncertain => _closeRequest != null;
   bool get openingUncertain => _openRequest != null;
   bool get paymentUncertain => _payRequest != null;
   List<Map<String, dynamic>> get pending =>
@@ -54,14 +55,19 @@ class PosController extends ChangeNotifier {
   }
 
   Future<void> _refresh() async {
-    final results = await Future.wait<dynamic>([
-      repository.context(store),
-      repository.products(store),
-      repository.batches(store),
-    ]);
-    context = results[0] as Map<String, dynamic>;
-    products = results[1] as List<CatalogProduct>;
-    batches = results[2] as List<Map<String, dynamic>>;
+    final nextContext = await repository.context(store);
+    if ((nextContext['store'] as Map)['active'] == true) {
+      final results = await Future.wait<dynamic>([
+        repository.products(store),
+        repository.batches(store),
+      ]);
+      products = results[0] as List<CatalogProduct>;
+      batches = results[1] as List<Map<String, dynamic>>;
+    } else {
+      products = [];
+      batches = [];
+    }
+    context = nextContext;
     for (final entry in cart.values) {
       if (entry.stock != null &&
           !choices(entry).any((c) => c['key'] == entry.stock)) {

@@ -1,0 +1,15 @@
+# Riwayat struk Flutter
+
+Pada modul **POS → Riwayat struk**, pilih periode kalender WIB (awal dan akhir inklusif, maksimal 31 hari) dan pencarian nomor struk, lalu **Terapkan filter**. Default hari ini WIB; ubah periode untuk mencari transaksi lama. Riwayat dapat dibuka sebelum membuka shift dan pada toko nonaktif yang masih dapat diakses dalam organisasi aktif. Daftar 20 struk terbaru pada POS tetap tersedia.
+
+Halaman menampilkan scope dari server: **Struk saya** untuk kasir, **Seluruh kasir toko** untuk pengelola berwenang. Gudang, pengelola tanpa assignment toko, organisasi lain dan pemilik pusat tanpa membership mitra ditolak. Navigasi tidak memberikan izin tambahan. Detail struk tetap memeriksa pemilik kasir/izin pengelola pada API.
+
+**Berikutnya/Sebelumnya** membaca maksimal 50 struk per halaman melalui endpoint toko yang sama. Pencarian nomor mempertahankan perilaku SQL LIKE; bukan pencarian produk. Isian yang belum diterapkan tidak mengubah query, pagination atau label periode aktif. API lama tanpa pasangan tanggal tetap mengembalikan seluruh riwayat berhalaman. API menerima pasangan interval ISO bertimezone `[from,to)`; Flutter mengirim akhir kalender + satu hari pukul 00:00 WIB. Urutan ID menurun dipertahankan demi kompatibilitas. Halaman dibaca live secara terpisah, bukan snapshot beku atau total laporan.
+
+**Buka struk** memakai struk tersimpan dengan nama/konversi/harga/pembayaran historis, melalui komponen `SaleReceipt` yang juga digunakan POS. Kembali ke daftar mempertahankan filter dan nomor halaman. Tidak ada checkout, debit stok/kas, cetak perangkat, refund, atau pengiriman struk dari halaman ini. Kegagalan GET menghapus hasil sebelumnya; bukan ditampilkan sebagai riwayat kosong. Retry detail membaca ID yang sama. Client memeriksa store ID envelope/baris/detail dan tidak mengikuti URL pagination eksternal.
+
+Tautan riwayat dinonaktifkan saat POS sibuk atau hasil buka shift, pembuatan draft, pembayaran maupun tutup shift belum pasti. Riwayat menggunakan controller terpisah agar pembacaan struk tidak mengganti draft/receipt/payload pending pada controller checkout. Pending masih hanya disimpan selama proses/halaman terkait hidup; fitur ini tidak menambah antrean offline atau persistensi sesi.
+
+Arsitektur: `ReceiptHistory` read service API, controller HTTP validasi dan private/no-store; Flutter `WibDateRange` pada core/domain, DTO riwayat, repository POS, controller baca, page dan molekul `ReceiptHistoryCard`. Provider/modul Sales yang ada digunakan kembali, tanpa dependensi atau migrasi baru. `WibDateRange` dapat dipakai modul lain tanpa dependensi ke Inventory.
+
+Validasi development mencakup batas tengah malam WIB, batas 31 hari, ownership/assignment/tenant, toko nonaktif/organisasi nonaktif, 51 struk (50+1), perubahan master tanpa perubahan snapshot, tidak ada perubahan stok/kas/audit/operasi setelah GET, retry/error serta widget 390px (text scale 1,5) dan 1200px. Pengujian HTTP terisolasi juga membaca filter struk sebagai kasir dan pengelola serta menolak akses pusat lintas organisasi. Perangkat nyata, PostgreSQL/concurrency dan UAT belum diverifikasi.

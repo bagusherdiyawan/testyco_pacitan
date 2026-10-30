@@ -37,7 +37,7 @@ Kas diharapkan = uang awal + penjualan tunai neto + kas masuk − kas keluar. Ua
 
 Selesaikan/batalkan seluruh draft aktif sebelum tutup. Kasir pemilik mengisi hitungan fisik; nilai tidak diisi otomatis sebagai bukti hitung. Versi shift harus sama dengan yang dilihat saat menghitung; jika kas berubah, muat ulang dan hitung kembali. Penutupan menyimpan expected, actual, selisih dan catatan tanpa menulis ulang penjualan.
 
-Web menyediakan riwayat struk berhalaman serta ringkasan penjualan per tanggal kalender Asia/Jakarta (WIB). Ini belum penetapan jam pergantian hari bisnis toko. API menerima interval eksplisit bertimezone, awal inklusif/akhir eksklusif, maksimal 31 hari. Ringkasan menghitung penjualan selesai, bukan order supply/transfer atau kas masuk/keluar. Pengelola hanya melihat toko yang berwenang.
+Flutter kini menyediakan [riwayat struk berhalaman dengan filter periode/nomor](native-receipt-history.md), scope kasir sendiri/pengelola toko, serta pembukaan struk historis terpisah dari checkout. Web menyediakan riwayat struk berhalaman serta ringkasan penjualan per tanggal kalender Asia/Jakarta (WIB). Ini belum penetapan jam pergantian hari bisnis toko. API menerima interval eksplisit bertimezone, awal inklusif/akhir eksklusif, maksimal 31 hari. Ringkasan menghitung penjualan selesai, bukan order supply/transfer atau kas masuk/keluar. Pengelola hanya melihat toko yang berwenang.
 
 ## Batas dan release gate
 

@@ -71,13 +71,15 @@ final class PosController
 
     public function sales(Request $r, string $store): mixed
     {
-        $s = $this->access->store($r->user(), $store, false);
-        $q = Sale::where('store_id', $store);
-        if (! $this->access->canManage($r->user(), $s->organization_id)) {
-            $q->where('cashier_id', $r->user()->id);
-        }
+        $v = $r->validate([
+            'page' => 'sometimes|integer|min:1',
+            'q' => 'nullable|string|max:100',
+            'from' => ['nullable', 'required_with:to', 'string', 'date', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'],
+            'to' => ['nullable', 'required_with:from', 'string', 'date', 'after:from', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'],
+        ]);
 
-        return $q->orderByDesc('id')->paginate(50);
+        return response()->json(app(\App\Modules\Sales\Application\ReceiptHistory::class)->read($r->user(), $store, $v))
+            ->header('Cache-Control', 'private, no-store');
     }
 
     public function receipt(Request $r, string $sale): mixed

@@ -10,6 +10,7 @@ import subprocess
 import tempfile
 import time
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, build_opener, HTTPCookieProcessor, urlopen
@@ -302,6 +303,14 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert web_post(pay_path,payment).url.endswith(sale_id)
         sale = api(base,'GET',f'sales/{sale_id}',token=cashier_token)['data']
         assert sale['total_amount']==12000 and sale['change_amount']==8000
+        sale_time=datetime.fromisoformat(sale['sold_at'].replace('Z','+00:00'))
+        history_query=urlencode({'from':(sale_time-timedelta(seconds=1)).isoformat(),'to':(sale_time+timedelta(seconds=1)).isoformat(),'q':sale['number']})
+        history=api(base,'GET',f'stores/{store}/sales?{history_query}',token=cashier_token)
+        assert history['scope']=='own' and history['store']['id']==store and history['total']==1
+        assert history['data'][0]['id']==sale_id and history['data'][0]['total_amount']==12000
+        history=api(base,'GET',f'stores/{store}/sales?{history_query}',token=manager_token)
+        assert history['scope']=='store' and history['data'][0]['id']==sale_id
+        api(base,'GET',f'stores/{store}/sales?{history_query}',token=owner,expected=403)
         current=api(base,'GET',f'stores/{store}/inventory/batches',token=cashier_token)['data'][0]
         assert current['ready_pieces']==2 and current['quarantined_pieces']==16
         warning = api(base,'GET',f'stores/{store}/inventory/minimums?low_only=1',token=cashier_token)
@@ -339,7 +348,6 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         # Cross-store cash reporting and CSV use the same stored sale, excluding cash expenses.
         import csv
         import io
-        from datetime import datetime, timedelta, timezone
         wib = timezone(timedelta(hours=7))
         sold_day = datetime.fromisoformat(sale['sold_at'].replace('Z','+00:00')).astimezone(wib).replace(hour=0,minute=0,second=0,microsecond=0)
         period = {'from':sold_day.isoformat(),'to':(sold_day+timedelta(days=1)).isoformat()}

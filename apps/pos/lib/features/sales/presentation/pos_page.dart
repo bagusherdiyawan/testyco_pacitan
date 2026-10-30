@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'receipt_history_page.dart';
 import '../application/pos_controller.dart';
 import '../data/pos_repository.dart';
 import '../domain/cart_entry.dart';
@@ -66,6 +67,25 @@ class _PosPageState extends State<PosPage> {
           icon: const Icon(Icons.refresh),
         ),
       ],
+    ),
+    TextButton.icon(
+      onPressed:
+          model.busy ||
+              model.openingUncertain ||
+              model.creatingUncertain ||
+              model.paymentUncertain ||
+              model.closingUncertain
+          ? null
+          : () => Navigator.of(context).push(
+              MaterialPageRoute<void>(
+                builder: (_) => ReceiptHistoryPage(
+                  repository: widget.repository,
+                  store: widget.storeId,
+                ),
+              ),
+            ),
+      icon: const Icon(Icons.receipt_long),
+      label: const Text('Riwayat struk'),
     ),
     if (model.busy) const LinearProgressIndicator(),
     if (model.error != null)
@@ -245,8 +265,12 @@ class _PosPageState extends State<PosPage> {
       }
       final contextData = model.context!;
       if ((contextData['store'] as Map)['active'] != true) {
-        return const Center(
-          child: Text('Toko nonaktif. Transaksi baru ditolak.'),
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            ...header(),
+            const Text('Toko nonaktif. Transaksi baru ditolak.'),
+          ],
         );
       }
       if (model.shift == null) {

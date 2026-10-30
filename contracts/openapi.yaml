@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.16.0",
+    "version": "0.17.0",
     "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
   },
   "security": [
@@ -5801,10 +5801,38 @@
                     },
                     "total": {
                       "type": "integer"
+                    },
+                    "store": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "active": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "active"
+                      ]
+                    },
+                    "scope": {
+                      "type": "string",
+                      "enum": [
+                        "own",
+                        "store"
+                      ]
                     }
                   },
                   "required": [
-                    "data"
+                    "data",
+                    "store",
+                    "scope"
                   ]
                 }
               }
@@ -5851,7 +5879,7 @@
             }
           },
           "422": {
-            "description": "Invalid money/units/cash tender or missing reason",
+            "description": "Invalid page/search, unpaired or timezone-less dates, reversed interval or range exceeding 31 days.",
             "content": {
               "application/json": {
                 "schema": {
@@ -5878,9 +5906,36 @@
               "type": "integer",
               "minimum": 1
             }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Paired timezone-explicit interval bound; from inclusive, to exclusive, maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Paired timezone-explicit interval bound; from inclusive, to exclusive, maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Receipt number search; does not broaden cashier/store scope."
           }
         ],
-        "description": "Paginated list metadata; lines are loaded only on receipt detail."
+        "description": "Read-only paginated history (50/page), newest ID first. No interval retains legacy all-history access; optional paired ISO timezone bounds are [from,to), at most 31 days. q searches receipt number (SQL LIKE). Cashiers see own receipts; authorized managers see the store. Inactive stores remain readable within an active organization. Data pages are live reads, not a frozen snapshot. Master updates never rewrite historical receipt values. External pagination URLs must not be used by native clients."
       }
     },
     "/api/v1/sales/{sale}": {

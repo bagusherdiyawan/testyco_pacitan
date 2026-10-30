@@ -474,4 +474,77 @@ class CashPosTest extends TestCase
         $this->act($secondLead)->postJson('/api/v1/inventory/counts/'.$count['id'].'/approve', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'review_note' => 'Snapshot before checkout'])->assertConflict();
         $this->assertSame(26, $this->batch->fresh()->ready_pieces);
     }
+
+    public function test_filtered_receipt_history_retains_ownership_and_store_tenant_guards(): void
+    {
+        $mine = $this->pay($this->intent($this->open()));
+        $theirs = $this->pay($this->intent($this->open($this->other), actor: $this->other), actor: $this->other);
+        $path = '/api/v1/stores/'.$this->store->id.'/sales';
+        $this->act($this->cashier)->getJson($path)->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $mine['id'])->assertJsonPath('scope', 'own')->assertJsonPath('store.id', $this->store->id)->assertHeader('Cache-Control', 'no-store, private');
+        $this->getJson($path.'?q='.urlencode($theirs['number']))->assertJsonCount(0, 'data');
+        $this->getJson('/api/v1/sales/'.$theirs['id'])->assertForbidden();
+        $assigned = $this->user($this->org, 'store_manager', [$this->store]);
+        $this->act($assigned)->getJson($path)->assertJsonCount(2, 'data')->assertJsonPath('scope', 'store');
+        $center = Organization::create(['name' => 'Pusat', 'type' => 'center']);
+        foreach ([$this->outside, $this->warehouse, $this->user($this->org, 'store_manager'), $this->user($center, 'owner')] as $actor) {
+            $this->act($actor)->getJson($path)->assertForbidden();
+            $this->getJson('/api/v1/sales/'.$mine['id'])->assertForbidden();
+        }
+        $this->store->update(['active' => false]);
+        $this->act($this->cashier)->getJson($path)->assertOk();
+        $this->org->update(['active' => false]);
+        $this->getJson($path)->assertForbidden();
+    }
+
+    public function test_receipt_filters_use_half_open_wib_period_and_historical_snapshots_without_writes(): void
+    {
+        $shift = $this->open();
+        $times = ['2026-10-29 16:59:59', '2026-10-29 17:00:00', '2026-10-30 16:59:59', '2026-10-30 17:00:00'];
+        $ids = [];
+        foreach ($times as $time) {
+            CarbonImmutable::setTestNow(CarbonImmutable::parse($time, 'UTC'));
+            $ids[] = $this->pay($this->intent($shift))['id'];
+        }
+        CarbonImmutable::setTestNow();
+        $this->product->update(['name' => 'Nama baru', 'pack_size' => 8, 'retail_price' => 9000, 'active' => false]);
+        $this->store->update(['name' => 'Toko baru']);
+        $this->cashier->update(['name' => 'Kasir baru']);
+        $tables = ['sales', 'sale_lines', 'stock_entries', 'operation_receipts', 'audit_entries'];
+        $before = [];
+        foreach ($tables as $table) $before[$table] = DB::table($table)->count();
+        $batch = $this->batch->fresh()->toArray();
+        $cash = CashShift::findOrFail($shift['id'])->toArray();
+        $url = '/api/v1/stores/'.$this->store->id.'/sales?'.http_build_query(['from' => '2026-10-30T00:00:00+07:00', 'to' => '2026-10-31T00:00:00+07:00']);
+        $rows = $this->act($this->cashier)->getJson($url)->assertOk()->assertJsonCount(2, 'data')->json('data');
+        $this->assertEqualsCanonicalizing([$ids[1], $ids[2]], array_column($rows, 'id'));
+        $this->assertSame('A1', $rows[0]['store_name']);
+        $this->getJson($url.'&q='.urlencode($rows[0]['number']))->assertJsonCount(1, 'data');
+        $receipt = $this->getJson('/api/v1/sales/'.$ids[1])->assertOk()->json('data');
+        $this->assertSame('Ayam', $receipt['lines'][0]['name']);
+        $this->assertSame(3000, $receipt['lines'][0]['unit_price']);
+        foreach ($before as $table => $count) $this->assertDatabaseCount($table, $count);
+        $this->assertSame($batch, $this->batch->fresh()->toArray());
+        $this->assertSame($cash, CashShift::findOrFail($shift['id'])->toArray());
+    }
+
+    public function test_receipt_history_paginates_beyond_fifty_and_rejects_invalid_filters(): void
+    {
+        $sale = $this->pay($this->intent($this->open()));
+        // Read-model fixtures only: no checkout or stock/cash accounting is inferred from these copies.
+        for ($i = 0; $i < 50; $i++) {
+            $intent = \App\Modules\Sales\Infrastructure\SaleIntent::findOrFail($sale['sale_intent_id'])->replicate();
+            $intent->save();
+            $copy = \App\Modules\Sales\Infrastructure\Sale::findOrFail($sale['id'])->replicate();
+            $copy->sale_intent_id = $intent->id;
+            $copy->number = 'HISTORY-FIXTURE-'.$i;
+            $copy->save();
+        }
+        $url = '/api/v1/stores/'.$this->store->id.'/sales';
+        $first = $this->getJson($url)->assertJsonCount(50, 'data')->assertJsonPath('last_page', 2)->json('data');
+        $second = $this->getJson($url.'?page=2')->assertJsonCount(1, 'data')->json('data');
+        $this->assertCount(51, array_unique(array_column([...$first, ...$second], 'id')));
+        foreach ([['page' => 0], ['page' => 'bad'], ['q' => str_repeat('a', 101)], ['from' => '2026-10-01T00:00:00Z'], ['to' => '2026-10-02T00:00:00Z'], ['from' => '2026-10-01', 'to' => '2026-10-02'], ['from' => '2026-10-02T00:00:00Z', 'to' => '2026-10-01T00:00:00Z'], ['from' => '2026-10-01T00:00:00Z', 'to' => '2026-11-02T00:00:00Z']] as $params) {
+            $this->getJson($url.'?'.http_build_query($params))->assertUnprocessable();
+        }
+    }
 }

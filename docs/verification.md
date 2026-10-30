@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 30 Oktober 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 154 tes lulus, 1315 assertions |
+| API PHPUnit | 157 tes lulus, 1381 assertions |
 | Web PHPUnit | 48 tes lulus, 195 assertions |
-| Flutter | 132 tes lulus; riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 334 tes lulus |
+| Flutter | 140 tes lulus; riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 345 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
 | Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound serta ledger scoped/filter/snapshot UTC lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.16.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.17.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -214,4 +214,14 @@ Irisan PRD 05-MOV/01-ACL, 30 Oktober 2026. Tidak ada migrasi/dependensi atau mut
 - Widget 390px text scale 1,5/1200px menguji Stock→Riwayat batch, signed quantity, actor #ID, UTC→WIB, filter/pagination/all-batches. Kasir tanpa hint tidak melihat entry; forged deep-link tetap menerima denial API. Error tidak dipresentasikan sebagai riwayat kosong; retry kembali menampilkan entry. Seluruh request native pada tes ledger adalah GET.
 - Smoke HTTP terisolasi memfilter shipment_receipt/quarantined/batch aktual menjadi satu entry +16 biji isi historis 8, UTC eksplisit dan tanpa harga. Owner pusat tanpa membership partner serta kasir ditolak. Seluruh alur supply/intake/POS/kas/minimum/report/CSV dan Compose metadata lama tetap lulus.
 
-Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions dan 132 Flutter (334 tes), analyzer bersih. Setelah finalisasi exception filter dan assertion UTC, analyzer serta 8 tes riwayat diulang dan lulus. OpenAPI 0.16.0 tetap 72 operation IDs unik; local refs/path parameters/required lists valid tanpa validator eksternal. PostgreSQL concurrency, Android/iOS/release devices dan UAT belum diverifikasi. Tidak ada ekspor ledger, running balance, pemulihan UUID/offline, reapproval/retur/refund atau kebijakan mutu baru.
+Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions dan 132 Flutter (334 tes), analyzer bersih. Setelah finalisasi exception filter dan assertion UTC, analyzer serta 8 tes riwayat diulang dan lulus. OpenAPI 0.17.0 tetap 72 operation IDs unik; local refs/path parameters/required lists valid tanpa validator eksternal. PostgreSQL concurrency, Android/iOS/release devices dan UAT belum diverifikasi. Tidak ada ekspor ledger, running balance, pemulihan UUID/offline, reapproval/retur/refund atau kebijakan mutu baru.
+
+
+## Riwayat struk native — 30 Oktober 2026
+
+- Tiga tes API tambahan (66 assertions) mencakup scope kasir/pengelola, assignment/tenant/pusat, toko nonaktif/organisasi nonaktif, interval WIB awal inklusif/akhir eksklusif, pencarian nomor, 51 struk (50+1), input invalid dan snapshot master historis. GET tidak mengubah jumlah sale/line/ledger/operation/audit, revisi/saldo batch maupun kas shift.
+- Delapan tes Flutter tambahan: kalender valid dan batas 31 hari, pagination scoped tanpa URL eksternal, detail baca tanpa pembayaran, error/retry/wrong-store, 390px text scale 1,5 dan 1200px, filter belum diterapkan, scope own/store, unknown shift opening yang mengunci navigasi, serta akses riwayat toko nonaktif tanpa request katalog operasional.
+- `scripts/check` menyelesaikan API 157/1381 assertions dan web 48/195 assertions serta analyzer bersih, lalu percobaan suite Flutter terhenti karena disk Docker penuh. Suite Flutter final dijalankan terpisah menggunakan SDK Flutter 3.35.7 yang direkonstruksi dari image digest terkunci yang sama: 140 tes lulus, analyzer tanpa issue dan formatter lulus. Total final 345 tes; kegagalan kapasitas awal tidak dicatat sebagai tes lulus.
+- Docker driver VFS membuat salinan image besar saat membuat container. Cache image Flutter yang tidak aktif dihapus melalui API Docker resmi; API/web kembali healthy dan metadata smoke ulang lulus. Pembersihan menyeluruh dan perubahan manual direktori internal Docker tidak dilakukan. SDK host berasal tujuh layer OCI yang seluruhnya diperiksa SHA-256 terhadap manifest digest terkunci; TLS tetap aktif. Helper lingkungan tersimpan di `/workspace/shared/testyco-native`, SDK sementara di `/tmp/testyco-flutter-sdk`, cache pub dipulihkan lalu `pub get --offline --enforce-lockfile` lulus. Analyzer host memerlukan cache normal `.dartServer` pada direktori pengguna.
+- HTTP smoke terisolasi lulus dengan query periode+nomor struk, scope own/store dan penolakan pemilik pusat lintas organisasi; seluruh alur supply, ledger, kas dan laporan sebelumnya tetap lulus. Tidak ada fixture ditambahkan pada DB development.
+- OpenAPI 0.17.0 tetap 72 operation ID unik; referensi lokal, required fields dan parameter path diperiksa. Tidak ada validator eksternal, migrasi atau dependensi baru. Android/iOS/perangkat/printer, PostgreSQL/concurrency dan UAT tetap belum diverifikasi.

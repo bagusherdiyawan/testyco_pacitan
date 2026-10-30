@@ -2,6 +2,8 @@
 
 Irisan PRD 09-PICK/SHIP dan 04 pemrosesan pusat. Flutter kini menyediakan inbox gudang, penetapan sumber, alokasi beberapa batch dan pengiriman parsial melalui workflow API yang sama dengan web. Tidak ada aturan finansial, reservasi atau pengganti baru.
 
+Penerimaan awal stok sumber kini juga tersedia di [Stok → Penerimaan awal gudang](native-warehouse-intake.md), terpisah dari dispatch dan penerimaan pesanan mitra.
+
 ## Navigasi dan sumber
 
 Masuk sebagai owner/admin pusat atau petugas warehouse assigned. Pilih toko pusat yang akan menjadi gudang sumber, lalu buka modul **Gudang** (melalui **Lainnya** pada mobile bila navigasi penuh). Untuk memilih sumber lain, gunakan **Ganti toko** sebelum membuka order. Ini mengikuti model toko pusat yang sama dengan web; tidak menambahkan jenis lokasi/aturan gudang baru.

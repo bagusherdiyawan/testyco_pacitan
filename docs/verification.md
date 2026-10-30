@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 30 Oktober 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 144 tes lulus, 1168 assertions |
+| API PHPUnit | 149 tes lulus, 1248 assertions |
 | Web PHPUnit | 48 tes lulus, 195 assertions |
-| Flutter | 114 tes lulus; gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 306 tes lulus |
+| Flutter | 124 tes lulus; penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
+| Total | 321 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
-| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang lulus |
+| Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.14.0 | 70 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.15.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -185,3 +185,18 @@ Irisan PRD 09-PICK/SHIP dan 04 process, 30 Oktober 2026. Tidak ada migrasi/depen
 - Smoke HTTP nyata menguji inbox/context, sumber terpilih/replay, batch snapshot, dispatch/replay, penerimaan aktual 18 baik/2 rusak dan remaining 0; semua supply, POS, kas, minimum, laporan/CSV lama tetap lulus. Compose metadata healthy dan lulus.
 
 Hasil final scripts/check: 144 API/1168 assertions, 48 web/195 assertions, 114 Flutter (306 tes), analyzer bersih. OpenAPI 0.14.0: 70 operation IDs unik; refs/path parameters/required lists diperiksa lokal tanpa validator eksternal. PostgreSQL concurrency, build/perangkat Android/iOS, UAT, jadwal/foto/suhu terstruktur, FEFO/expiry enforcement, reapproval/retur/kredit/pengganti dan recovery offline tetap belum diverifikasi/diimplementasikan sesuai scope masing-masing.
+
+## Bukti penerimaan awal gudang native
+
+Irisan PRD 05-RCV/MOV dan 01/02, 30 Oktober 2026. Inventory mengekstrak service penerimaan yang sama untuk legacy POST dan preview native, tanpa migrasi/dependensi baru atau perubahan izin pusat/mitra.
+
+- Katalog berhalaman 100 SKU aktif/toko pusat tanpa kolom harga, dengan source/can_intake eksplisit. Preview read-only memberi konversi server 2 kemasan isi 8 → 16 biji, hash dan waktu observasi, tanpa batch, ledger, operation receipt atau audit. GET/preview private/no-store.
+- Partner lead/manager/cashier, organisasi lain, warehouse unassigned dan center store_manager ditolak. Pusat tanpa membership partner tidak bisa intake di toko partner. SKU foreign/nonaktif dan toko nonaktif ditolak; SKU inactive tidak masuk katalog. Pagination 101 SKU serta validasi input/tanggal diuji.
+- Perubahan batch/tanggal/jumlah/note atau pack_size sesudah preview ditolak sebelum seluruh writes. Preview baru mengikuti pack_size terkini; pack_size/quantity_pieces palsu pada POST diabaikan dan stok memakai server. Expiry conflict pada identitas batch yang sama rollback tanpa claim/ledger/audit tambahan.
+- Replay committed UUID setelah produk berubah/nonaktif tetap mengembalikan batch asli (isi 8, 16 biji) sekali; tidak mengonversi ulang menjadi isi 10. Legacy web/API no-hash tetap lulus seluruh alur lama.
+- Native tidak mengisi jumlah/tanggal/batch/note otomatis. Review hanya server; preview belum mengubah stok. Invalid SKU/tanggal nyata/fractional/negatif/zero/overflow/hex/blank reason ditolak, leap day valid diterima. Edit quote membuang review unsent; salinan body/review tidak dapat mengubah request asli.
+- Unknown response mempertahankan immutable UUID/path/body/review, termasuk denial sesudah unknown. Refresh/edit/pop ditahan. Malformed ACK tetap uncertain sampai replay mengonfirmasi batch. Setelah ACK, confirm/load ulang pada page tidak membuat intake baru, dan UI menampilkan delta review serta ID, bukan saldo replay historis.
+- Widget 390px text scale 1,5 dan 1200px menguji navigasi Stok→intake→preview→confirm→stok terkini, penambahan 16 biji dan reload batch. Widget unknown membuktikan pop/refresh lock, retry identik dan satu write. Domain pembukaan/pengukusan/opname dan penerimaan mitra tetap lulus.
+- Smoke HTTP nyata menguji katalog price-free, preview tanpa batch, hash-bound record/replay, altered quantity conflict, partner denial serta replay intake awal sesudah seluruh stok sumber dikirim: stok sumber tetap 0, tanpa kredit kedua. Semua supply/POS/kas/minimum/report/CSV sebelumnya serta metadata Compose tetap lulus.
+
+Hasil final scripts/check: 149 API/1248 assertions, 48 web/195 assertions, 124 Flutter (321 tes), analyzer bersih. OpenAPI 0.15.0 memiliki 72 operation IDs unik; local refs/path parameters/required lists valid, tanpa validator eksternal. PostgreSQL concurrency, Android/iOS/release devices, UAT, expiry/quality enforcement, reapproval/retur/refund serta pemulihan offline tetap belum diverifikasi/diimplementasikan sesuai scope masing-masing.

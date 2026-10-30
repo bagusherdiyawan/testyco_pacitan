@@ -34,6 +34,8 @@ final class InventoryServiceProvider extends ServiceProvider
             Route::post('inventory/counts/{count}/{action}', [$control, 'review'])->where('action', 'approve|reject|cancel');
             Route::get('stores/{store}/inventory/batches', [InventoryController::class, 'batches']);
             Route::get('stores/{store}/inventory/ledger', [InventoryController::class, 'ledger']);
+            Route::get('stores/{store}/inventory/intake-products', [InventoryController::class, 'intakeProducts']);
+            Route::post('stores/{store}/inventory/intakes/preview', [InventoryController::class, 'previewIntake']);
             Route::post('stores/{store}/inventory/intakes', [InventoryController::class, 'intake']);
         });
     }

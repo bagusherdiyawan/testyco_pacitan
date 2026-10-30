@@ -128,7 +128,18 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         center = next(o['id'] for o in api(base, 'GET', 'organizations', token=owner)['data'] if o['type'] == 'center')
         source = api(base, 'POST', f'organizations/{center}/stores', {'name':'Smoke Gudang','address':'Pacitan'}, owner, 201)['data']['id']
         supplier_id = api(base, 'POST', f'organizations/{center}/products', product, owner, 201)['data']['id']
-        batch = api(base, 'POST', f'stores/{source}/inventory/intakes', {'operation_id':str(uuid.uuid4()),'product_id':supplier_id,'batch_code':'SMOKE-BATCH','expires_on':'2030-01-01','quantity_packs':20,'note':'Test physical warehouse receipt'}, owner, 201)['data']
+        intake_body={'product_id':supplier_id,'batch_code':'SMOKE-BATCH','expires_on':'2030-01-01','quantity_packs':20,'note':'Test physical warehouse receipt'}
+        intake_catalogue=api(base,'GET',f'stores/{source}/inventory/intake-products',token=owner)
+        assert intake_catalogue['can_intake'] and intake_catalogue['store']['id']==source and intake_catalogue['data'][0]['id']==supplier_id
+        assert 'wholesale_price' not in intake_catalogue['data'][0] and 'retail_price' not in intake_catalogue['data'][0]
+        intake_quote=api(base,'POST',f'stores/{source}/inventory/intakes/preview',intake_body,owner)['data']
+        assert intake_quote['quantity_pieces']==160 and intake_quote['pack_size']==8
+        assert api(base,'GET',f'stores/{source}/inventory/batches',token=owner)['data']==[]
+        intake_request={**intake_body,'operation_id':str(uuid.uuid4()),'review_hash':intake_quote['review_hash']}
+        api(base,'POST',f'stores/{source}/inventory/intakes',{**intake_request,'operation_id':str(uuid.uuid4()),'quantity_packs':21},owner,expected=409)
+        batch=api(base,'POST',f'stores/{source}/inventory/intakes',intake_request,owner,201)['data']
+        assert api(base,'POST',f'stores/{source}/inventory/intakes',intake_request,owner,201)['data']['id']==batch['id']
+        api(base,'GET',f'stores/{store}/inventory/intake-products',token=lead_token,expected=403)
         html = opener.open(web + f'/app/stores/{store}/orders/new').read().decode()
         create_path = f'/app/stores/{store}/orders'
         data = fields(html, create_path)
@@ -362,6 +373,8 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert current['data']['version']==3 and current['data']['minimum_pieces'] is None
         api(base,'POST',minimum_detail_path,{**zero,'operation_id':str(uuid.uuid4())},manager_token,expected=409)
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
+        api(base,'POST',f'stores/{source}/inventory/intakes',intake_request,owner,201)
+        assert api(base,'GET',f'stores/{source}/inventory/batches',token=owner)['data'][0]['usable_pieces']==0
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
         print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, logout')

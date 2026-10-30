@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.14.0",
+    "version": "0.15.0",
     "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
   },
   "security": [
@@ -3705,7 +3705,7 @@
             }
           }
         },
-        "description": "Center owner/admin or assigned warehouse only. Partner store stock must enter through approved-order receipt. No automatic quality certification or expiry blocking.",
+        "description": "Center owner/admin or assigned warehouse only. Partner store stock must enter through approved-order receipt. No automatic quality certification or expiry blocking. Optional review_hash binds exact source/product/SKU/condition/pack conversion, batch/expiry/quantity/note snapshot and is checked before any batch/ledger/audit write. Native always previews. Legacy no-hash intake remains server-authoritative. Committed UUID replay returns original batch before rechecking changed master data; its balance is historical, fetch inventory for current state.",
         "parameters": [
           {
             "in": "path",
@@ -7135,6 +7135,192 @@
           }
         }
       }
+    },
+    "/api/v1/stores/{store}/inventory/intake-products": {
+      "get": {
+        "operationId": "warehouseIntakeProducts",
+        "summary": "Price-free active product catalogue for authorized center intake",
+        "description": "Inventory-owned; does not depend on Ordering/Fulfillment. Active center store, owner/admin or assigned warehouse only. No partner onboarding override. 100 per page; per-page observation is not a frozen cross-page snapshot. Metadata can_intake and exact store must be checked by native. No stock or audit writes. Private/no-store.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IntakeCatalogue"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, invalid state, insufficient stock, or operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/inventory/intakes/preview": {
+      "post": {
+        "operationId": "previewWarehouseIntake",
+        "summary": "Read-only authoritative warehouse intake conversion review",
+        "description": "Same source authorization and snapshot builder as intake. Validates existing batch expiry/condition without creating batch, ledger, operation receipt or audit. Snapshot quantity_pieces is the addition, never current balance. No default quantity, FEFO or expiry blocking. Fingerprint is an optimistic check, not a signed attestation or reservation. Private/no-store.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/IntakePreviewInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/IntakePreview"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, invalid state, insufficient stock, or operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -8276,6 +8462,13 @@
           "note": {
             "type": "string",
             "maxLength": 2000
+          },
+          "review_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$",
+            "minLength": 64,
+            "maxLength": 64,
+            "description": "Optional for legacy clients; native always sends its preview hash. Optimistic snapshot fingerprint, not authorization/signature."
           }
         },
         "required": [
@@ -10927,6 +11120,176 @@
         "required": [
           "data",
           "source",
+          "current_page",
+          "last_page",
+          "total",
+          "observed_at"
+        ]
+      },
+      "IntakePreviewInput": {
+        "type": "object",
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "batch_code": {
+            "type": "string",
+            "maxLength": 80
+          },
+          "expires_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "quantity_packs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "note": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "product_id",
+          "batch_code",
+          "expires_on",
+          "quantity_packs",
+          "note"
+        ]
+      },
+      "IntakePreview": {
+        "type": "object",
+        "properties": {
+          "store_id": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "product_id": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "pack_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "batch_code": {
+            "type": "string"
+          },
+          "expires_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "quantity_packs": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "quantity_pieces": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "note": {
+            "type": "string"
+          },
+          "review_hash": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "store_id",
+          "store_name",
+          "product_id",
+          "sku",
+          "name",
+          "condition",
+          "pack_size",
+          "batch_code",
+          "expires_on",
+          "quantity_packs",
+          "quantity_pieces",
+          "note",
+          "review_hash",
+          "observed_at"
+        ]
+      },
+      "IntakeProduct": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "pack_size": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "sku",
+          "name",
+          "condition",
+          "pack_size"
+        ]
+      },
+      "IntakeCatalogue": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/IntakeProduct"
+            }
+          },
+          "store": {
+            "$ref": "#/components/schemas/WarehouseSource"
+          },
+          "can_intake": {
+            "type": "boolean"
+          },
+          "current_page": {
+            "type": "integer"
+          },
+          "last_page": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "integer"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "data",
+          "store",
+          "can_intake",
           "current_page",
           "last_page",
           "total",

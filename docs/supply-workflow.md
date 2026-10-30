@@ -6,7 +6,7 @@ Cakupan awal PRD 04, 05-RCV/MOV dan 09. Web memiliki seluruh aksi supply awal. F
 
 1. Jalankan `scripts/setup`; migrasi baru tidak mereset data. Jalankan `scripts/bootstrap` jika pusat belum ada, kemudian `docker compose up -d --wait`.
 2. Owner pusat membuat toko gudang pada organisasi pusat dan SKU pusat pada katalog pusat. Harga grosir adalah rupiah per kemasan; isi kemasan harus sesuai produk aktual.
-3. Pada workspace, buka **Pesanan dan stok** gudang. Catat penerimaan fisik dengan SKU, kode batch, kedaluwarsa, kemasan yang diterima baik dan referensi/catatan pemeriksaan.
+3. Pada workspace, buka **Pesanan dan stok** gudang. Catat penerimaan fisik dengan SKU, kode batch, kedaluwarsa, kemasan yang diterima baik dan referensi/catatan pemeriksaan. Alur ini kini juga tersedia di Flutter **Stok → Penerimaan awal gudang**, dengan [preview/konversi server](native-warehouse-intake.md).
 4. Pusat mendaftarkan mitra, toko beralamat, dan pimpinan. Pimpinan menyiapkan SKU lokal toko dengan kondisi serta isi kemasan yang sama dengan SKU pusat. Harga eceran tetap milik organisasi toko.
 
 ## Pengajuan dan persetujuan
@@ -37,7 +37,7 @@ Setiap formulir mutasi mempunyai UUID operasi. Gunakan UUID yang sama untuk meng
 
 ## API dan Flutter
 
-Kontrak OpenAPI 0.14.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
+Kontrak OpenAPI 0.15.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
 
 Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok yang menampilkan jumlah baik/karantina. `FEATURE_ORDERING=false` dan `FEATURE_INVENTORY=false` dapat menonaktifkan modul presentasi saat build. Persetujuan/penolakan/pembatalan berizin dan penerimaan aktual kini tersedia pada Flutter; lihat [panduan native](native-ordering.md). [Pengajuan baru Flutter](native-order-entry.md) memakai tinjauan harga server dan UUID yang tetap. Perubahan sebelum persetujuan kini tersedia pada [Flutter](native-order-amend.md), dengan versi awal dan tinjauan server. Pemilihan sumber dan dispatch kini juga melalui modul Gudang Flutter; lihat [panduan native](native-warehouse.md).
 

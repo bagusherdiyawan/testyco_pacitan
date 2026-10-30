@@ -114,6 +114,90 @@ class SupplyWorkflowTest extends TestCase
         return ['operation_id' => (string) Str::uuid(), 'version' => $version, 'lines' => [['shipment_line_id' => $shipment['lines'][0]['id'], 'good_packs' => $good, 'damaged_packs' => $damaged, 'condition_note' => 'Hasil pemeriksaan fisik']]];
     }
 
+    private function intakeBody(int $packs = 2): array
+    {
+        return ['product_id' => $this->supplierProduct->id, 'batch_code' => 'NATIVE-LOT', 'expires_on' => '2030-01-01', 'quantity_packs' => $packs, 'note' => 'Pemeriksaan fisik barang baik'];
+    }
+
+    public function test_native_intake_catalogue_and_preview_are_price_free_and_read_only(): void
+    {
+        $path = '/api/v1/stores/'.$this->source->id.'/inventory';
+        $this->act($this->warehouse)->getJson($path.'/intake-products')->assertOk()->assertHeader('Cache-Control', 'no-store, private')->assertJsonPath('can_intake', true)->assertJsonPath('store.id', $this->source->id)->assertJsonPath('data.0.id', $this->supplierProduct->id)->assertJsonMissingPath('data.0.retail_price')->assertJsonMissingPath('data.0.wholesale_price');
+        $r = $this->postJson($path.'/intakes/preview', $this->intakeBody())->assertOk()->assertJsonPath('data.quantity_pieces', 16)->assertJsonPath('data.pack_size', 8)->assertJsonMissingPath('data.retail_price')->assertJsonMissingPath('data.wholesale_price')->json('data');
+        $this->assertMatchesRegularExpression('/^[a-f0-9]{64}$/', $r['review_hash']);
+        $this->assertDatabaseCount('inventory_batches', 0);
+        $this->assertDatabaseCount('stock_entries', 0);
+        $this->assertDatabaseCount('operation_receipts', 0);
+        $this->assertDatabaseCount('audit_entries', 0);
+    }
+
+    public function test_native_intake_review_rejects_conversion_and_payload_changes_before_any_stock_write(): void
+    {
+        $path = '/api/v1/stores/'.$this->source->id.'/inventory/intakes';
+        $hash = $this->act($this->warehouse)->postJson($path.'/preview', $this->intakeBody())->assertOk()->json('data.review_hash');
+        $v = ['operation_id' => (string) Str::uuid(), ...$this->intakeBody(), 'review_hash' => $hash];
+        foreach ([['quantity_packs' => 3], ['batch_code' => 'OTHER'], ['expires_on' => '2031-01-01'], ['note' => 'Changed']] as $change) {
+            $this->postJson($path, [...$v, ...$change])->assertConflict();
+        }
+        $this->supplierProduct->update(['pack_size' => 10]);
+        $this->postJson($path, $v)->assertConflict();
+        $this->assertDatabaseCount('stock_entries', 0);
+        $this->assertDatabaseCount('inventory_batches', 0);
+        $this->assertDatabaseCount('operation_receipts', 0);
+        $this->assertDatabaseCount('audit_entries', 0);
+        $fresh = $this->postJson($path.'/preview', $this->intakeBody())->assertOk()->assertJsonPath('data.quantity_pieces', 20)->json('data.review_hash');
+        $this->postJson($path, [...$v, 'review_hash' => $fresh, 'quantity_pieces' => 1, 'pack_size' => 1])->assertCreated()->assertJsonPath('data.usable_pieces', 20)->assertJsonPath('data.pack_size', 10);
+    }
+
+    public function test_native_intake_replay_survives_later_catalogue_change_and_batch_expiry_conflict_rolls_back(): void
+    {
+        $path = '/api/v1/stores/'.$this->source->id.'/inventory/intakes';
+        $hash = $this->act($this->warehouse)->postJson($path.'/preview', $this->intakeBody())->assertOk()->json('data.review_hash');
+        $v = ['operation_id' => (string) Str::uuid(), ...$this->intakeBody(), 'review_hash' => $hash];
+        $id = $this->postJson($path, $v)->assertCreated()->assertJsonPath('data.stock_revision', 1)->json('data.id');
+        $this->postJson($path.'/preview', [...$this->intakeBody(), 'expires_on' => '2031-01-01'])->assertConflict();
+        $this->postJson($path, ['operation_id' => (string) Str::uuid(), ...$this->intakeBody(), 'expires_on' => '2031-01-01'])->assertConflict();
+        $this->supplierProduct->update(['pack_size' => 10, 'active' => false]);
+        $this->postJson($path, $v)->assertCreated()->assertJsonPath('data.id', $id)->assertJsonPath('data.usable_pieces', 16)->assertJsonPath('data.pack_size', 8);
+        $this->assertDatabaseCount('inventory_batches', 1);
+        $this->assertDatabaseCount('stock_entries', 1);
+        $this->assertDatabaseCount('operation_receipts', 1);
+        $this->assertDatabaseCount('audit_entries', 1);
+    }
+
+    public function test_native_intake_denies_non_center_unassigned_and_foreign_product_access(): void
+    {
+        $base = '/api/v1/stores/'.$this->source->id.'/inventory';
+        foreach ([$this->lead, $this->manager, $this->cashier, $this->outsider, $this->user($this->center, 'warehouse'), $this->user($this->center, 'store_manager', [$this->source])] as $actor) {
+            $this->act($actor)->getJson($base.'/intake-products')->assertForbidden();
+            $this->postJson($base.'/intakes/preview', $this->intakeBody())->assertForbidden();
+            $this->postJson($base.'/intakes', ['operation_id' => (string) Str::uuid(), ...$this->intakeBody()])->assertForbidden();
+        }
+        $this->act($this->owner)->getJson('/api/v1/stores/'.$this->target->id.'/inventory/intake-products')->assertForbidden();
+        $this->postJson($base.'/intakes/preview', [...$this->intakeBody(), 'product_id' => $this->localProduct->id])->assertNotFound();
+        $this->supplierProduct->update(['active' => false]);
+        $this->getJson($base.'/intake-products')->assertJsonCount(0, 'data');
+        $this->postJson($base.'/intakes/preview', $this->intakeBody())->assertNotFound();
+        $this->source->update(['active' => false]);
+        $this->getJson($base.'/intake-products')->assertConflict();
+        $this->postJson($base.'/intakes/preview', $this->intakeBody())->assertConflict();
+    }
+
+    public function test_native_intake_catalogue_pagination_and_input_validation(): void
+    {
+        for ($i = 0; $i < 100; $i++) {
+            Product::create([...$this->supplierProduct->only(['organization_id', 'name', 'condition', 'pack_size', 'portion_size', 'retail_price', 'wholesale_price']), 'sku' => 'C'.$i]);
+        }
+        $base = '/api/v1/stores/'.$this->source->id.'/inventory';
+        $this->act($this->warehouse)->getJson($base.'/intake-products')->assertJsonCount(100, 'data')->assertJsonPath('last_page', 2);
+        $this->getJson($base.'/intake-products?page=2')->assertJsonCount(1, 'data');
+        foreach ([['quantity_packs' => 0], ['quantity_packs' => 1.5], ['batch_code' => ' '], ['note' => ' '], ['expires_on' => '2030-02-30']] as $bad) {
+            $this->postJson($base.'/intakes/preview', [...$this->intakeBody(), ...$bad])->assertUnprocessable();
+        }
+        $this->postJson($base.'/intakes', ['operation_id' => (string) Str::uuid(), ...$this->intakeBody(), 'review_hash' => 'forged'])->assertUnprocessable();
+        $this->assertDatabaseCount('stock_entries', 0);
+    }
+
     public function test_native_warehouse_inbox_and_process_context_hide_unapproved_and_unassigned_work(): void
     {
         $order = $this->create();

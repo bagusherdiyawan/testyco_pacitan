@@ -8,10 +8,11 @@ class InventoryModule implements FeatureModule {
     required this.repository,
     required this.storeId,
     this.canControl = false,
+    this.canIntake = false,
   });
   final InventoryRepository repository;
   final String storeId;
-  final bool canControl;
+  final bool canControl, canIntake;
   @override
   String get id => 'inventory';
   @override
@@ -23,5 +24,6 @@ class InventoryModule implements FeatureModule {
     repository: repository,
     storeId: storeId,
     canControl: canControl,
+    canIntake: canIntake,
   );
 }

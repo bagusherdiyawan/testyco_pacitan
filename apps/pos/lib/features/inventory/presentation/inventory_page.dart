@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../data/inventory_repository.dart';
 import '../domain/stock_batch.dart';
 import 'stock_minimum_page.dart';
+import 'warehouse_intake_page.dart';
+import '../data/warehouse_intake_repository.dart';
 import 'stock_control_page.dart';
 import '../data/stock_control_repository.dart';
 import '../../../design_system/molecules/error_panel.dart';
@@ -12,11 +14,12 @@ class InventoryPage extends StatefulWidget {
     required this.repository,
     required this.storeId,
     this.canControl = false,
+    this.canIntake = false,
     super.key,
   });
   final InventoryRepository repository;
   final String storeId;
-  final bool canControl;
+  final bool canControl, canIntake;
   @override
   State<InventoryPage> createState() => _InventoryPageState();
 }
@@ -68,6 +71,24 @@ class _InventoryPageState extends State<InventoryPage> {
           ),
         ),
       ),
+      if (widget.canIntake)
+        TextButton.icon(
+          icon: const Icon(Icons.add_box_outlined),
+          label: const Text('Penerimaan awal gudang'),
+          onPressed: () async {
+            await Navigator.of(context).push<bool>(
+              MaterialPageRoute(
+                builder: (_) => WarehouseIntakePage(
+                  repository: WarehouseIntakeRepository(widget.repository.api),
+                  store: widget.storeId,
+                ),
+              ),
+            );
+            if (mounted) {
+              _reload();
+            }
+          },
+        ),
       if (widget.canControl)
         TextButton.icon(
           icon: const Icon(Icons.edit_note),

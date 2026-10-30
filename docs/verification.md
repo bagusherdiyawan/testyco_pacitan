@@ -5,9 +5,9 @@ Validasi terbaru pada lingkungan onboarding, 30 Oktober 2026; catatan irisan seb
 | Pemeriksaan | Hasil |
 | --- | --- |
 | API PHPUnit | 160 tes lulus, 1424 assertions |
-| Web PHPUnit | 48 tes lulus, 195 assertions |
+| Web PHPUnit | 54 tes lulus, 261 assertions |
 | Flutter | 157 tes lulus; audit organisasi/filter/snapshot 390px (text scale 1,5 + keyboard)/1200px dan delapan modul navigasi, perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 365 tes lulus |
+| Total | 371 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
@@ -242,3 +242,11 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - Tujuh tes native tambahan lulus: hint pengelola organisasi, kalender/filter/ID, pagination scoped tanpa URL eksternal, snapshot JSON/UTC, stale/error/retry/wrong-organization, navigasi delapan modul dengan overflow mobile dan rail tablet, 390px text scale 1,5 dengan keyboard dan 1200px, applied versus unsent filters, before/after, denial bukan empty serta label onboarding.
 - Final checks ekuivalen scripts/check menggunakan SDK host yang sama: 160 API/1424 assertions, 48 web/195, 157 Flutter, total 365 tes lulus. Analyzer tanpa issue dan formatter lulus. Pengujian HTTP terisolasi lulus: sale.completed exact period/subject/actor menunjukkan snapshot Rp12.000 kepada pimpinan mitra, onboarding pusat mengembalikan nol untuk aksi operasional, kasir/kepala toko ditolak dan GET tidak menambah audit. Alur/password/ledger/report sebelumnya tetap lulus; tidak ada fixture pada DB development.
 - OpenAPI 0.18.0 tetap 72 operasi unik, referensi lokal/path parameters/required fields diperiksa tanpa validator eksternal. Tidak ada migrasi/dependensi atau perubahan allowlist/role server. Modul native memakai FEATURE_AUDIT, bukan otorisasi client. Ekspor audit, global security-event viewer, inbox/push, PostgreSQL/concurrency, perangkat nyata dan UAT belum diverifikasi/diimplementasikan sebagaimana cakupan.
+
+
+## Audit web berfilter dan snapshot — 30 Oktober 2026
+
+- Enam tes web tambahan (66 assertions) lulus: session wajib/403/401, exact whitelist tanpa organization/scope/token/URL browser, periode inklusif WIB ke interval ISO dan default tepat tengah malam, pagination lokal berfilter, bearer hanya pada HTTP server, header/cookie boundary, HTML escaping nama/snapshot, JSON string/array/legacy/null, old-input isolation, query invalid tanpa backend call, onboarding empty terpisah dari wrong-organization/503/koneksi gagal.
+- Seluruh final checks ekuivalen scripts/check: API 160 tes/1424 assertions, web 54/261, Flutter 157, total 371. Analyzer Flutter bersih dan Blade view:cache lulus. Native regression menggunakan SDK host terverifikasi yang sama, tanpa container Flutter besar pada VFS.
+- Smoke HTTP nyata terisolasi lulus dengan login web pimpinan mitra menampilkan audit sale.completed Rp12.000, serta login admin pusat pada cookie jar lain menunjukkan hanya onboarding dan tidak menampilkan audit operasional mitra. GET API/web tidak menambah audit. Seluruh alur CSRF/supply/ledger/POS/kas/report/password sebelumnya tetap lulus; akun/database development tidak dimutasi.
+- API/OpenAPI 0.18.0 (72 operasi), migrasi, dependensi dan izin backend tidak berubah. Ini pemeriksaan HTML/server, bukan pengujian interaksi/visual browser nyata. Browser mobile/tablet, PostgreSQL/concurrency dan UAT tetap belum diverifikasi.

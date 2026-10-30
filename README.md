@@ -68,7 +68,7 @@ Web dan Flutter menyediakan filter periode/toko, perbandingan toko dan rincian p
 
 ## Jejak audit
 
-Pengelola organisasi kini dapat menelusuri perubahan melalui [modul Audit Flutter](docs/native-audit.md), dengan filter periode WIB, aksi, pelaku dan objek serta snapshot sebelum/sesudah. Akses mengikuti API; audit organisasi tidak tersedia bagi kasir/kepala toko/gudang.
+Pengelola organisasi dapat menelusuri perubahan melalui [halaman audit web](docs/web-audit.md) dan [modul Audit Flutter](docs/native-audit.md), dengan filter periode WIB, aksi, pelaku dan objek serta snapshot sebelum/sesudah. Akses mengikuti API; audit organisasi tidak tersedia bagi kasir/kepala toko/gudang.
 
 ## Flutter pada perangkat
 

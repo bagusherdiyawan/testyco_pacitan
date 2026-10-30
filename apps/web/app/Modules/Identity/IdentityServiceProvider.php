@@ -3,6 +3,7 @@
 namespace App\Modules\Identity;
 
 use App\Modules\Identity\Presentation\ApiSession;
+use App\Modules\Identity\Presentation\AuditController;
 use App\Modules\Identity\Presentation\AuthController;
 use App\Modules\Identity\Presentation\OrganizationController;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,7 @@ final class IdentityServiceProvider extends ServiceProvider
                 Route::post('/logout', [AuthController::class, 'logout']);
                 Route::get('/app', [OrganizationController::class, 'index']);
                 Route::post('/app/organizations', [OrganizationController::class, 'create']);
+                Route::get('/app/organizations/{organization}/audit', [AuditController::class, 'index']);
                 Route::get('/app/organizations/{organization}', [OrganizationController::class, 'show']);
                 Route::post('/app/organizations/{organization}/status', [OrganizationController::class, 'organizationStatus']);
                 Route::post('/app/organizations/{organization}/stores', [OrganizationController::class, 'createStore']);

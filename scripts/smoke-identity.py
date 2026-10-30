@@ -402,6 +402,18 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert central_audit['visibility']=='onboarding' and central_audit['data']==[]
         for denied in [manager_token,cashier_token]:
             api(base,'GET',audit_path,token=denied,expected=403)
+        web_audit_query=urlencode({'from_day':sold_day.date().isoformat(),'to_day':sold_day.date().isoformat(),'action':'sale.completed','subject_id':sale_id,'actor_id':sale['cashier_id']})
+        with opener.open(web+'/app/'+audit_path+'?'+web_audit_query) as response:
+            html=response.read().decode()
+            assert 'no-store' in response.headers['Cache-Control']
+        assert 'Jejak audit' in html and 'Perubahan sebelum / sesudah' in html and '12000' in html and sale_id in html
+        central_browser=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
+        central_login=central_browser.open(web+'/login').read().decode()
+        central_csrf=re.search(r'name="_token" value="([^"]+)"',central_login).group(1)
+        central_browser.open(Request(web+'/login',data=urlencode({'_token':central_csrf,'email':'owner@smoke.test','password':PASSWORD}).encode())).read()
+        central_html=central_browser.open(web+'/app/'+audit_path+'?'+web_audit_query).read().decode()
+        assert 'hanya data onboarding' in central_html and 'Tidak ada audit pada filter ini.' in central_html
+        assert 'wholesale_price' not in central_html
         assert api(base,'GET',audit_path,token=lead_token)['total']==audit_total
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']

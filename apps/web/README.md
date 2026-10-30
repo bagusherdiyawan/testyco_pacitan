@@ -5,3 +5,5 @@ Laravel Blade frontend terpisah dari API. Token pengguna berada pada session ser
 Ambang stok minimum per SKU/toko dan peringatan saat halaman dimuat tersedia; pengaturan melalui web, pembacaan web/Flutter. Lihat docs/stock-minimums.md di root. Belum ada push/email atau pesanan otomatis.
 
 Reporting menyediakan laporan POS tunai per organisasi/toko, produk historis dan filter periode. Ekspor CSV hanya web, maksimal 10.000 transaksi; semua output memakai scope server yang sama. Lihat docs/cash-reporting.md di root.
+
+Jejak audit: organisasi → Buka jejak audit dengan filter dan snapshot. Kalender WIB, filter exact, pagination lokal dan snapshot teks berizin melalui API; lihat [panduan](../../docs/web-audit.md).

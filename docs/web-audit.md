@@ -1,0 +1,19 @@
+# Jejak audit web
+
+Irisan PRD 01-AUD/13-SEC memakai endpoint audit organisasi yang sama dengan [Flutter](native-audit.md). Buka organisasi di web, lalu **Buka jejak audit dengan filter dan snapshot** pada bagian Audit terbaru. Ringkasan audit lama tetap tersedia; halaman baru berada di `/app/organizations/{organization}/audit` dan didaftarkan melalui provider Identity web.
+
+Pilih tanggal awal/akhir WIB (akhir termasuk, maksimal 31 hari), aksi persis, ID objek dan ID pelaku. Contoh aksi `product.updated`, `sale.completed` atau `shift.closed`. Jika tanggal tidak diberikan, masing-masing default hari ini Asia/Jakarta. BFF mengubah periode menjadi interval `[from,to)` bertimezone untuk API. Submit form menerapkan filter baru dari halaman 1; tautan pagination membawa filter aktif yang dinormalisasi. Input dari form lain yang tersimpan sebagai old input tidak menimpa filter audit.
+
+Halaman membaca **seluruh organisasi yang diizinkan**, bukan hanya satu toko. Backend tetap menentukan izin serta scope `organization`/`onboarding`. Kepala toko, kasir dan gudang ditolak oleh API audit organisasi. Admin pusat tanpa managing membership mitra hanya mendapat allowlist onboarding yang telah ada; filter tidak membuka audit operasional atau harga mitra. Catatan keamanan global tanpa organisasi, termasuk pergantian sandi, tetap di luar endpoint ini.
+
+Buka **Perubahan sebelum / sesudah** pada kartu untuk membaca snapshot historis. Nama organisasi, aksi, subjek dan seluruh snapshot di-escape oleh Blade. Snapshot string JSON dipretty-print; snapshot array juga didukung, string legacy yang tidak valid sebagai JSON ditampilkan sebagai teks, dan null diberi label tidak ada snapshot. Tidak ada HTML/executable dari data audit yang dijalankan atau tautan snapshot yang diikuti. Tidak ada join ke harga/nama master atau perhitungan saldo dari catatan audit.
+
+Waktu kejadian berasal `occurred_at` UTC eksplisit dan ditampilkan WIB. ID pelaku tetap ID historis, bukan lookup nama saat ini; null ditampilkan sebagai pelaku tidak tersedia. `Diamati` adalah waktu pembacaan API. Halaman bersifat live per request, bukan snapshot konsisten lintas pagination.
+
+Web hanya menghubungi path API organisasi dari route. Query hanya berisi interval, action, subject_id, actor_id dan page yang sudah divalidasi. `organization_id`, scope, URL dan token dari query browser tidak diteruskan. Pagination dibangun di domain web sendiri dan mengabaikan URL pagination yang dikirim API. Bearer token tetap pada session server, tidak dimasukkan ke HTML/URL; header/cookie API tidak diproksikan ke browser.
+
+Envelope organisasi/scope, setiap row organisasi dan metadata pagination diperiksa sebelum render. Denial, sesi kedaluwarsa, koneksi putus, respons salah scope atau kegagalan API tidak ditampilkan sebagai riwayat kosong. 401 menghapus session web dan menuju login; halaman yang berhasil menggunakan private/no-store. Tidak ada akses database API dari frontend, mutasi audit, ekspor atau perubahan transaksi. API, skema database, dependensi dan OpenAPI 0.18.0 tidak berubah.
+
+Atomic design: molekul `json-snapshot` dapat dipakai kembali untuk pasangan snapshot, organisme `audit-record` menyusun identitas/waktu/detail, dan halaman hanya menyusun filter/scope/pagination. CSS membungkus teks JSON panjang dan memakai grid form yang sudah ada, tanpa JavaScript atau paket baru.
+
+Validasi: enam tes web tambahan mencakup login/403/401, whitelist query, WIB/default tengah malam, pagination lokal, no-store/token/cookie boundary, XSS/snapshot legacy/null, old-input isolation, input invalid tanpa HTTP, scope mismatch, empty versus error dan koneksi gagal. Smoke HTTP terisolasi memeriksa halaman nyata untuk pimpinan mitra dan sesi admin pusat terpisah serta memastikan GET tidak menambah audit. Pemeriksaan HTML/server tidak membuktikan interaksi visual pada browser nyata; browser mobile/tablet dan UAT belum diverifikasi.

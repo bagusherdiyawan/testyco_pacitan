@@ -1,5 +1,7 @@
 # Jejak audit Flutter
 
+Halaman web berfilter dan snapshot kini juga tersedia; lihat [panduan audit web](web-audit.md).
+
 Irisan PRD 01-AUD dan 13-SEC: modul **Audit** menampilkan catatan perubahan organisasi pada mobile/tablet. Pilih toko dalam organisasi yang dikelola, lalu buka Audit; jika navigasi mobile penuh, gunakan **Lainnya**. Modul didaftarkan eksplisit dan dapat dimatikan dengan `--dart-define=FEATURE_AUDIT=false`. Flag dan role hint hanya mengatur navigasi; API tetap memeriksa setiap request.
 
 Pemilik, admin dan pimpinan mitra dengan keanggotaan pengelola dapat membaca audit organisasinya. Kepala toko, gudang dan kasir tidak mendapatkan akses audit organisasi meskipun ditugaskan pada toko. Ini riwayat seluruh organisasi, **bukan filter toko**. API lama tetap memberi admin pusat tanpa keanggotaan pengelola mitra hanya aksi onboarding yang sudah diizinkan: organisasi/toko, pembuatan/deaktivasi pengguna dan perubahan membership. Filter tidak pernah memperluas allowlist tersebut atau membuka harga operasional mitra. Native menggunakan organisasi toko yang dipilih, bukan pemilih semua mitra.

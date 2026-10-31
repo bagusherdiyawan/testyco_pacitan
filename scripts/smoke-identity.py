@@ -219,6 +219,18 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert 'wholesale_price' not in ledger_html and 'retail_price' not in ledger_html
         stock_html=opener.open(web+f'/app/stores/{store}/operations').read().decode()
         assert 'Riwayat batch ini' in stock_html and ('batch_id='+batch['id']) in stock_html
+        expiry_query=urlencode({'expires_from':'2030-01-01','expires_to':'2030-01-01','with_balance':1,'q':'SMOKE-BATCH'})
+        expiry_catalog=api(base,'GET',f'stores/{store}/inventory/batches?'+expiry_query,token=lead_token)
+        assert expiry_catalog['store']['id']==store and expiry_catalog['total']==1 and expiry_catalog['data'][0]['id']==batch['id']
+        assert expiry_catalog['data'][0]['pack_size']==8 and expiry_catalog['data'][0]['stock_revision']==batch['stock_revision']
+        assert 'wholesale_price' not in expiry_catalog['data'][0] and 'retail_price' not in expiry_catalog['data'][0]
+        assert api(base,'GET',f'stores/{store}/inventory/batches?expires_to=2029-12-31',token=lead_token)['total']==0
+        with opener.open(web+f'/app/stores/{store}/inventory/batch-expiry?'+expiry_query) as response:
+            expiry_html=response.read().decode()
+            assert 'no-store' in response.headers['Cache-Control']
+        assert 'Penelusuran kedaluwarsa batch' in expiry_html and 'SMOKE-BATCH' in expiry_html and 'Karantina 16' in expiry_html
+        assert 'Telusuri kedaluwarsa batch' in stock_html
+
 
         api(base,'GET',f'stores/{store}/inventory/ledger',token=owner,expected=403)
         warehouse=api(base,'GET',warehouse_path+'/'+order_id,token=owner)['data']
@@ -303,6 +315,8 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
             raise AssertionError('Cashier web session must not read staff ledger')
         except HTTPError as error:
             assert error.code==403
+        cashier_expiry=opener.open(web+f'/app/stores/{store}/inventory/batch-expiry?'+expiry_query).read().decode()
+        assert 'SMOKE-BATCH' in cashier_expiry and 'wholesale_price' not in cashier_expiry
         pos_path = f'/app/stores/{store}/pos'
         html = opener.open(web + pos_path).read().decode()
         open_path = pos_path + '/shifts'; opening = fields(html, open_path)

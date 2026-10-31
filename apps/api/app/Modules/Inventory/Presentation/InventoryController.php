@@ -4,18 +4,21 @@ namespace App\Modules\Inventory\Presentation;
 
 use App\Modules\Identity\Application\Access;
 use App\Modules\Inventory\Application\WarehouseIntake;
-use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use Illuminate\Http\Request;
 
 final class InventoryController
 {
     public function __construct(private Access $access, private WarehouseIntake $intake) {}
 
-    public function batches(Request $r, string $store): mixed
+    public function batches(Request $r, string $store, \App\Modules\Inventory\Application\BatchCatalogue $catalogue): mixed
     {
-        $this->access->store($r->user(), $store);
+        $v = $r->validate([
+            'page' => 'sometimes|integer|min:1', 'q' => 'nullable|string|max:100',
+            'expires_from' => 'nullable|string|date_format:Y-m-d', 'expires_to' => 'nullable|string|date_format:Y-m-d',
+            'with_balance' => 'sometimes|boolean',
+        ]);
 
-        return InventoryBatch::where('store_id', $store)->orderBy('expires_on')->orderBy('id')->paginate(100);
+        return response()->json($catalogue->read($r->user(), $store, $v))->header('Cache-Control', 'private, no-store');
     }
 
     public function ledger(Request $r, string $store, \App\Modules\Inventory\Application\LedgerHistory $history): mixed

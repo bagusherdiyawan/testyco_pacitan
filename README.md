@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.18.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.19.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -51,6 +51,8 @@ Ikuti [panduan operasional](docs/supply-workflow.md) dan [panduan pesanan Flutte
 Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan, kukus dan proposal hitung fisik. Snapshot lama tidak dapat menimpa pergerakan baru; approval opname memerlukan peninjau berwenang yang berbeda dari pengusul. Pada Flutter, petugas berwenang membuka tab **Stok → Pengolahan dan opname** untuk buka/kukus, pengajuan dan review yang sama. Ikuti [panduan kontrol stok](docs/stock-control.md).
 
 Riwayat pergerakan kini dapat dibaca pada [web](docs/web-stock-ledger.md) serta Flutter **Stok → Riwayat pergerakan stok**, termasuk filter periode WIB, sumber/bucket dan batch historis. Lihat [panduan ledger native](docs/native-stock-ledger.md).
+
+Penelusuran [kedaluwarsa batch](docs/batch-expiry.md) kini tersedia di web, dengan batas tanggal pilihan pengguna dan filter batch bersaldo. Periode peringatan, recall dan blok penjualan otomatis belum ditetapkan.
 
 ## Stok minimum
 

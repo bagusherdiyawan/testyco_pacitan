@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.18.0",
+    "version": "0.19.0",
     "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
   },
   "security": [
@@ -3514,10 +3514,35 @@
                     },
                     "total": {
                       "type": "integer"
+                    },
+                    "store": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "active": {
+                          "type": "boolean"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "active"
+                      ]
+                    },
+                    "observed_at": {
+                      "type": "string",
+                      "format": "date-time"
                     }
                   },
                   "required": [
-                    "data"
+                    "data",
+                    "store",
+                    "observed_at"
                   ]
                 }
               }
@@ -3564,7 +3589,7 @@
             }
           },
           "422": {
-            "description": "Invalid input, quantities or batch mapping",
+            "description": "Invalid dates/reversed bounds/page/query/balance flag.",
             "content": {
               "application/json": {
                 "schema": {
@@ -3591,8 +3616,48 @@
               "type": "integer",
               "minimum": 1
             }
+          },
+          {
+            "in": "query",
+            "name": "expires_from",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive optional packaging-expiry calendar date; either bound may be supplied alone."
+          },
+          {
+            "in": "query",
+            "name": "expires_to",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            },
+            "description": "Inclusive optional packaging-expiry calendar date; either bound may be supplied alone."
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            },
+            "description": "Historical SKU/name/batch code search, without widening store scope."
+          },
+          {
+            "in": "query",
+            "name": "with_balance",
+            "schema": {
+              "type": "integer",
+              "enum": [
+                0,
+                1
+              ]
+            },
+            "description": "0/default all batches;1 any positive usable/opened/ready/quarantined bucket. Waste alone excluded."
           }
-        ]
+        ],
+        "description": "Read-only price-free batch catalogue with historical batch snapshots and current bucket balances. Existing assigned-store access (including cashier) and inactive-store reads are preserved; central onboarding gives no partner operational access. Defaults retain all batches and expires_on/id ascending pagination100. Optional independent expires_from/expires_to are inclusive calendar packaging dates, not UTC instants or a warning horizon; no arbitrary31-day cap. q searches historical SKU/name/batch code via LIKE. with_balance=1 requires a positive usable/opened/ready/quarantined bucket; cumulative waste alone does not qualify. Filters are ANDed under store scope. No sale block, FEFO allocation, food-quality certification, ready-food shelf life or recall is introduced. Pages are live reads."
       }
     },
     "/api/v1/stores/{store}/inventory/ledger": {

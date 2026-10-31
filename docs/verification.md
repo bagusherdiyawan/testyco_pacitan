@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 1 November 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 160 tes lulus, 1424 assertions |
-| Web PHPUnit | 68 tes lulus, 416 assertions |
+| API PHPUnit | 163 tes lulus, 1464 assertions |
+| Web PHPUnit | 74 tes lulus, 473 assertions |
 | Flutter | 157 tes lulus; audit organisasi/filter/snapshot 390px (text scale 1,5 + keyboard)/1200px dan delapan modul navigasi, perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 385 tes lulus |
+| Total | 394 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
 | Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound serta ledger scoped/filter/snapshot UTC lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.18.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.19.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -266,3 +266,11 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - Final equivalent scripts/check: API 160 tes/1424 assertions, web 68/416, Flutter 157, total 385 tes lulus. Analyzer bersih dan Blade view:cache lulus. Native regresi memakai SDK host terverifikasi yang sama tanpa container Flutter besar pada VFS.
 - Smoke HTTP nyata terisolasi lulus: riwayat web kasir berfilter nomor/periode dengan private/no-store menampilkan struk Rp12.000, pencarian tanpa tanggal tetap all-history, pimpinan berwenang membaca struk kasir toko, dan sesi web admin pusat tanpa membership mitra ditolak 403. Pemeriksaan saldo stok/kas serta audit/report/password/supply/ledger/POS sebelumnya tetap lulus; DB dan fixture sementara tidak menyentuh development DB.
 - Tidak ada perubahan API/OpenAPI 0.18.0 (72 operasi), policy pembayaran/izin, schema atau dependensi. Controller baca dipisahkan dari checkout; tidak ada mutasi, refund, ekspor, antrean offline atau cetak perangkat baru. HTML/server diuji, bukan interaksi/visual browser nyata; mobile/tablet browser, perangkat/printer, PostgreSQL/concurrency dan UAT belum diverifikasi.
+
+
+## Penelusuran kedaluwarsa batch — 1 November 2026
+
+- Tiga tes API baru (40 assertions) dan enam tes web baru (57 assertions) lulus. Cakupan: inclusive independent bounds, AND-scoped search/balance OR, quarantined-only termasuk dengan available0 dan waste-only dikecualikan, historical snapshot setelah rename/pack/status master berubah, no prices/no DB writes/revision/audit/claim changes, cashier assignment tetap diizinkan/unassigned/tenant/central denied, inactive-store read/inactive-org denied, legacy100+1 order, invalid query; BFF whitelist/private/cache/token-cookie boundary, no horizon/31-day cap, local pagination/old-input isolation, escaped historical metadata, wrong-store/empty/error/connection/inactive states.
+- Full equivalent checks: API163/1464 assertions, web74/473, Flutter157, total394 tes lulus, analyzer bersih dan Blade cache compiled. Flutter/POS/batch-read callers existing tetap kompatibel dengan envelope tambahan. Native SDK host terverifikasi digunakan sesuai workflow VFS.
+- Real isolated HTTP smoke lulus: batas expiry tepat tanggal batch menemukan satu batch historis isi8 tanpa perubahan revision; batas sebelumnya menemukan0; web menampilkan tanggal/saldo termasuk16 karantina dan link navigasi; sesi kasir web yang sudah ada tetap dapat membaca. Seluruh workflow stok/kas/penjualan/audit/report/password sebelumnya tetap lulus dan normal development DB tidak dimutasi.
+- OpenAPI0.19.0 tetap72 operasi unik; referensi lokal/path parameters/required lists diperiksa. Tidak ada migrasi database/dependensi, default horizon, push/recall/food-quality certification, sale block atau FEFO baru. Server/HTML diperiksa, bukan browser/perangkat nyata/UAT/PostgreSQL concurrency.

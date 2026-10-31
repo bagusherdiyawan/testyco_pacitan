@@ -209,6 +209,17 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert history['store']['id']==store and history['total']==1 and history['data'][0]['quantity_pieces']==16
         assert history['data'][0]['pack_size']==8 and history['data'][0]['batch_code']=='SMOKE-BATCH'
         assert history['data'][0]['occurred_at'].endswith('+00:00') and 'retail_price' not in history['data'][0]
+        ledger_day=datetime.fromisoformat(history['data'][0]['occurred_at']).astimezone(timezone(timedelta(hours=7))).date().isoformat()
+        web_ledger_query=urlencode({'from_day':ledger_day,'to_day':ledger_day,'batch_id':batch['id'],'source_type':'shipment_receipt','bucket':'quarantined','q':'SMOKE-BATCH'})
+        with opener.open(web+f'/app/stores/{store}/inventory/ledger?'+web_ledger_query) as response:
+            ledger_html=response.read().decode()
+            assert 'no-store' in response.headers['Cache-Control']
+        assert '+16 biji' in ledger_html and 'Karantina' in ledger_html and 'Isi kemasan historis: 8 biji' in ledger_html
+        assert 'SMOKE-BATCH' in ledger_html and 'bukan saldo akhir atau saldo berjalan' in ledger_html
+        assert 'wholesale_price' not in ledger_html and 'retail_price' not in ledger_html
+        stock_html=opener.open(web+f'/app/stores/{store}/operations').read().decode()
+        assert 'Riwayat batch ini' in stock_html and ('batch_id='+batch['id']) in stock_html
+
         api(base,'GET',f'stores/{store}/inventory/ledger',token=owner,expected=403)
         warehouse=api(base,'GET',warehouse_path+'/'+order_id,token=owner)['data']
         assert not warehouse['can_dispatch'] and warehouse['order']['lines'][0]['remaining_packs']==0
@@ -287,6 +298,11 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         html = opener.open(web + '/login').read().decode()
         csrf = re.search(r'name="_token" value="([^"]+)"', html).group(1)
         opener.open(Request(web + '/login', data=urlencode({'_token':csrf,'email':cashier['email'],'password':PASSWORD}).encode())).read()
+        try:
+            opener.open(web+f'/app/stores/{store}/inventory/ledger').read()
+            raise AssertionError('Cashier web session must not read staff ledger')
+        except HTTPError as error:
+            assert error.code==403
         pos_path = f'/app/stores/{store}/pos'
         html = opener.open(web + pos_path).read().decode()
         open_path = pos_path + '/shifts'; opening = fields(html, open_path)

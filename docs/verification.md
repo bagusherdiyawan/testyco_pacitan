@@ -1,13 +1,13 @@
 # Bukti implementasi dan pengujian
 
-Validasi terbaru pada lingkungan onboarding, 30 Oktober 2026; catatan irisan sebelumnya berasal dari 28–29 Oktober 2026. Hasil lokal, bukan UAT bisnis atau CI remote.
+Validasi terbaru pada lingkungan onboarding, 31 Oktober 2026; catatan irisan sebelumnya berasal dari 28–29 Oktober 2026. Hasil lokal, bukan UAT bisnis atau CI remote.
 
 | Pemeriksaan | Hasil |
 | --- | --- |
 | API PHPUnit | 160 tes lulus, 1424 assertions |
-| Web PHPUnit | 54 tes lulus, 261 assertions |
+| Web PHPUnit | 61 tes lulus, 345 assertions |
 | Flutter | 157 tes lulus; audit organisasi/filter/snapshot 390px (text scale 1,5 + keyboard)/1200px dan delapan modul navigasi, perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 371 tes lulus |
+| Total | 378 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
@@ -250,3 +250,11 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - Seluruh final checks ekuivalen scripts/check: API 160 tes/1424 assertions, web 54/261, Flutter 157, total 371. Analyzer Flutter bersih dan Blade view:cache lulus. Native regression menggunakan SDK host terverifikasi yang sama, tanpa container Flutter besar pada VFS.
 - Smoke HTTP nyata terisolasi lulus dengan login web pimpinan mitra menampilkan audit sale.completed Rp12.000, serta login admin pusat pada cookie jar lain menunjukkan hanya onboarding dan tidak menampilkan audit operasional mitra. GET API/web tidak menambah audit. Seluruh alur CSRF/supply/ledger/POS/kas/report/password sebelumnya tetap lulus; akun/database development tidak dimutasi.
 - API/OpenAPI 0.18.0 (72 operasi), migrasi, dependensi dan izin backend tidak berubah. Ini pemeriksaan HTML/server, bukan pengujian interaksi/visual browser nyata. Browser mobile/tablet, PostgreSQL/concurrency dan UAT tetap belum diverifikasi.
+
+
+## Riwayat ledger stok web — 31 Oktober 2026
+
+- Tujuh tes web tambahan (84 assertions) lulus: session/403/401, whitelist query, kalender WIB inklusif ke interval ISO dan default tengah malam, batch/source/bucket/search/pagination lokal, old-input isolation/no-store/token-cookie boundary, snapshot historis isi 8/signed -8 dan +16, waktu UTC ke WIB, source ID/pelaku, HTML escaping/tanpa harga, filter invalid tanpa HTTP, mismatch store/row/batch serta 404, inactive empty versus connection failure, dan hint navigasi staff/kasir.
+- Kalender audit, laporan tunai dan ledger kini memakai Shared/Application/WibPeriod; 18 tes target audit/report/ledger lulus (174 assertions) sebelum suite penuh. Tidak ada perubahan definisi periode/metrik/izin. Final checks ekuivalen scripts/check: API 160 tes/1424 assertions, web 61/345, Flutter 157, total 378; analyzer bersih, Blade view:cache lulus. Native regresi memakai SDK host terverifikasi tanpa container Flutter besar pada VFS.
+- Smoke HTTP terisolasi lulus: halaman ledger berfilter exact batch/source/quarantined/search menampilkan +16 biji dan pack_size historis 8; tautan per batch tersedia bagi pimpinan, dan sesi web kasir ditolak 403. Semua alur audit/report/password/supply/ledger/POS/kas terdahulu tetap lulus. Pengujian hanya menggunakan DB/container sementara, tidak menambah akun atau mutasi pada development DB.
+- API/OpenAPI 0.18.0 (72 operasi), schema, dependensi dan policy backend tidak berubah. Tidak ada perhitungan running balance, ekspor ledger, mutasi stok/kas, pemulihan UUID/offline atau aturan mutu baru. HTML/server diuji; interaksi/visual browser mobile/tablet, perangkat nyata, PostgreSQL/concurrency dan UAT belum diverifikasi.

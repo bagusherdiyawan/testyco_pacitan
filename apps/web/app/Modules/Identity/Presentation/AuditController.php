@@ -3,7 +3,7 @@
 namespace App\Modules\Identity\Presentation;
 
 use App\Modules\Identity\Infrastructure\Backend;
-use Carbon\CarbonImmutable;
+use App\Shared\Application\WibPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -21,14 +21,11 @@ final class AuditController
             'actor_id' => 'nullable|integer|min:1',
             'page' => 'sometimes|integer|min:1',
         ]);
-        $today = CarbonImmutable::now('Asia/Jakarta')->format('Y-m-d');
-        $from = CarbonImmutable::parse($v['from_day'] ?? $today, 'Asia/Jakarta')->startOfDay();
-        $to = CarbonImmutable::parse($v['to_day'] ?? $today, 'Asia/Jakarta')->startOfDay()->addDay();
-        abort_unless($to->greaterThan($from) && $to->timestamp - $from->timestamp <= 31 * 86400, 422, 'Rentang maksimal 31 hari dan tanggal akhir tidak sebelum awal.');
+        $period = WibPeriod::fromDays($v['from_day'] ?? null, $v['to_day'] ?? null);
         $exact = array_filter(array_intersect_key($v, array_flip(['action', 'subject_id', 'actor_id'])), fn ($value) => $value !== null && $value !== '');
         $page = (int) ($v['page'] ?? 1);
-        $query = [...$exact, 'from' => $from->toIso8601String(), 'to' => $to->toIso8601String(), 'page' => $page];
-        $filters = [...$exact, 'from_day' => $from->format('Y-m-d'), 'to_day' => $to->subDay()->format('Y-m-d')];
+        $query = [...$exact, ...$period->api(), 'page' => $page];
+        $filters = [...$exact, ...$period->calendar()];
         $payload = $this->api->request('GET', "organizations/$organization/audit", $query)->json();
         abort_unless(is_array($payload)
             && data_get($payload, 'organization.id') === $organization

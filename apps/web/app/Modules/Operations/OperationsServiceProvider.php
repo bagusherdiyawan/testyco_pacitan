@@ -7,6 +7,7 @@ use App\Modules\Identity\Presentation\ApiSession;
 use App\Modules\Operations\Presentation\OperationsController;
 use App\Modules\Operations\Presentation\StockControlController;
 use App\Modules\Operations\Presentation\StockMinimumController;
+use App\Modules\Operations\Presentation\StockLedgerController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -18,6 +19,7 @@ final class OperationsServiceProvider extends ServiceProvider
             throw new \LogicException('Operations requires Identity.');
         }
         Route::middleware(['web', ApiSession::class])->group(function () {
+            Route::get('/app/stores/{store}/inventory/ledger', [StockLedgerController::class, 'index']);
             Route::get('/app/stores/{store}/stock-minimums', [StockMinimumController::class, 'index']);
             Route::post('/app/stores/{store}/stock-minimums/{product}', [StockMinimumController::class, 'configure']);
             $stock = StockControlController::class;

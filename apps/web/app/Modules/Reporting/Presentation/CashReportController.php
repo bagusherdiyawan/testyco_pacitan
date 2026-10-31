@@ -3,7 +3,7 @@
 namespace App\Modules\Reporting\Presentation;
 
 use App\Modules\Identity\Infrastructure\Backend;
-use Carbon\CarbonImmutable;
+use App\Shared\Application\WibPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -14,12 +14,9 @@ final class CashReportController
     private function filters(Request $r): array
     {
         $v = $r->validate(['from_day' => 'sometimes|date_format:Y-m-d', 'to_day' => 'sometimes|date_format:Y-m-d', 'store_id' => 'sometimes|nullable|ulid', 'page' => 'sometimes|integer|min:1']);
-        $today = CarbonImmutable::now('Asia/Jakarta')->format('Y-m-d');
-        $from = CarbonImmutable::parse($v['from_day'] ?? $today, 'Asia/Jakarta')->startOfDay();
-        $to = CarbonImmutable::parse($v['to_day'] ?? $today, 'Asia/Jakarta')->startOfDay()->addDay();
-        abort_unless($to->greaterThan($from) && $to->timestamp - $from->timestamp <= 31 * 86400, 422, 'Rentang tanggal maksimal 31 hari dan akhir tidak sebelum awal.');
+        $period = WibPeriod::fromDays($v['from_day'] ?? null, $v['to_day'] ?? null);
 
-        return [['from' => $from->toIso8601String(), 'to' => $to->toIso8601String(), 'store_id' => $v['store_id'] ?? null], ['from_day' => $from->format('Y-m-d'), 'to_day' => $to->subDay()->format('Y-m-d'), 'store_id' => $v['store_id'] ?? null, 'page' => (int) ($v['page'] ?? 1)]];
+        return [[...$period->api(), 'store_id' => $v['store_id'] ?? null], [...$period->calendar(), 'store_id' => $v['store_id'] ?? null, 'page' => (int) ($v['page'] ?? 1)]];
     }
 
     public function index(Request $r, string $organization): mixed

@@ -50,7 +50,7 @@ Ikuti [panduan operasional](docs/supply-workflow.md) dan [panduan pesanan Flutte
 
 Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan, kukus dan proposal hitung fisik. Snapshot lama tidak dapat menimpa pergerakan baru; approval opname memerlukan peninjau berwenang yang berbeda dari pengusul. Pada Flutter, petugas berwenang membuka tab **Stok → Pengolahan dan opname** untuk buka/kukus, pengajuan dan review yang sama. Ikuti [panduan kontrol stok](docs/stock-control.md).
 
-Riwayat pergerakan kini dapat dibaca pada Flutter **Stok → Riwayat pergerakan stok**, termasuk filter periode WIB, sumber/bucket dan batch historis. Lihat [panduan ledger native](docs/native-stock-ledger.md).
+Riwayat pergerakan kini dapat dibaca pada [web](docs/web-stock-ledger.md) serta Flutter **Stok → Riwayat pergerakan stok**, termasuk filter periode WIB, sumber/bucket dan batch historis. Lihat [panduan ledger native](docs/native-stock-ledger.md).
 
 ## Stok minimum
 

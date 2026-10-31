@@ -1,5 +1,7 @@
 # Riwayat pergerakan stok di Flutter
 
+Halaman web berfilter kini juga tersedia; lihat [panduan web](web-stock-ledger.md).
+
 Irisan PRD 05-MOV serta 01-ACL. Petugas berwenang kini membaca ledger dari mobile/tablet untuk menelusuri penambahan, perpindahan keadaan, pengiriman, penerimaan dan debit POS. Fitur ini read-only; tidak menambah stok, mengubah audit atau membuat operasi pengganti.
 
 ## Penggunaan dan akses

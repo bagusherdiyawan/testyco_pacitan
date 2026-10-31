@@ -7,3 +7,5 @@ Ambang stok minimum per SKU/toko dan peringatan saat halaman dimuat tersedia; pe
 Reporting menyediakan laporan POS tunai per organisasi/toko, produk historis dan filter periode. Ekspor CSV hanya web, maksimal 10.000 transaksi; semua output memakai scope server yang sama. Lihat docs/cash-reporting.md di root.
 
 Jejak audit: organisasi → Buka jejak audit dengan filter dan snapshot. Kalender WIB, filter exact, pagination lokal dan snapshot teks berizin melalui API; lihat [panduan](../../docs/web-audit.md).
+
+Ledger stok: Pesanan dan stok toko → Riwayat pergerakan stok / Riwayat batch ini. Filter WIB/batch/sumber/bucket, signed pieces dan snapshot historis; lihat [panduan](../../docs/web-stock-ledger.md).

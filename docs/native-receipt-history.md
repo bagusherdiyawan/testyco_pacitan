@@ -1,5 +1,7 @@
 # Riwayat struk Flutter
 
+Pencarian nomor dan filter periode kini juga tersedia di [web](web-receipt-history.md); web mempertahankan default seluruh riwayat.
+
 Pada modul **POS → Riwayat struk**, pilih periode kalender WIB (awal dan akhir inklusif, maksimal 31 hari) dan pencarian nomor struk, lalu **Terapkan filter**. Default hari ini WIB; ubah periode untuk mencari transaksi lama. Riwayat dapat dibuka sebelum membuka shift dan pada toko nonaktif yang masih dapat diakses dalam organisasi aktif. Daftar 20 struk terbaru pada POS tetap tersedia.
 
 Halaman menampilkan scope dari server: **Struk saya** untuk kasir, **Seluruh kasir toko** untuk pengelola berwenang. Gudang, pengelola tanpa assignment toko, organisasi lain dan pemilik pusat tanpa membership mitra ditolak. Navigasi tidak memberikan izin tambahan. Detail struk tetap memeriksa pemilik kasir/izin pengelola pada API.

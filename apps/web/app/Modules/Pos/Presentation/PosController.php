@@ -64,11 +64,6 @@ final class PosController
         return redirect('/app/stores/'.$result['store_id'].'/pos')->with('status', 'Draft dibatalkan tanpa perubahan kas/stok.');
     }
 
-    public function history(string $store): mixed
-    {
-        return view('pages.pos.history', ['store' => $store, 'sales' => $this->api->page("stores/$store/sales")]);
-    }
-
     public function receipt(string $sale): mixed
     {
         return view('pages.pos.receipt', ['sale' => $this->api->request('GET', "sales/$sale")->json('data')]);

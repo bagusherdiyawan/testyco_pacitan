@@ -9,3 +9,5 @@ Reporting menyediakan laporan POS tunai per organisasi/toko, produk historis dan
 Jejak audit: organisasi → Buka jejak audit dengan filter dan snapshot. Kalender WIB, filter exact, pagination lokal dan snapshot teks berizin melalui API; lihat [panduan](../../docs/web-audit.md).
 
 Ledger stok: Pesanan dan stok toko → Riwayat pergerakan stok / Riwayat batch ini. Filter WIB/batch/sumber/bucket, signed pieces dan snapshot historis; lihat [panduan](../../docs/web-stock-ledger.md).
+
+Riwayat struk: POS → Riwayat struk, pencarian nomor dan pasangan tanggal WIB opsional. Tanpa tanggal tetap seluruh riwayat berhalaman, scope dari API; lihat [panduan](../../docs/web-receipt-history.md).

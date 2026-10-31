@@ -60,7 +60,7 @@ Pengelola dapat mengatur ambang biji per SKU/toko melalui web dan Flutter; lihat
 
 Buka **POS tunai** dari toko di web atau modul Penjualan Flutter. Buka shift, pilih produk/satuan/batch, tinjau total server, lalu konfirmasi uang tunai. Struk berasal dari transaksi tersimpan; membuka/cetak ulang tidak memotong stok lagi. Draft tersimpan di server dan dapat dipulihkan setelah login ulang.
 
-Pengelola berwenang mencatat kas masuk/keluar melalui web atau modul **Kas shift** Flutter; lihat [panduan kas native](docs/native-shift-cash.md). Tutup shift memerlukan hitungan fisik; selisih wajib diberi alasan dan draft aktif harus diselesaikan/dibatalkan. Web menyediakan riwayat struk serta ringkasan penjualan per tanggal WIB. Flutter kini menyediakan [riwayat struk berhalaman](docs/native-receipt-history.md) dengan filter periode WIB dan nomor struk. Lihat [panduan POS dan shift](docs/cash-pos.md) untuk batas satuan, retry dan hak akses.
+Pengelola berwenang mencatat kas masuk/keluar melalui web atau modul **Kas shift** Flutter; lihat [panduan kas native](docs/native-shift-cash.md). Tutup shift memerlukan hitungan fisik; selisih wajib diberi alasan dan draft aktif harus diselesaikan/dibatalkan. Web menyediakan [pencarian riwayat struk](docs/web-receipt-history.md) dengan filter nomor/periode WIB serta ringkasan penjualan per tanggal WIB. Flutter kini menyediakan [riwayat struk berhalaman](docs/native-receipt-history.md) dengan filter periode WIB dan nomor struk. Lihat [panduan POS dan shift](docs/cash-pos.md) untuk batas satuan, retry dan hak akses.
 
 ## Laporan penjualan tunai
 

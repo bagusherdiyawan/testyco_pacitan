@@ -327,6 +327,16 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         history=api(base,'GET',f'stores/{store}/sales?{history_query}',token=manager_token)
         assert history['scope']=='store' and history['data'][0]['id']==sale_id
         api(base,'GET',f'stores/{store}/sales?{history_query}',token=owner,expected=403)
+        receipt_day=sale_time.astimezone(timezone(timedelta(hours=7))).date().isoformat()
+        web_receipt_query=urlencode({'from_day':receipt_day,'to_day':receipt_day,'q':sale['number']})
+        with opener.open(web+f'/app/stores/{store}/pos/sales?'+web_receipt_query) as response:
+            receipt_history_html=response.read().decode()
+            assert 'no-store' in response.headers['Cache-Control']
+        assert 'Cakupan: struk saya.' in receipt_history_html and sale['number'] in receipt_history_html and 'Rp 12.000' in receipt_history_html
+        assert ('/app/pos/sales/'+sale_id) in receipt_history_html
+        all_history_html=opener.open(web+f'/app/stores/{store}/pos/sales?'+urlencode({'q':sale['number']})).read().decode()
+        assert 'Periode diterapkan: seluruh riwayat.' in all_history_html and sale['number'] in all_history_html
+
         current=api(base,'GET',f'stores/{store}/inventory/batches',token=cashier_token)['data'][0]
         assert current['ready_pieces']==2 and current['quarantined_pieces']==16
         warning = api(base,'GET',f'stores/{store}/inventory/minimums?low_only=1',token=cashier_token)
@@ -386,6 +396,8 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         csrf=re.search(r'name="_token" value="([^"]+)"',html).group(1)
         opener.open(Request(web+'/login',data=urlencode({'_token':csrf,'email':lead['email'],'password':PASSWORD}).encode())).read()
         web_period=urlencode({'from_day':sold_day.date().isoformat(),'to_day':sold_day.date().isoformat()})
+        manager_history_html=opener.open(web+f'/app/stores/{store}/pos/sales?'+web_receipt_query).read().decode()
+        assert 'seluruh kasir toko yang diizinkan' in manager_history_html and sale['number'] in manager_history_html
         html=opener.open(web+'/app/'+report_path+'?'+web_period).read().decode()
         assert 'Rp 12.000' in html and '4 biji' in html
         with opener.open(web+'/app/'+report_path+'/export?'+web_period) as response:
@@ -430,6 +442,12 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         central_html=central_browser.open(web+'/app/'+audit_path+'?'+web_audit_query).read().decode()
         assert 'hanya data onboarding' in central_html and 'Tidak ada audit pada filter ini.' in central_html
         assert 'wholesale_price' not in central_html
+        try:
+            central_browser.open(web+f'/app/stores/{store}/pos/sales?'+web_receipt_query).read()
+            raise AssertionError('Central onboarding must not read partner receipts')
+        except HTTPError as error:
+            assert error.code==403
+
         assert api(base,'GET',audit_path,token=lead_token)['total']==audit_total
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']

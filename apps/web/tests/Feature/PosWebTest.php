@@ -85,7 +85,7 @@ class PosWebTest extends TestCase
 
     public function test_receipt_history_is_paginated_and_reads_api_scope(): void
     {
-        Http::fake(['*' => Http::response(['data' => [$this->sale()], 'total' => 100, 'per_page' => 50, 'current_page' => 2])]);
+        Http::fake(['*' => Http::response(['store' => ['id' => 'STORE', 'name' => 'Toko Pacitan', 'active' => true], 'scope' => 'own', 'data' => [$this->sale()], 'total' => 100, 'per_page' => 50, 'current_page' => 2])]);
         $this->withSession($this->apiSession())->get('/app/stores/STORE/pos/sales?page=2')->assertOk()->assertSee('POS-123')->assertSee('Halaman 2 dari 2');
         Http::assertSent(fn ($r) => str_contains($r->url(), 'page=2'));
     }

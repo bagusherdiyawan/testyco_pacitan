@@ -5,6 +5,7 @@ namespace App\Modules\Identity;
 use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Identity\Presentation\AuthController;
 use App\Modules\Identity\Presentation\IdentityController;
+use App\Modules\Identity\Presentation\UserReactivationController;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
@@ -32,8 +33,10 @@ final class IdentityServiceProvider extends ServiceProvider
             Route::patch('stores/{store}', [IdentityController::class, 'updateStore']);
             Route::get('organizations/{organization}/users', [IdentityController::class, 'users']);
             Route::post('organizations/{organization}/users', [IdentityController::class, 'createUser']);
-            Route::patch('organizations/{organization}/users/{user}/membership', [IdentityController::class, 'updateMembership']);
-            Route::post('organizations/{organization}/users/{user}/deactivate', [IdentityController::class, 'deactivateUser']);
+            Route::patch('organizations/{organization}/users/{user}/membership', [IdentityController::class, 'updateMembership'])->whereNumber('user');
+            Route::post('organizations/{organization}/users/{user}/deactivate', [IdentityController::class, 'deactivateUser'])->whereNumber('user');
+            Route::get('organizations/{organization}/users/{user}/reactivation', [UserReactivationController::class, 'show'])->whereNumber('user');
+            Route::post('organizations/{organization}/users/{user}/reactivate', [UserReactivationController::class, 'store'])->whereNumber('user');
             Route::get('organizations/{organization}/audit', [IdentityController::class, 'audit']);
         });
     }

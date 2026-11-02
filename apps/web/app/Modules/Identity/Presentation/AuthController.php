@@ -25,7 +25,7 @@ final class AuthController
         if (! $response->successful()) {
             return back()->withInput($r->only('email'))->withErrors(['email' => $response->status() === 429 ? 'Terlalu banyak percobaan. Tunggu sebentar.' : 'Email atau kata sandi tidak valid, atau layanan sedang tidak tersedia.']);
         }
-        $r->session()->forget('order_changes_pending');
+        $r->session()->forget(['order_changes_pending', 'user_reactivation_pending']);
         $r->session()->regenerate();
         $r->session()->put(['api_token' => $response->json('token'), 'api_user' => $response->json('user'), 'api_expires_at' => time() + (int) $response->json('expires_in')]);
 

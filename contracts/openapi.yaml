@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.20.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes."
+    "version": "0.21.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation."
   },
   "security": [
     {
@@ -1621,7 +1621,8 @@
             "name": "user",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "integer",
+              "minimum": 1
             }
           }
         ],
@@ -1634,7 +1635,8 @@
               }
             }
           }
-        }
+        },
+        "description": " Locks target user and increments global access_version on every accepted role/store assignment update, invalidating prior reactivation review. Revokes tokens; does not activate an inactive account."
       }
     },
     "/api/v1/organizations/{organization}/users/{user}/deactivate": {
@@ -1720,10 +1722,12 @@
             "name": "user",
             "required": true,
             "schema": {
-              "type": "string"
+              "type": "integer",
+              "minimum": 1
             }
           }
-        ]
+        ],
+        "description": "Existing command remains compatible without UUID/version. Locks target user, increments access_version, deactivates globally and revokes all tokens. Self or owner in ANY membership denied; multi-organization identities require central administrator. Repeated accepted deactivation still advances revision; audit records actual prior state."
       }
     },
     "/api/v1/organizations/{organization}/audit": {
@@ -8119,6 +8123,228 @@
         },
         "description": "Requires current pending parent version, same pending change and zero shipments; increments version once and releases hold. Retains original approved quantities/total. Supplier owner/admin withdraws. Retry requires immutable UUID/path/body; committed result may be historical, reload context after ACK."
       }
+    },
+    "/api/v1/organizations/{organization}/users/{user}/reactivation": {
+      "get": {
+        "operationId": "reviewUserReactivation",
+        "summary": "Review scoped account identity/assignments and activation capability",
+        "responses": {
+          "401": {
+            "description": "Authentication required or token expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/store/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Account active, stale access version, operation ID conflict or inactive review organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; private/no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserReactivationContext"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "description": "Requires organization management; exact membership must exist. Only this organization stores/role are returned; membership_count signals global impact without exposing other organization details. can_reactivate false for active account, inactive review organization, self, owner in ANY membership, or multi-organization identity without central administrator. Flags do not authorize mutations. No password/token data. Private/no-store."
+      }
+    },
+    "/api/v1/organizations/{organization}/users/{user}/reactivate": {
+      "post": {
+        "operationId": "reactivateUser",
+        "summary": "Reactivate an inactive account using reviewed access version and UUID",
+        "responses": {
+          "401": {
+            "description": "Authentication required or token expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/store/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Account active, stale access version, operation ID conflict or inactive review organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; private/no-store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/UserReactivationResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserReactivationInput"
+              }
+            }
+          }
+        },
+        "description": "Organization management and exact membership required before idempotency lookup and under locked user. Self and owner in any membership denied; multi-organization status change requires central administrator. Review organization must be active. Current inactive user access_version must match version; increments once. Preserves password, roles and assignments; deletes all tokens and audits user.reactivated before/after/reason in invoked organization only (included in central onboarding audit allowlist). Shared Operations atomically stores UUID/actor/scope/validated payload result. Identical retry replays historical result even after later deactivation, without changing current state. Different actor/scope/payload UUID conflicts. After ACK reload context, then user must login again; no token is issued here. No stock/cash writes."
+      }
     }
   },
   "components": {
@@ -8144,6 +8370,11 @@
           "email": {
             "type": "string",
             "format": "email"
+          },
+          "access_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Persisted review revision; increments on deactivation, membership/assignment change and reactivation. Optional on legacy creation responses."
           }
         },
         "required": [
@@ -12553,6 +12784,163 @@
         "required": [
           "order",
           "change"
+        ]
+      },
+      "AccountAccessState": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "name": {
+            "type": "string"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "access_version": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Persisted review revision; increments on deactivation, membership/assignment change and reactivation. Optional on legacy creation responses."
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "email",
+          "active",
+          "access_version"
+        ]
+      },
+      "UserReactivationContext": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "active"
+            ]
+          },
+          "user": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/AccountAccessState"
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "enum": [
+                      "owner",
+                      "admin",
+                      "partner_lead",
+                      "store_manager",
+                      "cashier",
+                      "warehouse"
+                    ]
+                  },
+                  "membership_count": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "stores": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "active": {
+                          "type": "boolean"
+                        },
+                        "organization_id": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "name",
+                        "active",
+                        "organization_id"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "role",
+                  "membership_count",
+                  "stores"
+                ]
+              }
+            ]
+          },
+          "can_reactivate": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "organization",
+          "user",
+          "can_reactivate"
+        ]
+      },
+      "UserReactivationInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "reason"
+        ]
+      },
+      "UserReactivationResult": {
+        "type": "object",
+        "properties": {
+          "organization_id": {
+            "type": "string"
+          },
+          "user": {
+            "$ref": "#/components/schemas/AccountAccessState"
+          }
+        },
+        "required": [
+          "organization_id",
+          "user"
         ]
       }
     }

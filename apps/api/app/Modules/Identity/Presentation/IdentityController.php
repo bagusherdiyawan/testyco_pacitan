@@ -5,6 +5,7 @@ namespace App\Modules\Identity\Presentation;
 use App\Models\User;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Application\Audit;
+use App\Modules\Identity\Application\UserAccountStatus;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
 use Illuminate\Http\Request;
@@ -14,7 +15,7 @@ use Illuminate\Validation\Rules\Password;
 
 final class IdentityController
 {
-    public function __construct(private Access $access) {}
+    public function __construct(private Access $access, private UserAccountStatus $accounts) {}
 
     public function organizations(Request $r): mixed
     {
@@ -115,7 +116,7 @@ final class IdentityController
     {
         $this->access->manage($r->user(), $organization);
 
-        return DB::table('organization_user')->join('users', 'users.id', '=', 'organization_user.user_id')->where('organization_id', $organization)->select('users.id', 'name', 'email', 'active', 'role')->orderBy('name')->paginate(100)->through(function ($user) use ($organization) {
+        return DB::table('organization_user')->join('users', 'users.id', '=', 'organization_user.user_id')->where('organization_id', $organization)->select('users.id', 'name', 'email', 'active', 'access_version', 'role')->orderBy('name')->paginate(100)->through(function ($user) use ($organization) {
             $user->store_ids = DB::table('store_user')->join('stores', 'stores.id', '=', 'store_user.store_id')->where('user_id', $user->id)->where('organization_id', $organization)->pluck('store_id')->all();
 
             return $user;
@@ -147,20 +148,25 @@ final class IdentityController
         $this->access->manage($r->user(), $organization);
         $membership = DB::table('organization_user')->where('organization_id', $organization)->where('user_id', $user)->first();
         abort_unless($membership, 404);
-        abort_if($membership->role === 'owner' || (string) $r->user()->id === $user, 403, 'Akun pemilik dan akses sendiri tidak dapat diubah di sini.');
+        abort_if($membership->role === 'owner' || (int) $r->user()->id === (int) $user, 403, 'Akun pemilik dan akses sendiri tidak dapat diubah di sini.');
         $org = Organization::findOrFail($organization);
         $roles = $org->type === 'center' ? ['admin', 'warehouse', 'store_manager', 'cashier'] : ['partner_lead', 'store_manager', 'cashier'];
         $v = $r->validate(['role' => ['required', Rule::in($roles)], 'store_ids' => 'present|array|max:100', 'store_ids.*' => ['required', 'distinct', Rule::exists('stores', 'id')->where('organization_id', $organization)]]);
 
-        return DB::transaction(function () use ($r, $organization, $user, $membership, $v) {
+        return DB::transaction(function () use ($r, $organization, $user, $v) {
+            $account = User::lockForUpdate()->findOrFail($user);
+            $current = DB::table('organization_user')->where('organization_id', $organization)->where('user_id', $user)->first();
+            abort_unless($current, 404);
+            abort_if($current->role === 'owner' || (int) $r->user()->id === (int) $user, 403);
             DB::table('organization_user')->where('organization_id', $organization)->where('user_id', $user)->update(['role' => $v['role']]);
             $storeIds = Store::where('organization_id', $organization)->pluck('id');
             DB::table('store_user')->where('user_id', $user)->whereIn('store_id', $storeIds)->delete();
             foreach ($v['store_ids'] as $id) {
                 DB::table('store_user')->insert(['store_id' => $id, 'user_id' => $user]);
             }
-            User::findOrFail($user)->tokens()->delete();
-            Audit::record($r->user()->id, $organization, 'membership.updated', $user, ['role' => $membership->role], $v);
+            $account->forceFill(['access_version' => $account->access_version + 1])->save();
+            $account->tokens()->delete();
+            Audit::record($r->user()->id, $organization, 'membership.updated', $user, ['role' => $current->role], $v);
 
             return response()->noContent();
         });
@@ -168,21 +174,9 @@ final class IdentityController
 
     public function deactivateUser(Request $r, string $organization, string $user): mixed
     {
-        $this->access->manage($r->user(), $organization);
-        $m = DB::table('organization_user')->where('organization_id', $organization)->where('user_id', $user)->first();
-        abort_unless($m, 404);
-        abort_if($m->role === 'owner' || (string) $r->user()->id === $user, 403);
-        // Account status is global. Only central admins can disable a multi-organization identity.
-        abort_if(! $this->access->centralAdministrator($r->user()) && DB::table('organization_user')->where('user_id', $user)->count() > 1, 403);
+        $this->accounts->deactivate($r->user(), $organization, (int) $user);
 
-        return DB::transaction(function () use ($r, $organization, $user) {
-            $u = User::findOrFail($user);
-            $u->forceFill(['active' => false])->save();
-            $u->tokens()->delete();
-            Audit::record($r->user()->id, $organization, 'user.deactivated', $user, ['active' => true], ['active' => false]);
-
-            return response()->noContent();
-        });
+        return response()->noContent();
     }
 
     public function audit(Request $r, string $organization): mixed

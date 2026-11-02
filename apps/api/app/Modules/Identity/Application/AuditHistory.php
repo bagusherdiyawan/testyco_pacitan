@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\DB;
 
 final class AuditHistory
 {
-    public const ONBOARDING_ACTIONS = ['organization.created', 'organization.updated', 'store.created', 'store.updated', 'user.created', 'user.deactivated', 'membership.updated'];
+    public const ONBOARDING_ACTIONS = ['organization.created', 'organization.updated', 'store.created', 'store.updated', 'user.created', 'user.deactivated', 'user.reactivated', 'membership.updated'];
 
     public function __construct(private Access $access) {}
 

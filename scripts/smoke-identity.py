@@ -497,6 +497,31 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert accepted['order']['lines'][0]['id']==change_order['lines'][0]['id']
         assert accepted['order']['lines'][0]['quantity_packs']==1 and accepted['order']['total_amount']==18000
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
+        # Disposable account: real web CSRF reactivation, stale version and old-token denial.
+        member=api(base,'POST',f'organizations/{org}/users',{'name':'Returning staff','email':'returning@smoke.test','password':PASSWORD,'role':'cashier','store_ids':[store]},lead_token,201)['data']
+        member_path=f'organizations/{org}/users/{member["id"]}'
+        old_member_token=api(base,'POST','auth/login',{'email':member['email'],'password':PASSWORD,'device_name':'before-disable'})['token']
+        api(base,'POST',member_path+'/deactivate',{},lead_token,204)
+        api(base,'GET','auth/me',token=old_member_token,expected=401)
+        api(base,'POST','auth/login',{'email':member['email'],'password':PASSWORD,'device_name':'disabled-denied'},expected=422)
+        review_path='/app/'+member_path+'/reactivation'
+        reactivate_path='/app/'+member_path+'/reactivate'
+        with opener.open(web+review_path) as response:
+            member_html=response.read().decode()
+            assert 'no-store' in response.headers['Cache-Control']
+        activation=fields(member_html,reactivate_path); activation['reason']='Reviewed return to work in isolated smoke'
+        assert activation['version']=='2'
+        web_post(reactivate_path,activation).read()
+        replay={key:activation[key] for key in ['operation_id','version','reason']}
+        assert api(base,'POST',member_path+'/reactivate',replay,lead_token)['data']['user']['access_version']==3
+        api(base,'GET','auth/me',token=old_member_token,expected=401)
+        new_member_token=api(base,'POST','auth/login',{'email':member['email'],'password':PASSWORD,'device_name':'after-reactivation'})['token']
+        assert api(base,'GET','stores',token=new_member_token)['data'][0]['id']==store
+        member_context=api(base,'GET',member_path+'/reactivation',token=lead_token)['data']
+        assert member_context['user']['active'] and not member_context['can_reactivate']
+        assert api(base,'GET',audit_path+'?'+urlencode({'action':'user.reactivated','subject_id':str(member['id'])}),token=lead_token)['total']==1
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
+        api(base,'POST','auth/logout',{},new_member_token,204)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'
@@ -510,7 +535,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST','auth/logout',{},changed_session,204)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, password rotation/revoked sessions, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, password rotation/revoked sessions, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 2 November 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 171 tes lulus, 1587 assertions |
-| Web PHPUnit | 81 tes lulus, 547 assertions |
+| API PHPUnit | 178 tes lulus, 1683 assertions |
+| Web PHPUnit | 89 tes lulus, 637 assertions |
 | Flutter | 190 tes lulus; penelusuran tanggal kemasan/filter batch bersaldo390px (text scale1,5 + keyboard)/1200px; persetujuan ulang dari detail Pesanan/Gudang, review/unknown/keyboard390px (text scale1,5)/1200px; audit organisasi/filter/snapshot 390px (text scale 1,5 + keyboard)/1200px dan delapan modul navigasi, perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 442 tes lulus |
+| Total | 457 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
-| Migrasi kontrol stok, POS, ambang dan histori revisi pada DB development | Lulus tanpa reset saldo lama |
+| Migrasi kontrol stok, POS, ambang, histori revisi dan versi akses akun pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
 | Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound serta ledger scoped/filter/snapshot UTC lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.20.0 | 77 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.21.0 | 79 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -300,3 +300,13 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - Widget390px text scale1,5 dan1200px masuk dari Stok dengan canControl=false, tanpa menawarkan ledger/pengolahan. Inset keyboard280, upper-only/query/with_balance, historical condition/pack/date/quarantine dan observed_at WIB ditampilkan. Edit draft tanpa apply tidak mengganti query pagination. Form invalid tidak mengirim request; read403 tidak menampilkan stale batch atau empty success. Semua request GET ke path toko yang sama.
 - Final checks ekuivalen scripts/check: API171/1587 assertions, web81/547, Flutter190, total442 tes lulus. Analyzer tanpa issue; format136files tidak berubah. Native memakai SDK host fallback terverifikasi, tanpa container Flutter besar pada VFS. Compose healthy, metadata smoke dan full HTTP terisolasi nyata lulus termasuk penelusuran expiry backend/web serta workflow reapproval/supply/POS/stock/cash/audit/report/password sebelumnya; tidak menambah fixture pada development DB.
 - Kontrak OpenAPI0.20.0 tetap77 operasi, local refs/path parameters/required lists valid. Tidak ada perubahan API/schema/migrasi/dependensi/otorisasi atau kebijakan mutu. Ini widget/server, bukan verifikasi perangkat Android/iOS/browser visual, PostgreSQL concurrency atau UAT. Penelusuran tidak mengaktifkan default warning horizon, FEFO, sale block, recall atau notifikasi baru.
+
+
+## Reaktivasi akun API/web — 2 November 2026
+
+- 7 tes API baru/96 assertions: exact membership/role/tenant guards, inactive/state/version/alasan/UUID, global owner/self termasuk ID nol depan, multi-org central-only, inactive review org, snapshot penugasan dan password tidak berubah, token dihapus, membership update membatalkan review, once-only replay historis sesudah deaktivasi berikutnya tidak menghidupkan akun lagi, collision/stale rollback, actual audit sebelum/sesudah, allowlist onboarding baru tanpa akses audit penjualan dan migration down guard. Token nyata lama tetap401 sesudah reaktivasi; login baru berhasil.
+- 8 tes web baru/90 assertions: entry akun nonaktif dari organisasi, protected owner/self tanpa link, escaped metadata dan scoped role/stores, foreign envelope/assignment503, capability/versi di-recheck sebelum POST, validated payload tanpa role/URL/active browser, immutable session/path/body/review pada unknown→403→ACK dan penggantian ditahan termasuk route organisasi lain/ID nol depan, mismatch ACK/401, initial validation/stale/422,429 ditahan serta successful login membersihkan pending akun lama. Fake HTTP factory direset antar fase agar respons baru tidak tertutup wildcard lama.
+- HTTP terisolasi nyata lulus: staff sementara login, dinonaktifkan (token lama401/login422), review CSRF web versi2 lalu aktif versi3, replay UUID menghasilkan satu audit, token lama tetap401, login baru dan assignment toko semula berhasil. Ledger tidak bertambah. Alur supply/reapproval/kontrol stok/POS/kas/audit/report/password sebelumnya tetap lulus. Akun/database development tidak diberi fixture; migrasi access_version diaplikasikan tanpa reset.
+- Full checks ekuivalen scripts/check: API178/1683 assertions, web89/637, Flutter190, total457 tes lulus; analyzer bersih dengan native SDK host fallback terverifikasi. Compose healthy, metadata smoke, Blade cache dan Composer validate strict lulus. Pint pada file PHP baru lulus setelah perapian. OpenAPI0.21.0:79 operasi unik, refs/path parameters/required lists diperiksa lokal; bukan validator eksternal.
+- Status tetap global, bukan membership activation. Perlindungan owner diperketat ke seluruh membership pada deaktivasi/reaktivasi; owner/self/multi-org bukan capability yang boleh diinferensi frontend. Reactivation tidak mengubah kredensial/role/assignment, memberi token otomatis, memulihkan session lama, membuka audit operasional mitra, atau menambah mutasi stok/kas. Legacy deactivate tetap204 dan kini menaikkan revision dengan actual before state.
+- Browser interaksi/visual, perangkat fisik, PostgreSQL concurrency, deployment dan UAT belum diverifikasi. Session pending bukan recovery lintas restart; reset email/MFA, owner recovery dan penggabungan membership lintas organisasi tetap backlog.

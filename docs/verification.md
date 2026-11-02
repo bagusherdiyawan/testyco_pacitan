@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 2 November 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 183 tes lulus, 1734 assertions |
-| Web PHPUnit | 96 tes lulus, 735 assertions |
+| API PHPUnit | 188 tes lulus, 1789 assertions |
+| Web PHPUnit | 102 tes lulus, 813 assertions |
 | Flutter | 190 tes lulus; penelusuran tanggal kemasan/filter batch bersaldo390px (text scale1,5 + keyboard)/1200px; persetujuan ulang dari detail Pesanan/Gudang, review/unknown/keyboard390px (text scale1,5)/1200px; audit organisasi/filter/snapshot 390px (text scale 1,5 + keyboard)/1200px dan delapan modul navigasi, perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 469 tes lulus |
+| Total | 480 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS, ambang, histori revisi dan versi akses akun pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
 | Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound serta ledger scoped/filter/snapshot UTC lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.22.0 | 80 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.23.0 | 81 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -320,3 +320,12 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - Final equivalent checks scripts/check: API183/1734 assertions, web96/735, Flutter190, total469 lulus; analyzer bersih melalui SDK host fallback terverifikasi. Composer strict validate, Pint file PHP baru/shared AuditHistory, Blade cache, Compose healthy dan metadata smoke lulus. OpenAPI0.22.0:80 operasi unik/refs/path/required valid lokal, actor_id nullable diperjelas sesuai response lama; bukan validator eksternal.
 - API export adalah bounded JSON untuk BFF; CSV dibuat di frontend HTTP terpisah tanpa DB access. Query scope/allowlist/entry mapper/validasi digunakan bersama reader; reader all-history pagination50 lama tetap lulus. Tidak ada migrasi/dependensi, perluasan role/allowlist, mutasi audit/keuangan atau file permanen baru. Timestamp dan sel CSV adalah data, bukan executable formula atau snapshot restore.
 - Browser interaksi/visual, perangkat nyata, UAT, load production dan PostgreSQL concurrency belum diverifikasi. Ekspor terjadwal/besar dan unduhan file native belum dibuat.
+
+
+## Ekspor CSV ledger stok — 2 November 2026
+
+- 5 tes API baru/55 assertions: staff/assignment/tenant guards (termasuk kasir assigned dan pusat tanpa membership ditolak), inactive store/organization behavior, actual apply fixture16→-8/+8 dengan master SKU/pack berubah tetap snapshot8, no batch/revision/ledger/audit/receipt writes saat export, exact batch/time/source/bucket dan q OR tetap scoped,101 matching rows tanpa pagination,10.000 allowed/10.001 dan8MiB fail422 tanpa truncate, invalid period/filter.
+- 6 tes web baru/78 assertions: scoped whitelist tanpa page/store/URL/token browser, private/no-store/nosniff/fixed filename dan cookie boundary, -8 numeric berbeda dari note "-8" terlindungi, quotes/newline/null/Unicode formula, extra price data tidak disalin, wrong envelope/row/batch/duplicate/number/time/payload fail sebelum CSV, invalid filters tanpa request,403/404/422/message feedback/503/network/401 serta default WIB/inactive empty/applied-link filters.
+- Shared BoundedExport API dan CsvDownload/ExportTime web diekstrak lalu seluruh audit export/reader lama tetap lulus. Tidak mengubah byte/row bounds atau isi/format CSV audit; actor text tetap melalui CsvText, ledger integer dipercaya hanya setelah validasi tipe. Ledger query/mapper lama dibagi dengan export tanpa mengubah pagination100/all-history pada read API.
+- Full equivalent scripts/check lulus: API188/1789 assertions, web102/813, Flutter190, total480; analyzer bersih via SDK host fallback, Pint file PHP terkait lulus. Compose healthy, metadata smoke dan HTTP terisolasi nyata lulus: receipt16 karantina/pack8/source sama dalam CSV, revision tidak berubah, pusat/kasir ditolak, audit CSV dan seluruh supply/reapproval/reactivation/POS/stock/cash/report/password sebelumnya tetap lulus. Tidak ada fixture pada DB development. Blade cache/Composer strict dan local OpenAPI refs/path/required diperiksa.
+- OpenAPI0.23.0:81 operasi; source_id opaque diperjelas, tanpa migrasi/dependensi/role baru. CSV bukan saldo akhir, running balance, UUID recovery atau restore/import. Browser visual/interaksi, perangkat fisik, PostgreSQL concurrency/load production dan UAT belum diverifikasi; export file native/terjadwal belum dibuat.

@@ -5,6 +5,7 @@ namespace App\Modules\Inventory\Application;
 use App\Models\User;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
+use App\Shared\Application\BoundedExport;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +15,7 @@ final class LedgerHistory
 
     public function __construct(private Access $access) {}
 
-    public function read(User $user, string $store, array $filters): array
+    private function scope(User $user, string $store, array $filters): array
     {
         $source = $this->access->store($user, $store, StockAccess::STAFF);
         $query = DB::table('stock_entries as e')->join('inventory_batches as b', 'b.id', '=', 'e.inventory_batch_id')
@@ -40,10 +41,29 @@ final class LedgerHistory
             abort_if($to->timestamp - $from->timestamp > 31 * 86400, 422, 'Rentang riwayat maksimal 31 hari.');
             $query->where('e.created_at', '>=', $from)->where('e.created_at', '<', $to);
         }
-        $page = $query->orderByDesc('e.created_at')->orderByDesc('e.id')->paginate(100)->through(function ($row) {
-            return [...(array) $row, 'quantity_pieces' => (int) $row->quantity_pieces, 'pack_size' => (int) $row->pack_size, 'actor_id' => (int) $row->actor_id, 'occurred_at' => CarbonImmutable::parse($row->created_at, 'UTC')->toIso8601String()];
-        });
+
+        return [$query, $source, $from, $to];
+    }
+
+    private function entry(object $row): array
+    {
+        return [...(array) $row, 'quantity_pieces' => (int) $row->quantity_pieces, 'pack_size' => (int) $row->pack_size, 'actor_id' => (int) $row->actor_id, 'occurred_at' => CarbonImmutable::parse($row->created_at, 'UTC')->toIso8601String()];
+    }
+
+    public function read(User $user, string $store, array $filters): array
+    {
+        [$query, $source, $from, $to] = $this->scope($user, $store, $filters);
+        $page = $query->orderByDesc('e.created_at')->orderByDesc('e.id')->paginate(100)->through(fn ($row) => $this->entry($row));
 
         return [...$page->toArray(), 'store' => $source->only(['id', 'name', 'active']), 'observed_at' => now()->toIso8601String(), 'filters' => [...$filters, 'from' => $from?->toIso8601String(), 'to' => $to?->toIso8601String()]];
+    }
+
+    public function export(User $user, string $store, array $filters): array
+    {
+        [$query, $source, $from, $to] = $this->scope($user, $store, $filters);
+        abort_unless($from && $to, 422, 'Ekspor riwayat stok membutuhkan periode dengan timezone.');
+        $rows = BoundedExport::collect($query->orderByDesc('e.created_at')->orderByDesc('e.id')->limit(BoundedExport::MAX_ROWS + 1)->cursor()->map(fn ($row) => $this->entry($row)), 'riwayat stok');
+
+        return ['data' => $rows, 'row_count' => count($rows), 'store' => $source->only(['id', 'name', 'active']), 'observed_at' => now()->toIso8601String(), 'filters' => [...$filters, 'from' => $from->toIso8601String(), 'to' => $to->toIso8601String()]];
     }
 }

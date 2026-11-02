@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.22.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.23.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -57,6 +57,8 @@ Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan
 Riwayat pergerakan kini dapat dibaca pada [web](docs/web-stock-ledger.md) serta Flutter **Stok → Riwayat pergerakan stok**, termasuk filter periode WIB, sumber/bucket dan batch historis. Lihat [panduan ledger native](docs/native-stock-ledger.md).
 
 Penelusuran [kedaluwarsa batch](docs/batch-expiry.md) kini tersedia di web dan [Flutter](docs/native-batch-expiry.md), dengan batas tanggal pilihan pengguna dan filter batch bersaldo termasuk karantina. Pada Flutter buka **Stok → Telusuri kedaluwarsa batch**. Periode peringatan, recall dan blok penjualan otomatis belum ditetapkan.
+
+Web juga menyediakan [CSV riwayat pergerakan stok](docs/ledger-export.md) berdasarkan filter aktif, maksimal10.000 catatan/8MiB. Perubahan dalam biji tetap terpisah dari saldo fisik.
 
 ## Stok minimum
 

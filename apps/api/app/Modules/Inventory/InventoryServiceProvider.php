@@ -6,6 +6,7 @@ use App\Modules\Catalog\CatalogServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Inventory\Presentation\InventoryController;
+use App\Modules\Inventory\Presentation\LedgerExportController;
 use App\Modules\Inventory\Presentation\StockControlController;
 use App\Modules\Inventory\Presentation\StockMinimumController;
 use Illuminate\Support\Facades\Route;
@@ -33,6 +34,7 @@ final class InventoryServiceProvider extends ServiceProvider
             Route::post('stores/{store}/inventory/counts', [$control, 'propose']);
             Route::post('inventory/counts/{count}/{action}', [$control, 'review'])->where('action', 'approve|reject|cancel');
             Route::get('stores/{store}/inventory/batches', [InventoryController::class, 'batches']);
+            Route::get('stores/{store}/inventory/ledger/export', LedgerExportController::class);
             Route::get('stores/{store}/inventory/ledger', [InventoryController::class, 'ledger']);
             Route::get('stores/{store}/inventory/intake-products', [InventoryController::class, 'intakeProducts']);
             Route::post('stores/{store}/inventory/intakes/preview', [InventoryController::class, 'previewIntake']);

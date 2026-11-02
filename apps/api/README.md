@@ -23,3 +23,5 @@ Pengurangan jumlah pascapersetujuan sebelum pengiriman pertama kini tersedia mel
 Reaktivasi akun nonaktif kini melalui review versi akses, UUID, alasan dan otorisasi server; role/assignment/password dipertahankan, token lama dicabut. Lihat [panduan akun](../../docs/account-reactivation.md).
 
 Ekspor audit organisasi kini melalui bounded JSON API dan CSV web, dengan query scope/allowlist yang sama seperti pembaca, maksimal10.000 catatan/8MiB dan periode31hari. Lihat [panduan](../../docs/audit-export.md).
+
+CSV pergerakan stok web kini melalui bounded JSON ledger API dengan query staff/store/batch yang sama. Angka bertanda tetap delta biji, bukan saldo; lihat [panduan](../../docs/ledger-export.md).

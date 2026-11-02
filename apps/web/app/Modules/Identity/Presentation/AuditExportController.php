@@ -3,7 +3,8 @@
 namespace App\Modules\Identity\Presentation;
 
 use App\Modules\Identity\Infrastructure\Backend;
-use App\Shared\Application\CsvText;
+use App\Shared\Application\CsvDownload;
+use App\Shared\Application\ExportTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
@@ -28,26 +29,16 @@ final class AuditExportController
                 && is_string($entry['id'] ?? null) && $entry['id'] !== '' && ! isset($ids[$entry['id']])
                 && is_string($entry['action'] ?? null) && array_key_exists('subject_id', $entry) && (is_string($entry['subject_id']) || $entry['subject_id'] === null)
                 && array_key_exists('actor_id', $entry) && (is_int($entry['actor_id']) || $entry['actor_id'] === null)
-                && is_string($entry['occurred_at'] ?? null) && strtotime($entry['occurred_at']) !== false
-                && preg_match('/^[0-9]{4}-[0-9]{2}-[0-9]{2}T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9](?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})$/D', $entry['occurred_at'])
-                && checkdate((int) substr($entry['occurred_at'], 5, 2), (int) substr($entry['occurred_at'], 8, 2), (int) substr($entry['occurred_at'], 0, 4))
+                && ExportTime::valid($entry['occurred_at'] ?? null)
                 && array_key_exists('before', $entry) && (is_string($entry['before']) || $entry['before'] === null)
                 && array_key_exists('after', $entry) && (is_string($entry['after']) || $entry['after'] === null), 503, 'Baris ekspor audit API tidak valid.');
             $ids[$entry['id']] = true;
-            $rows[] = array_map(fn ($v) => CsvText::safe((string) $v), [
+            $rows[] = array_map(fn ($v) => (string) $v, [
                 $entry['id'], $organization, $data['visibility'], CarbonImmutable::parse($entry['occurred_at'])->utc()->toIso8601String(),
                 $entry['actor_id'] ?? '', $entry['action'], $entry['subject_id'] ?? '', $entry['before'] ?? 'null', $entry['after'] ?? 'null',
             ]);
         }
 
-        return response()->streamDownload(function () use ($rows) {
-            $stream = fopen('php://output', 'wb');
-            fwrite($stream, "\xEF\xBB\xBF");
-            fputcsv($stream, ['audit_id', 'organization_id', 'visibility', 'occurred_at_utc', 'actor_id', 'action', 'subject_id', 'before_json', 'after_json'], ',', '"', '');
-            foreach ($rows as $row) {
-                fputcsv($stream, $row, ',', '"', '');
-            }
-            fclose($stream);
-        }, 'audit.csv', ['Content-Type' => 'text/csv; charset=UTF-8', 'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff']);
+        return CsvDownload::response('audit.csv', ['audit_id', 'organization_id', 'visibility', 'occurred_at_utc', 'actor_id', 'action', 'subject_id', 'before_json', 'after_json'], $rows);
     }
 }

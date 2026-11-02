@@ -4,6 +4,7 @@ namespace App\Modules\Operations;
 
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ApiSession;
+use App\Modules\Operations\Presentation\LedgerExportController;
 use App\Modules\Operations\Presentation\OperationsController;
 use App\Modules\Operations\Presentation\OrderChangeController;
 use App\Modules\Operations\Presentation\BatchExpiryController;
@@ -22,6 +23,7 @@ final class OperationsServiceProvider extends ServiceProvider
         }
         Route::middleware(['web', ApiSession::class])->group(function () {
             Route::get('/app/stores/{store}/inventory/batch-expiry', [BatchExpiryController::class, 'index']);
+            Route::get('/app/stores/{store}/inventory/ledger/export', LedgerExportController::class);
             Route::get('/app/stores/{store}/inventory/ledger', [StockLedgerController::class, 'index']);
             Route::get('/app/stores/{store}/stock-minimums', [StockMinimumController::class, 'index']);
             Route::post('/app/stores/{store}/stock-minimums/{product}', [StockMinimumController::class, 'configure']);

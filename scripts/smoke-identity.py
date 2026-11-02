@@ -2,6 +2,8 @@
 Does not seed or modify the normal development database. Requires Docker.
 """
 import http.cookiejar
+import csv
+import io
 import json
 import os
 import re
@@ -231,6 +233,15 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert '+16 biji' in ledger_html and 'Karantina' in ledger_html and 'Isi kemasan historis: 8 biji' in ledger_html
         assert 'SMOKE-BATCH' in ledger_html and 'bukan saldo akhir atau saldo berjalan' in ledger_html
         assert 'wholesale_price' not in ledger_html and 'retail_price' not in ledger_html
+        with opener.open(web+f'/app/stores/{store}/inventory/ledger/export?'+web_ledger_query) as response:
+            ledger_csv=list(csv.reader(io.StringIO(response.read().decode('utf-8-sig'))))
+            assert response.headers['Content-Type'].startswith('text/csv') and 'no-store' in response.headers['Cache-Control']
+        assert len(ledger_csv)==2 and ledger_csv[1][2]==batch['id'] and ledger_csv[1][7]=='8'
+        assert ledger_csv[1][13]=='quarantined' and ledger_csv[1][14]=='16'
+        assert ledger_csv[1][12]==history['data'][0]['source_id']
+        assert api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data'][0]['stock_revision']==batch['stock_revision']
+        ledger_export_query=urlencode({'from':ledger_day+'T00:00:00+07:00','to':(datetime.fromisoformat(ledger_day)+timedelta(days=1)).date().isoformat()+'T00:00:00+07:00'})
+        api(base,'GET',f'stores/{store}/inventory/ledger/export?'+ledger_export_query,token=owner,expected=403)
         stock_html=opener.open(web+f'/app/stores/{store}/operations').read().decode()
         assert 'Riwayat batch ini' in stock_html and ('batch_id='+batch['id']) in stock_html
         expiry_query=urlencode({'expires_from':'2030-01-01','expires_to':'2030-01-01','with_balance':1,'q':'SMOKE-BATCH'})
@@ -319,6 +330,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         cashier_token = api(base, 'POST', 'auth/login', {'email':cashier['email'],'password':PASSWORD,'device_name':'smoke'})['token']
         api(base, 'GET', f'stores/{store}/inventory/control-context', token=cashier_token, expected=403)
         api(base,'GET',f'stores/{store}/inventory/ledger',token=cashier_token,expected=403)
+        api(base,'GET',f'stores/{store}/inventory/ledger/export?'+ledger_export_query,token=cashier_token,expected=403)
         assert not api(base,'GET',minimum_detail_path,token=cashier_token)['can_manage']
         opener = build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
         html = opener.open(web + '/login').read().decode()
@@ -400,8 +412,6 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==entries
         assert api(base,'GET',f'stores/{store}/pos/context',token=cashier_token)['data']['shift'] is None
         # Cross-store cash reporting and CSV use the same stored sale, excluding cash expenses.
-        import csv
-        import io
         wib = timezone(timedelta(hours=7))
         sold_day = datetime.fromisoformat(sale['sold_at'].replace('Z','+00:00')).astimezone(wib).replace(hour=0,minute=0,second=0,microsecond=0)
         period = {'from':sold_day.isoformat(),'to':(sold_day+timedelta(days=1)).isoformat()}
@@ -543,7 +553,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST','auth/logout',{},changed_session,204)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, password rotation/revoked sessions, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, stock ledger CSV/scoped signed pieces, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, password rotation/revoked sessions, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

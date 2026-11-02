@@ -277,3 +277,10 @@ Web menambah review/konfirmasi/retry lewat Backend HTTP, escaped user-access-sum
 Identity AuditHistory membagi private scope query/entry mapping untuk reader pagination50 dan export bounded. Authorization/allowlist dipasang sebelum filter; global null-org events tetap tersembunyi. Export membutuhkan interval timezone <=31days, cursor10001 mendeteksi row overflow dan encoded-row bytes8MiB sebelum mengirim JSON. Tidak ada offset pagination, silent truncation, master join atau audit/write side effect. AuditQuery berbagi validasi HTTP tanpa mengubah legacy all-history read.
 
 Web AuditSearch membagi kalender WibPeriod/whitelist; export memakai applied filters tanpa page/URL client. API memberikan JSON data scoped, BFF memeriksa organisasi tiap row/ID/type/size kemudian mengubahnya ke CSV privat, fixed filename/BOM/fputcsv/CsvText. Null dan legacy snapshot dipertahankan sebagai data teks, prefix formula dinetralkan; tidak ada restore/import promise atau cookie/header API diteruskan. Tidak menulis file permanen/session bisnis/ledger/audit. Lihat docs/audit-export.md.
+
+
+## ADR-034: ekspor ledger dan utilitas bounded/CSV bersama
+
+LedgerHistory membagi scope/join/filter/entry mapping antara pagination100 dan bounded export. Guard staff/assignment tidak sama dengan katalog batch kasir dan tidak menerima central onboarding override. Dua sisi join terikat toko; batch exact diperiksa di toko. Export membutuhkan periode timezone<=31days, mengembalikan snapshot metadata dan signed piece deltas, tanpa saldo/price/master join atau write. LedgerQuery/LedgerSearch membagi validasi dan applied query di layer HTTP masing-masing aplikasi.
+
+API BoundedExport kini dipakai audit/ledger untuk10000rows/8MiB limit sebelum respons. Web CsvDownload/CsvText/ExportTime dipakai kedua exporter: semua row scope/type diverifikasi dahulu, integer tervalidasi tetap numerik dan semua text aman dari formula; timestamp ISO nyata diformat UTC. Header/file name konstan, private/no-store/nosniff/BOM; tidak meneruskan cookie/header API, membuat file permanen atau mengaktifkan backup/import. Regression audit lama tetap menjaga format/otorisasi. Lihat docs/ledger-export.md.

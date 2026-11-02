@@ -23,14 +23,7 @@ final class InventoryController
 
     public function ledger(Request $r, string $store, \App\Modules\Inventory\Application\LedgerHistory $history): mixed
     {
-        $v = $r->validate([
-            'page' => 'sometimes|integer|min:1', 'batch_id' => 'sometimes|required|ulid',
-            'q' => 'sometimes|nullable|string|max:100',
-            'source_type' => ['sometimes', 'required', \Illuminate\Validation\Rule::in(\App\Modules\Inventory\Application\LedgerHistory::SOURCES)],
-            'bucket' => 'sometimes|required|in:usable,opened,ready,quarantined,waste',
-            'from' => ['required_with:to', 'nullable', 'string', 'date', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'],
-            'to' => ['required_with:from', 'nullable', 'string', 'date', 'after:from', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'],
-        ]);
+        $v = LedgerQuery::validate($r);
 
         return response()->json($history->read($r->user(), $store, $v))->header('Cache-Control', 'private, no-store');
     }

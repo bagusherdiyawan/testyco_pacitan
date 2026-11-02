@@ -4,9 +4,9 @@ namespace App\Modules\Identity\Application;
 
 use App\Models\User;
 use App\Modules\Identity\Infrastructure\Organization;
+use App\Shared\Application\BoundedExport;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Validation\ValidationException;
 
 final class AuditHistory
 {
@@ -58,19 +58,7 @@ final class AuditHistory
     {
         [$q, $org, $visibility] = $this->scope($user, $organization, $filters);
         abort_unless(isset($filters['from'], $filters['to']), 422, 'Ekspor audit membutuhkan periode dengan timezone.');
-        $rows = [];
-        $bytes = 2;
-        foreach ($q->orderByDesc('id')->limit(10001)->cursor() as $row) {
-            if (count($rows) === 10000) {
-                throw ValidationException::withMessages(['export' => 'Ekspor audit maksimal 10.000 catatan. Persempit filter.']);
-            }
-            $entry = $this->entry($row);
-            $bytes += strlen(json_encode($entry, JSON_THROW_ON_ERROR)) + 1;
-            if ($bytes > 8 * 1024 * 1024) {
-                throw ValidationException::withMessages(['export' => 'Snapshot ekspor audit melebihi 8 MiB. Persempit filter.']);
-            }
-            $rows[] = $entry;
-        }
+        $rows = BoundedExport::collect($q->orderByDesc('id')->limit(BoundedExport::MAX_ROWS + 1)->cursor()->map(fn ($row) => $this->entry($row)), 'audit');
 
         return ['data' => $rows, 'row_count' => count($rows), 'organization' => ['id' => $org->id, 'name' => $org->name], 'visibility' => $visibility, 'observed_at' => now()->utc()->toIso8601String()];
     }

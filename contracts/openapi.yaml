@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.22.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation. Bounded read-only audit export shares organization/central onboarding scope and exact filters. API provides JSON rows (maximum10000 and8MiB encoded records, explicit timezone period up to31days), web validates scope then formats private UTF8 CSV with spreadsheet-formula protection. No audit or business writes."
+    "version": "0.23.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation. Bounded read-only audit export shares organization/central onboarding scope and exact filters. API provides JSON rows (maximum10000 and8MiB encoded records, explicit timezone period up to31days), web validates scope then formats private UTF8 CSV with spreadsheet-formula protection. No audit or business writes. Bounded stock-ledger export uses the same staff/store/batch query as history. API JSON export supports web CSV with signed integer piece deltas and historical batch snapshots, never balances. Shared limits10000rows/8MiB and explicit timezone period<=31days; no stock/audit writes."
   },
   "security": [
     {
@@ -8481,6 +8481,148 @@
           }
         ]
       }
+    },
+    "/api/v1/stores/{store}/inventory/ledger/export": {
+      "get": {
+        "operationId": "exportStockLedger",
+        "summary": "Bounded scoped stock ledger export rows",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LedgerExport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, invalid state, insufficient stock, or operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid filter/period or export exceeds10000rows/8MiB; narrow filters. No partial export.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "batch_id",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string",
+              "maxLength": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_type",
+            "schema": {
+              "enum": [
+                "warehouse_intake",
+                "shipment_dispatch",
+                "shipment_receipt",
+                "inventory_open",
+                "inventory_cook",
+                "stock_count",
+                "stock_waste",
+                "pos_sale"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "bucket",
+            "schema": {
+              "enum": [
+                "usable",
+                "opened",
+                "ready",
+                "quarantined",
+                "waste"
+              ]
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "required": true
+          }
+        ],
+        "description": "Same staff membership/store assignment and exact owned batch scope as history, including inactive store reads under active organization. Assigned cashier and center owner without membership denied. Joined batch/store predicates and LIKE metadata search preserved. Required from/to timezone interval<=31days (inclusive start/exclusive end). All matching records ordered created_at/id descending, no page, max10000rows/8MiB encoded records. Over limit422 with export validation error before partial output. JSON rows consumed by web CSV; signed quantity_pieces is a bucket delta, never running/current balance. Historical SKU/pack/condition/expiry, no price or master join. No stock/revision/ledger/audit/receipt writes."
+      }
     }
   },
   "components": {
@@ -9593,7 +9735,7 @@
           },
           "source_id": {
             "type": "string",
-            "description": "ULID"
+            "description": "Opaque source record reference, not request operation UUID; not necessarily ULID."
           },
           "note": {
             "type": [
@@ -13184,6 +13326,160 @@
           "organization",
           "visibility",
           "observed_at"
+        ]
+      },
+      "LedgerExportRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "inventory_batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "actor_id": {
+            "type": "integer"
+          },
+          "bucket": {
+            "enum": [
+              "usable",
+              "opened",
+              "ready",
+              "quarantined",
+              "waste"
+            ]
+          },
+          "quantity_pieces": {
+            "type": "integer",
+            "description": "Signed change in base pieces for this bucket; not a running or current balance."
+          },
+          "source_type": {
+            "enum": [
+              "warehouse_intake",
+              "shipment_dispatch",
+              "shipment_receipt",
+              "inventory_open",
+              "inventory_cook",
+              "stock_count",
+              "stock_waste",
+              "pos_sale"
+            ]
+          },
+          "source_id": {
+            "type": "string",
+            "description": "Opaque source record reference, not request operation UUID; not necessarily ULID."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "batch_code": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "pack_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "expires_on": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Explicit UTC instant derived from original ledger created_at. created_at remains unchanged for legacy clients."
+          }
+        },
+        "required": [
+          "id",
+          "inventory_batch_id",
+          "quantity_pieces",
+          "bucket",
+          "source_type",
+          "source_id",
+          "sku",
+          "name",
+          "batch_code",
+          "condition",
+          "pack_size",
+          "expires_on",
+          "occurred_at",
+          "actor_id",
+          "store_id",
+          "note"
+        ]
+      },
+      "LedgerExport": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "maxItems": 10000,
+            "items": {
+              "$ref": "#/components/schemas/LedgerExportRow"
+            }
+          },
+          "store": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "active": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "active"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "filters": {
+            "$ref": "#/components/schemas/LedgerFilters"
+          },
+          "row_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          }
+        },
+        "required": [
+          "data",
+          "row_count",
+          "store",
+          "observed_at",
+          "filters"
         ]
       }
     }

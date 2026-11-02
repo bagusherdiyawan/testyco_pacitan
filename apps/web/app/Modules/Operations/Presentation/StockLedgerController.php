@@ -3,10 +3,8 @@
 namespace App\Modules\Operations\Presentation;
 
 use App\Modules\Identity\Infrastructure\Backend;
-use App\Shared\Application\WibPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Validation\Rule;
 
 final class StockLedgerController
 {
@@ -18,17 +16,9 @@ final class StockLedgerController
 
     public function index(Request $r, string $store): mixed
     {
-        $v = $r->validate([
-            'from_day' => 'sometimes|date_format:Y-m-d', 'to_day' => 'sometimes|date_format:Y-m-d',
-            'batch_id' => 'nullable|ulid', 'q' => 'nullable|string|max:100', 'page' => 'sometimes|integer|min:1',
-            'source_type' => ['nullable', Rule::in(array_keys(self::SOURCES))],
-            'bucket' => ['nullable', Rule::in(array_keys(self::BUCKETS))],
-        ]);
-        $period = WibPeriod::fromDays($v['from_day'] ?? null, $v['to_day'] ?? null);
-        $selected = array_filter(array_intersect_key($v, array_flip(['batch_id', 'q', 'source_type', 'bucket'])), fn ($value) => $value !== null && $value !== '');
-        $page = (int) ($v['page'] ?? 1);
-        $filters = [...$period->calendar(), ...$selected];
-        $payload = $this->api->request('GET', "stores/$store/inventory/ledger", [...$period->api(), ...$selected, 'page' => $page])->json();
+        [$query, $filters, $page] = LedgerSearch::parse($r);
+        $selected = array_intersect_key($filters, array_flip(['batch_id', 'q', 'source_type', 'bucket']));
+        $payload = $this->api->request('GET', "stores/$store/inventory/ledger", [...$query, 'page' => $page])->json();
         abort_unless(is_array($payload) && data_get($payload, 'store.id') === $store && is_array($payload['data'] ?? null), 503, 'Cakupan riwayat stok API tidak valid.');
         foreach ($payload['data'] as $entry) {
             abort_unless(is_array($entry) && ($entry['store_id'] ?? null) === $store

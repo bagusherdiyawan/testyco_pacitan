@@ -70,6 +70,11 @@ final class OrderAccess
         return $source;
     }
 
+    public function held(string $order): bool
+    {
+        return \App\Modules\Ordering\Infrastructure\OrderChange::pending($order);
+    }
+
     public function inbox(User $user)
     {
         $centers = Organization::where('type', 'center')->where('active', true)->select('id');

@@ -190,6 +190,20 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         warehouse=api(base,'GET',warehouse_path+'/'+order_id,token=owner)['data']
         assert not warehouse['can_process'] and warehouse['can_dispatch']
         assert warehouse['order']['lines'][0]['remaining_packs']==20 and warehouse['batches'][0]['id']==batch['id']
+        # Postapproval proposal holds dispatch; web recipient rejects without changing approved quote.
+        change_body={'operation_id':str(uuid.uuid4()),'version':order['version'],'reason':'Physical shortage reviewed','lines':[{'order_line_id':order['lines'][0]['id'],'quantity_packs':18}]}
+        change_result=api(base,'POST',f'orders/{order_id}/changes',change_body,owner,201)['data']
+        assert change_result['order']['total_amount']==360000 and change_result['change']['after']['total_amount']==324000
+        held=api(base,'GET',warehouse_path+'/'+order_id,token=owner)['data']
+        assert held['change_pending'] and not held['can_dispatch'] and held['batches']==[]
+        blocked={'operation_id':str(uuid.uuid4()),'version':change_result['order']['version'],'handler':'Held dispatch','lines':[{'order_line_id':order['lines'][0]['id'],'allocations':[{'batch_id':batch['id'],'quantity_packs':20}]}]}
+        api(base,'POST',f'orders/{order_id}/shipments',blocked,owner,expected=409)
+        change_html=opener.open(web+f'/app/orders/{order_id}/changes').read().decode()
+        reject_path=f'/app/orders/{order_id}/changes/{change_result["change"]["id"]}/reject'
+        rejection=fields(change_html,reject_path); rejection['reason']='Keep original confirmed quantity'
+        web_post(reject_path,rejection).read()
+        order=api(base,'GET',f'orders/{order_id}',token=owner)['data']
+        assert not order['change_pending'] and order['total_amount']==360000 and order['lines'][0]['quantity_packs']==20
         dispatch = {'operation_id':str(uuid.uuid4()),'version':order['version'],'handler':'Smoke warehouse','lines':[{'order_line_id':order['lines'][0]['id'],'allocations':[{'batch_id':batch['id'],'quantity_packs':20}]}]}
         shipment = api(base, 'POST', f'orders/{order_id}/shipments', dispatch, owner, 201)['data']['shipment']
         api(base, 'POST', f'orders/{order_id}/shipments', dispatch, owner, 201)
@@ -463,6 +477,26 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
             assert error.code==403
 
         assert api(base,'GET',audit_path,token=lead_token)['total']==audit_total
+        # Separate order: supplier web proposes reduction, recipient web accepts; no stock posting.
+        change_order=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':supplier_id,'local_product_id':local_product_id,'quantity_packs':2}]},lead_token,201)['data']
+        change_id=change_order['id']
+        change_order=api(base,'POST',f'orders/{change_id}/approve',{'operation_id':str(uuid.uuid4()),'version':change_order['version']},lead_token)['data']
+        proposal_path=f'/app/orders/{change_id}/changes'
+        proposal_html=central_browser.open(web+proposal_path).read().decode()
+        proposal=fields(proposal_html,proposal_path)
+        proposal.update({'reason':'Supply only one confirmed pack','lines[0][quantity_packs]':'1'})
+        central_browser.open(Request(web+proposal_path,data=urlencode(proposal).encode())).read()
+        proposal_history=api(base,'GET',f'orders/{change_id}/changes',token=lead_token)
+        assert proposal_history['order']['total_amount']==36000 and proposal_history['change_pending']
+        request_id=proposal_history['data'][0]['id']
+        accept_path=f'/app/orders/{change_id}/changes/{request_id}/approve'
+        accept_html=opener.open(web+proposal_path).read().decode()
+        web_post(accept_path,fields(accept_html,accept_path)).read()
+        accepted=api(base,'GET',f'orders/{change_id}/changes',token=lead_token)
+        assert accepted['data'][0]['status']=='approved' and not accepted['change_pending']
+        assert accepted['order']['lines'][0]['id']==change_order['lines'][0]['id']
+        assert accepted['order']['lines'][0]['quantity_packs']==1 and accepted['order']['total_amount']==18000
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'
@@ -476,7 +510,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST','auth/logout',{},changed_session,204)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, password rotation/revoked sessions, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, password rotation/revoked sessions, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

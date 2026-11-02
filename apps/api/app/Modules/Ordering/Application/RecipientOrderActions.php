@@ -7,6 +7,7 @@ use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Infrastructure\Store;
 use App\Modules\Ordering\Domain\OrderState;
 use App\Modules\Ordering\Infrastructure\SupplyOrder;
+use App\Modules\Ordering\Infrastructure\OrderChange;
 
 final class RecipientOrderActions
 {
@@ -18,6 +19,10 @@ final class RecipientOrderActions
         $operating = $side === 'recipient' && in_array($role, OrderAccess::RECIPIENT_ROLES, true) && Store::whereKey($order->store_id)->where('active', true)->exists();
         $decide = $operating && in_array($role, $order->kind === 'internal_transfer' ? ['owner', 'admin'] : ['partner_lead'], true);
         $state = OrderState::from($order->status);
+
+        if (OrderChange::pending($order->id)) {
+            return ['amend' => false, 'approve' => false, 'reject' => false, 'cancel' => false, 'receive' => false];
+        }
 
         return ['amend' => $decide && $state->allows('amend'), 'approve' => $decide && $state->allows('approve'), 'reject' => $decide && $state->allows('reject'), 'cancel' => $decide && $state->allows('cancel'), 'receive' => $operating && $fulfillment && $state->allows('receive')];
     }

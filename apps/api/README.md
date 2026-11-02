@@ -17,3 +17,5 @@ Lihat docs/native-order-amend.md untuk preview/PUT sebelum approval, binding ver
 Penerimaan awal gudang pusat kini juga melalui Flutter dengan katalog tanpa harga, preview konversi server dan retry immutable; lihat docs/native-warehouse-intake.md. Stok mitra tetap melalui penerimaan pesanan yang disetujui.
 
 Riwayat ledger stok native kini memiliki filter periode WIB, batch, sumber/bucket dan pencarian snapshot historis; read-only dan staff-scoped. Lihat docs/native-stock-ledger.md. Referensi sumber bukan UUID request dan delta bukan saldo terkini.
+
+Pengurangan jumlah pascapersetujuan sebelum pengiriman pertama kini tersedia melalui API/web, dengan hold, snapshot dan approve/reject/withdraw. Lihat [panduan reapproval](../../docs/order-reapproval.md) untuk scope, peran, retry session dan migrasi history; revisi sesudah kirim/composer Flutter tetap backlog.

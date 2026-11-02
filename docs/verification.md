@@ -1,20 +1,20 @@
 # Bukti implementasi dan pengujian
 
-Validasi terbaru pada lingkungan onboarding, 1 November 2026; catatan irisan sebelumnya berasal dari 28–29 Oktober 2026. Hasil lokal, bukan UAT bisnis atau CI remote.
+Validasi terbaru pada lingkungan onboarding, 2 November 2026; catatan irisan sebelumnya berasal dari 28–29 Oktober 2026. Hasil lokal, bukan UAT bisnis atau CI remote.
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 163 tes lulus, 1464 assertions |
-| Web PHPUnit | 74 tes lulus, 473 assertions |
+| API PHPUnit | 171 tes lulus, 1587 assertions |
+| Web PHPUnit | 81 tes lulus, 547 assertions |
 | Flutter | 157 tes lulus; audit organisasi/filter/snapshot 390px (text scale 1,5 + keyboard)/1200px dan delapan modul navigasi, perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 394 tes lulus |
+| Total | 409 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
-| Migrasi kontrol stok, POS dan ambang pada DB development | Lulus tanpa reset saldo lama |
+| Migrasi kontrol stok, POS, ambang dan histori revisi pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
 | Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound serta ledger scoped/filter/snapshot UTC lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.19.0 | 72 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.20.0 | 77 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -274,3 +274,12 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - Full equivalent checks: API163/1464 assertions, web74/473, Flutter157, total394 tes lulus, analyzer bersih dan Blade cache compiled. Flutter/POS/batch-read callers existing tetap kompatibel dengan envelope tambahan. Native SDK host terverifikasi digunakan sesuai workflow VFS.
 - Real isolated HTTP smoke lulus: batas expiry tepat tanggal batch menemukan satu batch historis isi8 tanpa perubahan revision; batas sebelumnya menemukan0; web menampilkan tanggal/saldo termasuk16 karantina dan link navigasi; sesi kasir web yang sudah ada tetap dapat membaca. Seluruh workflow stok/kas/penjualan/audit/report/password sebelumnya tetap lulus dan normal development DB tidak dimutasi.
 - OpenAPI0.19.0 tetap72 operasi unik; referensi lokal/path parameters/required lists diperiksa. Tidak ada migrasi database/dependensi, default horizon, push/recall/food-quality certification, sale block atau FEFO baru. Server/HTML diperiksa, bukan browser/perangkat nyata/UAT/PostgreSQL concurrency.
+
+
+## Pengurangan pascapersetujuan API/web — 2 November 2026
+
+- Delapan tes API baru/123 assertions: original quote tidak berubah saat pending, hold proses/dispatch/cancel, frozen harga/pack sesudah master berubah, penerapan pada ID baris sama, kuota dispatch berkurang, nol stock/revision/shipment sebelum dispatch, replay proposal/keputusan termasuk setelah keputusan lain, UUID collision/stale, deny role/lintas tenant/wrong parent, reject/withdraw, semua baris/min1/no increases, target nonaktif, internal total0 dan used migration rollback guard. PUT amendment lama tetap menolak approved.
+- Tujuh tes web baru/74 assertions: capability sender/recipient, escaped snapshot, body/ACK exact, request unknown menahan replacement dan tetap immutable melewati denial, GET pending tanpa API, retry mengabaikan edit browser, malformed ACK, definitive422, 401 invalidation, login account switch dan required decision reason.
+- HTTP terisolasi nyata: supplier mengusulkan20→18, dispatch ditolak409 saat pending, penerima menolak lewat form CSRF sehingga original20/Rp360.000 tetap; order terpisah2→1 melalui form supplier dan persetujuan web penerima menjadi Rp18.000 pada ID baris sama, tanpa ledger baru. Workflow stok/actual receipt/POS/kas/audit/report/password sebelumnya tetap lulus. Tidak ada fixture pada DB development.
+- Full checks ekuivalen scripts/check: API171/1587 assertions, web81/547, Flutter157, total409 lulus dan analyzer bersih. Native memakai SDK host terverifikasi sesuai fallback VFS existing. Compose healthy, metadata smoke dan Blade cache lulus. Migrasi tambahan diaplikasikan tanpa reset database development. OpenAPI0.20.0:77 operation IDs unik, refs/path parameters/required lists diperiksa lokal, bukan validator eksternal.
+- Pengujian server/HTML dan native regresi bukan browser/device/UAT atau PostgreSQL concurrency. Fitur hanya pengurangan semua baris existing min1 sebelum kirim; substitusi/penambahan/penghapusan baris, after-shipment/return/credit, composer reapproval native dan antrean tahan restart tetap backlog.

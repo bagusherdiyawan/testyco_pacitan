@@ -114,6 +114,7 @@ final class OrderWorkflow
 
     public function requireState(SupplyOrder $order, string $action, int $version): void
     {
+        abort_if($this->orders->held($order->id), 409, 'Pesanan ditahan sampai usulan perubahan diputuskan atau ditarik.');
         abort_unless($order->version === $version, 409, 'Versi pesanan berubah. Muat ulang sebelum melanjutkan.');
         abort_unless(OrderState::from($order->status)->allows($action), 409, 'Status pesanan tidak mengizinkan tindakan ini.');
     }

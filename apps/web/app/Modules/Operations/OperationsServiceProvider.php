@@ -5,6 +5,7 @@ namespace App\Modules\Operations;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ApiSession;
 use App\Modules\Operations\Presentation\OperationsController;
+use App\Modules\Operations\Presentation\OrderChangeController;
 use App\Modules\Operations\Presentation\BatchExpiryController;
 use App\Modules\Operations\Presentation\StockControlController;
 use App\Modules\Operations\Presentation\StockMinimumController;
@@ -36,6 +37,10 @@ final class OperationsServiceProvider extends ServiceProvider
             Route::post('/app/stores/{store}/inventory/intakes', [$c, 'intake']);
             Route::get('/app/supply/orders', [$c, 'inbox']);
             Route::get('/app/orders/{order}', [$c, 'show']);
+            Route::get('/app/orders/{order}/changes', [OrderChangeController::class, 'index']);
+            Route::post('/app/orders/{order}/changes', [OrderChangeController::class, 'propose']);
+            Route::post('/app/orders/{order}/changes/retry', [OrderChangeController::class, 'retry']);
+            Route::post('/app/orders/{order}/changes/{change}/{action}', [OrderChangeController::class, 'decide'])->where('action', 'approve|reject|withdraw');
             Route::get('/app/orders/{order}/edit', [$c, 'editForm']);
             Route::post('/app/orders/{order}/amend', [$c, 'amend']);
             Route::post('/app/orders/{order}/shipments', [$c, 'dispatch']);

@@ -15,7 +15,7 @@ Kepala toko yang ditugaskan atau pimpinan membuka **Pesanan dan stok → Buat pe
 
 Pimpinan mitra meninjau detail dan menyetujui, menolak dengan alasan, atau mengubah jumlah/item sebelum approval. Harga/konversi yang berubah sebelum approval menimbulkan 409 agar pengajuan diperbarui dan ditinjau lagi. Persetujuan tidak mengurangi stok.
 
-Toko sendiri memakai SKU pusat yang sama, persetujuan owner/admin pusat, dan tipe transfer internal; tidak menciptakan penjualan mitra atau invoice. Edit setelah approval belum tersedia dan ditolak. Pembatalan beralasan dapat dilakukan pimpinan sebelum kiriman pertama.
+Toko sendiri memakai SKU pusat yang sama, persetujuan owner/admin pusat, dan tipe transfer internal; tidak menciptakan penjualan mitra atau invoice. Edit langsung setelah approval tetap ditolak. [Usulan pengurangan terpisah](order-reapproval.md) kini tersedia pada web/API sebelum pengiriman pertama; pending menahan proses/dispatch/cancel sampai penerima memutuskan atau pemasok menarik. Pembatalan beralasan dapat dilakukan pimpinan sebelum kiriman pertama.
 
 ## Pemrosesan pusat
 
@@ -39,12 +39,12 @@ Setiap formulir mutasi mempunyai UUID operasi. Gunakan UUID yang sama untuk meng
 
 ## API dan Flutter
 
-Kontrak OpenAPI 0.16.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
+Kontrak OpenAPI 0.20.0 mencakup supply-catalog, orders, approve/reject/cancel/process, shipments, receive, inventory/batches dan inventory/ledger. Semua endpoint bisnis tetap memakai bearer token dan scope organisasi/toko.
 
 Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok yang menampilkan jumlah baik/karantina. `FEATURE_ORDERING=false` dan `FEATURE_INVENTORY=false` dapat menonaktifkan modul presentasi saat build. Persetujuan/penolakan/pembatalan berizin dan penerimaan aktual kini tersedia pada Flutter; lihat [panduan native](native-ordering.md). [Pengajuan baru Flutter](native-order-entry.md) memakai tinjauan harga server dan UUID yang tetap. Perubahan sebelum persetujuan kini tersedia pada [Flutter](native-order-amend.md), dengan versi awal dan tinjauan server. Pemilihan sumber dan dispatch kini juga melalui modul Gudang Flutter; lihat [panduan native](native-warehouse.md).
 
 ## Batas berikutnya
 
-Belum ada reservasi stok, perubahan setelah approval dengan reapproval, resolusi barang rusak/hilang, pembuktian foto/suhu terstruktur, kontrak harga khusus mitra, pengiriman notifikasi stok minimum, refund POS/QRIS, billing atau offline. PostgreSQL/concurrency dan UAT belum diverifikasi. Gunakan untuk development dan pengujian alur ini dahulu.
+Belum ada reservasi stok, substitusi/penambahan/penghapusan baris atau revisi sesudah kirim, composer reapproval Flutter, resolusi barang rusak/hilang, pembuktian foto/suhu terstruktur, kontrak harga khusus mitra, pengiriman notifikasi stok minimum, refund POS/QRIS, billing atau offline. PostgreSQL/concurrency dan UAT belum diverifikasi. Gunakan untuk development dan pengujian alur ini dahulu.
 
 Pembukaan kemasan, pengukusan dan opname/susut berapproval kini tersedia pada [kontrol stok](stock-control.md). Pengiriman tetap hanya mengambil stok utuh; proses tidak membuat kuota pengganti atau perubahan tagihan.

@@ -6,6 +6,7 @@ use App\Modules\Catalog\CatalogServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Ordering\Presentation\OrderController;
+use App\Modules\Ordering\Presentation\OrderChangeController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -28,6 +29,9 @@ final class OrderingServiceProvider extends ServiceProvider
             Route::post('stores/{store}/orders', [$c, 'create']);
             Route::get('supply/orders', [$c, 'inbox']);
             Route::get('orders/{order}', [$c, 'show']);
+            Route::get('orders/{order}/changes', [OrderChangeController::class, 'index']);
+            Route::post('orders/{order}/changes', [OrderChangeController::class, 'propose']);
+            Route::post('orders/{order}/changes/{change}/{action}', [OrderChangeController::class, 'decide'])->where('action', 'approve|reject|withdraw');
             Route::post('orders/{order}/preview', [$c, 'previewAmend']);
             Route::put('orders/{order}', [$c, 'amend']);
             Route::post('orders/{order}/{action}', [$c, 'transition'])->where('action', 'approve|reject|cancel|process');

@@ -54,9 +54,10 @@ final class OrderController
         $role = $this->identity->role($r->user(), $record->organization_id)?->value;
         $supplierRole = $this->identity->role($r->user(), $record->supplier_organization_id)?->value;
 
+        $changePending = $this->access->held($order);
         $fulfillment = app()->getProvider(FulfillmentServiceProvider::class) !== null;
 
-        return ['data' => [...$record->toArray(), 'fulfillment_enabled' => $fulfillment, 'recipient_actions' => $this->recipientActions->for($r->user(), $record, $side, $fulfillment), 'access_side' => $side, 'can_approve' => in_array($role, $record->kind === 'internal_transfer' ? ['owner', 'admin'] : ['partner_lead'], true), 'can_process' => $record->approved_at !== null && in_array($supplierRole, ['owner', 'admin'], true)]];
+        return ['data' => [...$record->toArray(), 'change_pending' => $changePending, 'fulfillment_enabled' => $fulfillment, 'recipient_actions' => $this->recipientActions->for($r->user(), $record, $side, $fulfillment), 'access_side' => $side, 'can_approve' => in_array($role, $record->kind === 'internal_transfer' ? ['owner', 'admin'] : ['partner_lead'], true), 'can_process' => ! $changePending && $record->approved_at !== null && in_array($supplierRole, ['owner', 'admin'], true)]];
     }
 
     private function items(): array

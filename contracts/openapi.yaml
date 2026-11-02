@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.19.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT."
+    "version": "0.20.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes."
   },
   "security": [
     {
@@ -3363,7 +3363,7 @@
             }
           }
         },
-        "description": "process requires source_store_id. Each command requires operation_id and current version; same request replays stable result.",
+        "description": "process requires source_store_id. Each command requires operation_id and current version; same request replays stable result. Pending postapproval changes hold this action (409), even with current version.",
         "parameters": [
           {
             "in": "path",
@@ -3461,7 +3461,7 @@
             }
           }
         },
-        "description": "process requires source_store_id. Each command requires operation_id and current version; same request replays stable result.",
+        "description": "process requires source_store_id. Each command requires operation_id and current version; same request replays stable result. Pending postapproval changes hold this action (409), even with current version.",
         "parameters": [
           {
             "in": "path",
@@ -4080,7 +4080,7 @@
             }
           }
         },
-        "description": "Manual batch choice. Quantity cannot exceed unshipped order balance or stock. No automatic FEFO, negative stock, or replacement allowance.",
+        "description": "Manual batch choice. Quantity cannot exceed unshipped order balance or stock. No automatic FEFO, negative stock, or replacement allowance. Pending postapproval changes hold this action (409), even with current version.",
         "parameters": [
           {
             "in": "path",
@@ -7553,6 +7553,572 @@
           }
         }
       }
+    },
+    "/api/v1/orders/{order}/changes": {
+      "get": {
+        "operationId": "listOrderChanges",
+        "summary": "Read authorized postapproval proposal history and capabilities",
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, shipment exists, pending proposal/invalid state, snapshot mismatch, inactive target or operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderChangeContext"
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "description": "Same parent order visibility as GET detail. Private/no-store; 50 rows per page descending ID. Actions are hints only; mutations reauthorize. Wholesale decisions require recipient partner_lead, internal transfer decisions recipient owner/admin. Supplier owner/admin proposes/withdraws. Warehouse cannot propose."
+      },
+      "post": {
+        "operationId": "proposeOrderChange",
+        "summary": "Supplier owner/admin proposes reductions before any shipment",
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, shipment exists, pending proposal/invalid state, snapshot mismatch, inactive target or operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OrderChangeResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderChangeInput"
+              }
+            }
+          }
+        },
+        "description": "Approved/processing only with zero shipments. Every existing line exactly once, no additions/removals/increases, at least one reduction, minimum one pack. Frozen approved prices, conversions and line IDs retained. Original quantities/total stay until approval; proposal increments parent version and places hold. operation_id replays identical actor/scope/payload even after decision."
+      }
+    },
+    "/api/v1/orders/{order}/changes/{change}/approve": {
+      "post": {
+        "operationId": "approveOrderChange",
+        "summary": "Approve pending quantity proposal",
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, shipment exists, pending proposal/invalid state, snapshot mismatch, inactive target or operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OrderChangeResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "change",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "reason": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "maxLength": 2000
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "version"
+                ]
+              }
+            }
+          }
+        },
+        "description": "Requires current pending parent version, same pending change and zero shipments; increments version once and releases hold. Recipient approver accepts frozen before/after snapshot, applies reduced quantities/total and records new approval. No stock/cash writes. Retry requires immutable UUID/path/body; committed result may be historical, reload context after ACK."
+      }
+    },
+    "/api/v1/orders/{order}/changes/{change}/reject": {
+      "post": {
+        "operationId": "rejectOrderChange",
+        "summary": "Reject pending quantity proposal",
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, shipment exists, pending proposal/invalid state, snapshot mismatch, inactive target or operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OrderChangeResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "change",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "version",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "description": "Requires current pending parent version, same pending change and zero shipments; increments version once and releases hold. Retains original approved quantities/total. Recipient approver rejects. Retry requires immutable UUID/path/body; committed result may be historical, reload context after ACK."
+      }
+    },
+    "/api/v1/orders/{order}/changes/{change}/withdraw": {
+      "post": {
+        "operationId": "withdrawOrderChange",
+        "summary": "Withdraw pending quantity proposal",
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, shipment exists, pending proposal/invalid state, snapshot mismatch, inactive target or operation conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/OrderChangeResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "change",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "reason": {
+                    "type": "string",
+                    "maxLength": 2000,
+                    "minLength": 1
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "version",
+                  "reason"
+                ]
+              }
+            }
+          }
+        },
+        "description": "Requires current pending parent version, same pending change and zero shipments; increments version once and releases hold. Retains original approved quantities/total. Supplier owner/admin withdraws. Retry requires immutable UUID/path/body; committed result may be historical, reload context after ACK."
+      }
     }
   },
   "components": {
@@ -8513,6 +9079,10 @@
           "fulfillment_enabled": {
             "type": "boolean",
             "description": "Present on GET order detail. False means the client must not request the optional shipments endpoint or offer receipt. Legacy response without this field may still support existing shipments; no mutation capability is inferred from legacy can_approve."
+          },
+          "change_pending": {
+            "type": "boolean",
+            "description": "GET context only: pending postapproval proposal holds processing/dispatch/cancellation. Mutation routes recheck authoritatively."
           }
         },
         "required": [
@@ -11350,6 +11920,10 @@
           "observed_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "change_pending": {
+            "type": "boolean",
+            "description": "GET context only: pending postapproval proposal holds processing/dispatch/cancellation. Mutation routes recheck authoritatively."
           }
         },
         "required": [
@@ -11677,6 +12251,308 @@
           "current_page",
           "last_page",
           "total"
+        ]
+      },
+      "OrderChangeLine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "supplier_product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "local_product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "local_sku": {
+            "type": "string"
+          },
+          "local_name": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "pack_size": {
+            "type": "integer"
+          },
+          "quantity_packs": {
+            "type": "integer"
+          },
+          "unit_price": {
+            "type": "integer",
+            "description": "IDR per kemasan snapshot; zero for internal transfer"
+          }
+        },
+        "required": [
+          "id",
+          "supplier_product_id",
+          "local_product_id",
+          "sku",
+          "name",
+          "local_sku",
+          "local_name",
+          "condition",
+          "pack_size",
+          "quantity_packs",
+          "unit_price"
+        ]
+      },
+      "OrderChangeSnapshot": {
+        "type": "object",
+        "properties": {
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderChangeLine"
+            }
+          },
+          "total_amount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "approved_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "approved_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "lines",
+          "total_amount"
+        ]
+      },
+      "OrderChange": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "supply_order_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "pending_order_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "base_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "pending_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "approved",
+              "rejected",
+              "withdrawn"
+            ]
+          },
+          "requested_by": {
+            "type": "integer"
+          },
+          "decided_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "decision_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "before": {
+            "$ref": "#/components/schemas/OrderChangeSnapshot"
+          },
+          "after": {
+            "$ref": "#/components/schemas/OrderChangeSnapshot"
+          },
+          "decided_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "supply_order_id",
+          "pending_order_id",
+          "base_version",
+          "pending_version",
+          "status",
+          "requested_by",
+          "reason",
+          "before",
+          "after"
+        ]
+      },
+      "OrderChangeContext": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/SupplyOrder"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/OrderChange"
+            }
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "propose": {
+                "type": "boolean"
+              },
+              "approve": {
+                "type": "boolean"
+              },
+              "reject": {
+                "type": "boolean"
+              },
+              "withdraw": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "propose",
+              "approve",
+              "reject",
+              "withdraw"
+            ]
+          },
+          "change_pending": {
+            "type": "boolean"
+          },
+          "current_page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "per_page": {
+            "type": "integer",
+            "const": 50
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_page": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "order",
+          "data",
+          "actions",
+          "change_pending",
+          "current_page",
+          "per_page",
+          "total",
+          "last_page"
+        ]
+      },
+      "OrderChangeInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "properties": {
+                "order_line_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "quantity_packs": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 10000
+                }
+              },
+              "required": [
+                "order_line_id",
+                "quantity_packs"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "reason",
+          "lines"
+        ]
+      },
+      "OrderChangeResult": {
+        "type": "object",
+        "properties": {
+          "order": {
+            "$ref": "#/components/schemas/SupplyOrder"
+          },
+          "change": {
+            "$ref": "#/components/schemas/OrderChange"
+          }
+        },
+        "required": [
+          "order",
+          "change"
         ]
       }
     }

@@ -13,3 +13,5 @@ Ledger stok: Pesanan dan stok toko → Riwayat pergerakan stok / Riwayat batch i
 Riwayat struk: POS → Riwayat struk, pencarian nomor dan pasangan tanggal WIB opsional. Tanpa tanggal tetap seluruh riwayat berhalaman, scope dari API; lihat [panduan](../../docs/web-receipt-history.md).
 
 Kedaluwarsa batch: Pesanan dan stok toko → Telusuri kedaluwarsa batch; batas kemasan inklusif opsional dan filter saldo termasuk karantina, tanpa horizon otomatis. Lihat [panduan](../../docs/batch-expiry.md).
+
+Pengurangan jumlah pascapersetujuan sebelum pengiriman pertama kini tersedia melalui API/web, dengan hold, snapshot dan approve/reject/withdraw. Lihat [panduan reapproval](../../docs/order-reapproval.md) untuk scope, peran, retry session dan migrasi history; revisi sesudah kirim/composer Flutter tetap backlog.

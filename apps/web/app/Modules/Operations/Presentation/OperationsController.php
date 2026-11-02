@@ -51,9 +51,9 @@ final class OperationsController
     {
         $record = $this->api->request('GET', "orders/$order")->json('data');
         $batches = [];
-        if ($record['source_store_id'] && $record['can_process']) {
+        if (! ($record['change_pending'] ?? false) && $record['source_store_id'] && $record['can_process']) {
             $batches = $this->api->all("stores/{$record['source_store_id']}/inventory/batches");
-        } elseif ($record['source_store_id'] && $record['access_side'] === 'supplier') {
+        } elseif (! ($record['change_pending'] ?? false) && $record['source_store_id'] && $record['access_side'] === 'supplier') {
             $batches = $this->api->all("stores/{$record['source_store_id']}/inventory/batches");
         }
 

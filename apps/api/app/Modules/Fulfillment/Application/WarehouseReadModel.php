@@ -49,7 +49,8 @@ final class WarehouseReadModel
             abort_unless($order->supplier_organization_id === $source->organization_id && $order->store_id !== $sourceId, 403);
             abort_unless($order->source_store_id === null || $order->source_store_id === $sourceId, 403, 'Pesanan ditugaskan ke gudang lain.');
             $targetActive = Store::whereKey($order->store_id)->where('active', true)->exists() && Organization::whereKey($order->organization_id)->where('active', true)->exists();
-            $active = $source->active && $targetActive;
+            $hold = $this->access->held($id);
+            $active = $source->active && $targetActive && ! $hold;
             $state = OrderState::from($order->status);
             $admin = in_array($this->identity->role($user, $source->organization_id)?->value, ['owner', 'admin'], true);
             $sent = $this->workflow->totals($id, 'quantity_packs');
@@ -62,7 +63,7 @@ final class WarehouseReadModel
                     ->map(fn ($batch) => $batch->only(['id', 'product_id', 'batch_code', 'expires_on', 'pack_size', 'usable_pieces', 'stock_revision']))->values();
             }
 
-            return ['order' => [...$order->toArray(), 'lines' => $lines->all()], 'source' => $source->only(['id', 'name', 'active']), 'can_process' => $active && $admin && $state->allows('process'), 'can_dispatch' => $canDispatch, 'batches' => $batches->all(), 'shipments' => $this->workflow->shipments($id)->toArray(), 'observed_at' => now()->toIso8601String()];
+            return ['change_pending' => $hold, 'order' => [...$order->toArray(), 'lines' => $lines->all()], 'source' => $source->only(['id', 'name', 'active']), 'can_process' => $active && $admin && $state->allows('process'), 'can_dispatch' => $canDispatch, 'batches' => $batches->all(), 'shipments' => $this->workflow->shipments($id)->toArray(), 'observed_at' => now()->toIso8601String()];
         });
     }
 }

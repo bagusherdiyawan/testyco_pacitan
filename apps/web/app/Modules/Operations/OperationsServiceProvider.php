@@ -4,13 +4,14 @@ namespace App\Modules\Operations;
 
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ApiSession;
+use App\Modules\Operations\Presentation\BatchExpiryController;
 use App\Modules\Operations\Presentation\LedgerExportController;
 use App\Modules\Operations\Presentation\OperationsController;
 use App\Modules\Operations\Presentation\OrderChangeController;
-use App\Modules\Operations\Presentation\BatchExpiryController;
+use App\Modules\Operations\Presentation\ShipmentDiscrepancyController;
 use App\Modules\Operations\Presentation\StockControlController;
-use App\Modules\Operations\Presentation\StockMinimumController;
 use App\Modules\Operations\Presentation\StockLedgerController;
+use App\Modules\Operations\Presentation\StockMinimumController;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\ServiceProvider;
 
@@ -39,6 +40,12 @@ final class OperationsServiceProvider extends ServiceProvider
             Route::post('/app/stores/{store}/inventory/intakes', [$c, 'intake']);
             Route::get('/app/supply/orders', [$c, 'inbox']);
             Route::get('/app/orders/{order}', [$c, 'show']);
+            Route::get('/app/orders/{order}/shipments/{shipment}/discrepancy', [ShipmentDiscrepancyController::class, 'show']);
+            Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy', [ShipmentDiscrepancyController::class, 'report']);
+            Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/notes', [ShipmentDiscrepancyController::class, 'note']);
+            Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/resolutions', [ShipmentDiscrepancyController::class, 'propose']);
+            Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/resolutions/{resolution}/{action}', [ShipmentDiscrepancyController::class, 'decide'])->where('action', 'confirm|reject|withdraw');
+            Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/retry', [ShipmentDiscrepancyController::class, 'retry']);
             Route::get('/app/orders/{order}/changes', [OrderChangeController::class, 'index']);
             Route::post('/app/orders/{order}/changes', [OrderChangeController::class, 'propose']);
             Route::post('/app/orders/{order}/changes/retry', [OrderChangeController::class, 'retry']);

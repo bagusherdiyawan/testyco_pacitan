@@ -21,3 +21,5 @@ Reaktivasi akun nonaktif kini melalui review versi akses, UUID, alasan dan otori
 Ekspor audit organisasi kini melalui bounded JSON API dan CSV web, dengan query scope/allowlist yang sama seperti pembaca, maksimal10.000 catatan/8MiB dan periode31hari. Lihat [panduan](../../docs/audit-export.md).
 
 CSV pergerakan stok web kini melalui bounded JSON ledger API dengan query staff/store/batch yang sama. Angka bertanda tetap delta biji, bukan saldo; lihat [panduan](../../docs/ledger-export.md).
+
+Kasus selisih kiriman kini tersedia melalui API/web: snapshot penerimaan aktual, catatan bersama, usulan rencana owner/admin pusat lalu konfirmasi pimpinan mitra. Tidak mengeksekusi retur/pengganti/kredit atau mengubah stok/order/invoice. Lihat [panduan kasus](../../docs/shipment-discrepancies.md).

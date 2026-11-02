@@ -515,6 +515,38 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert accepted['order']['lines'][0]['id']==change_order['lines'][0]['id']
         assert accepted['order']['lines'][0]['quantity_packs']==1 and accepted['order']['total_amount']==18000
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
+        # Actual discrepancy case and two-party plan approval, never stock/financial execution.
+        before_case_batches=api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']
+        case_path=f'/app/orders/{order_id}/shipments/{shipment["id"]}/discrepancy'
+        case_api=f'orders/{order_id}/shipments/{shipment["id"]}/discrepancy'
+        before_case_order=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
+        case_html=opener.open(web+case_path).read().decode()
+        report=fields(case_html,case_path); report.update({'reason':'Two damaged packs from actual receipt','reference':'Isolated physical inspection'})
+        web_post(case_path,report).read()
+        case_data=api(base,'GET',case_api,token=lead_token)
+        assert case_data['case']['version']==1 and case_data['snapshot']['problem_packs']==2
+        assert case_data['snapshot']['lines'][0]['damaged_pieces']==16 and case_data['snapshot']['lines'][0]['missing_packs']==0
+        proposal_path=case_path+'/resolutions'
+        case_html=central_browser.open(web+case_path).read().decode()
+        case_proposal=fields(case_html,proposal_path); case_proposal.update({'type':'replacement','proposal':'Replacement plan; physical execution still outstanding'})
+        central_browser.open(Request(web+proposal_path,data=urlencode(case_proposal).encode())).read()
+        case_data=api(base,'GET',case_api,token=lead_token)
+        resolution_id=case_data['pending_resolution']['id']
+        confirm_path=proposal_path+'/'+resolution_id+'/confirm'
+        case_html=opener.open(web+case_path).read().decode()
+        confirmation=fields(case_html,confirm_path); confirmation['reason']='Partner confirms plan, no stock receipt implied'
+        web_post(confirm_path,confirmation).read()
+        case_data=api(base,'GET',case_api,token=lead_token)
+        assert case_data['case']['status']=='plan_confirmed' and case_data['pending_resolution'] is None
+        note_path=case_path+'/notes'
+        case_html=central_browser.open(web+case_path).read().decode()
+        follow_up=fields(case_html,note_path); follow_up['message']='Approved plan still awaiting physical execution'
+        central_browser.open(Request(web+note_path,data=urlencode(follow_up).encode())).read()
+        final_case=api(base,'GET',case_api,token=lead_token)
+        assert final_case['case']['version']==4 and final_case['data'][0]['side']=='supplier'
+        assert api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']==before_case_batches
+        assert api(base,'GET',f'orders/{order_id}',token=lead_token)['data']['version']==before_case_order['version']
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
         # Disposable account: real web CSRF reactivation, stale version and old-token denial.
         member=api(base,'POST',f'organizations/{org}/users',{'name':'Returning staff','email':'returning@smoke.test','password':PASSWORD,'role':'cashier','store_ids':[store]},lead_token,201)['data']
         member_path=f'organizations/{org}/users/{member["id"]}'
@@ -553,7 +585,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST','auth/logout',{},changed_session,204)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, stock ledger CSV/scoped signed pieces, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, password rotation/revoked sessions, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, stock ledger CSV/scoped signed pieces, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, receipt discrepancy case and supplier-plan/partner-confirmation with no stock execution, password rotation/revoked sessions, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

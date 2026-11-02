@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.23.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation. Bounded read-only audit export shares organization/central onboarding scope and exact filters. API provides JSON rows (maximum10000 and8MiB encoded records, explicit timezone period up to31days), web validates scope then formats private UTF8 CSV with spreadsheet-formula protection. No audit or business writes. Bounded stock-ledger export uses the same staff/store/batch query as history. API JSON export supports web CSV with signed integer piece deltas and historical batch snapshots, never balances. Shared limits10000rows/8MiB and explicit timezone period<=31days; no stock/audit writes."
+    "version": "0.24.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation. Bounded read-only audit export shares organization/central onboarding scope and exact filters. API provides JSON rows (maximum10000 and8MiB encoded records, explicit timezone period up to31days), web validates scope then formats private UTF8 CSV with spreadsheet-formula protection. No audit or business writes. Bounded stock-ledger export uses the same staff/store/batch query as history. API JSON export supports web CSV with signed integer piece deltas and historical batch snapshots, never balances. Shared limits10000rows/8MiB and explicit timezone period<=31days; no stock/audit writes. Receipt discrepancy cases freeze damaged/missing quantities, append shared notes and provide narrative wholesale plans approved by center owner/admin then confirmed by recipient partner_lead. Plan confirmation does not execute stock returns, replacement shipments or financial credits. Internal transfer cases allow recording only; their resolution approval policy remains undecided."
   },
   "security": [
     {
@@ -8623,6 +8623,778 @@
         ],
         "description": "Same staff membership/store assignment and exact owned batch scope as history, including inactive store reads under active organization. Assigned cashier and center owner without membership denied. Joined batch/store predicates and LIKE metadata search preserved. Required from/to timezone interval<=31days (inclusive start/exclusive end). All matching records ordered created_at/id descending, no page, max10000rows/8MiB encoded records. Over limit422 with export validation error before partial output. JSON rows consumed by web CSV; signed quantity_pieces is a bucket delta, never running/current balance. Historical SKU/pack/condition/expiry, no price or master join. No stock/revision/ledger/audit/receipt writes."
       }
+    },
+    "/api/v1/orders/{order}/shipments/{shipment}/discrepancy": {
+      "get": {
+        "operationId": "getShipmentDiscrepancy",
+        "summary": "Read receipt discrepancy, notes and plan history",
+        "description": "Private/no-store. Mutation locks parent order, shipment, case then plan; UUID replay returns original result without reapplying. No stock, revision, ledger, order status/version/quantities, cash, invoice, or replacement quota writes. Order-view authority; separate notes/closed-plan pagination50. Pending plan not hidden by pagination.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "resolutions_page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale order/case version, duplicate case/pending plan, invalid state, inactive counterparty, incomplete receipt or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; replay may be historical, reload context after acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ShipmentDiscrepancyContext"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "reportShipmentDiscrepancy",
+        "summary": "Recipient reports damaged or missing packs",
+        "description": "Private/no-store. Mutation locks parent order, shipment, case then plan; UUID replay returns original result without reapplying. No stock, revision, ledger, order status/version/quantities, cash, invoice, or replacement quota writes. Existing recipient staff authority; confirmed receipt with issue>0 required. One case per shipment; snapshot computed only on server. Historical inactive store allowed. Uses order_version, starts case version1.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale order/case version, duplicate case/pending plan, invalid state, inactive counterparty, incomplete receipt or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success; replay may be historical, reload context after acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ShipmentDiscrepancyResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentDiscrepancyReportInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{order}/shipments/{shipment}/discrepancy/notes": {
+      "post": {
+        "operationId": "noteShipmentDiscrepancy",
+        "summary": "Append shared case note",
+        "description": "Private/no-store. Mutation locks parent order, shipment, case then plan; UUID replay returns original result without reapplying. No stock, revision, ledger, order status/version/quantities, cash, invoice, or replacement quota writes. Either authorized order-view party may append; increments case version and stales a previous decision review. Notes readable by both parties; text reference only, no upload.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale order/case version, duplicate case/pending plan, invalid state, inactive counterparty, incomplete receipt or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; replay may be historical, reload context after acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ShipmentDiscrepancyResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentDiscrepancyNoteInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{order}/shipments/{shipment}/discrepancy/resolutions": {
+      "post": {
+        "operationId": "proposeShipmentDiscrepancyPlan",
+        "summary": "Center owner/admin proposes a resolution plan",
+        "description": "Private/no-store. Mutation locks parent order, shipment, case then plan; UUID replay returns original result without reapplying. No stock, revision, ledger, order status/version/quantities, cash, invoice, or replacement quota writes. Wholesale center owner/admin only, active recipient organization, reported case and no pending plan. Narrative return/replacement/credit proposal moves case to awaiting_confirmation. Internal-transfer approval policy is not enabled.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale order/case version, duplicate case/pending plan, invalid state, inactive counterparty, incomplete receipt or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success; replay may be historical, reload context after acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ShipmentDiscrepancyResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentDiscrepancyPlanInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{order}/shipments/{shipment}/discrepancy/resolutions/{resolution}/confirm": {
+      "post": {
+        "operationId": "confirmShipmentDiscrepancyPlan",
+        "summary": "Confirm pending resolution plan",
+        "description": "Private/no-store. Mutation locks parent order, shipment, case then plan; UUID replay returns original result without reapplying. No stock, revision, ledger, order status/version/quantities, cash, invoice, or replacement quota writes. Wholesale only. Recipient partner_lead only; active supplier required. Marks plan confirmed and case plan_confirmed; no execution. Requires exact pending plan and current case version.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resolution",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale order/case version, duplicate case/pending plan, invalid state, inactive counterparty, incomplete receipt or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; replay may be historical, reload context after acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ShipmentDiscrepancyResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentDiscrepancyConfirmInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{order}/shipments/{shipment}/discrepancy/resolutions/{resolution}/reject": {
+      "post": {
+        "operationId": "rejectShipmentDiscrepancyPlan",
+        "summary": "Reject pending resolution plan",
+        "description": "Private/no-store. Mutation locks parent order, shipment, case then plan; UUID replay returns original result without reapplying. No stock, revision, ledger, order status/version/quantities, cash, invoice, or replacement quota writes. Wholesale only. Recipient partner_lead only; reason required. Records rejected history and returns case to reported. Requires exact pending plan and current case version.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resolution",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale order/case version, duplicate case/pending plan, invalid state, inactive counterparty, incomplete receipt or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; replay may be historical, reload context after acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ShipmentDiscrepancyResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentDiscrepancyDecisionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{order}/shipments/{shipment}/discrepancy/resolutions/{resolution}/withdraw": {
+      "post": {
+        "operationId": "withdrawShipmentDiscrepancyPlan",
+        "summary": "Withdraw pending resolution plan",
+        "description": "Private/no-store. Mutation locks parent order, shipment, case then plan; UUID replay returns original result without reapplying. No stock, revision, ledger, order status/version/quantities, cash, invoice, or replacement quota writes. Wholesale only. Supplier center owner/admin only; reason required. Records withdrawn history and returns case to reported. Requires exact pending plan and current case version.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resolution",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale order/case version, duplicate case/pending plan, invalid state, inactive counterparty, incomplete receipt or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; replay may be historical, reload context after acknowledgement",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ShipmentDiscrepancyResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ShipmentDiscrepancyDecisionInput"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -13481,6 +14253,768 @@
           "observed_at",
           "filters"
         ]
+      },
+      "ShipmentDiscrepancyLine": {
+        "type": "object",
+        "properties": {
+          "shipment_line_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "order_line_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "source_batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "local_sku": {
+            "type": "string"
+          },
+          "local_name": {
+            "type": "string"
+          },
+          "batch_code": {
+            "type": "string"
+          },
+          "expires_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "pack_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sent_packs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "good_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "damaged_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "damaged_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "condition_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "shipment_line_id",
+          "order_line_id",
+          "source_batch_id",
+          "sku",
+          "name",
+          "local_sku",
+          "local_name",
+          "batch_code",
+          "expires_on",
+          "pack_size",
+          "sent_packs",
+          "good_packs",
+          "damaged_packs",
+          "missing_packs",
+          "damaged_pieces",
+          "missing_pieces",
+          "condition_note"
+        ]
+      },
+      "ShipmentDiscrepancySnapshot": {
+        "type": "object",
+        "properties": {
+          "received_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "received_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "receipt_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "problem_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentDiscrepancyLine"
+            }
+          }
+        },
+        "required": [
+          "received_at",
+          "received_by",
+          "receipt_note",
+          "problem_packs",
+          "lines"
+        ],
+        "description": "Frozen confirmed receipt. Missing is sent minus good minus damaged, never the unshipped order remainder. Historical supplier/local SKU, batch and pack metadata; no prices or balances. Source batch ID is not a recipient stock batch."
+      },
+      "ShipmentDiscrepancy": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "shipment_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "supply_order_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "supplier_organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "reported_by": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "status": {
+            "enum": [
+              "reported",
+              "awaiting_confirmation",
+              "plan_confirmed"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "snapshot": {
+            "$ref": "#/components/schemas/ShipmentDiscrepancySnapshot"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "shipment_id",
+          "supply_order_id",
+          "organization_id",
+          "supplier_organization_id",
+          "store_id",
+          "reported_by",
+          "version",
+          "status",
+          "reason",
+          "reference",
+          "snapshot",
+          "created_at",
+          "updated_at"
+        ],
+        "description": "One case per shipment. Independent case version; report starts at1, each note/proposal/decision increments once. plan_confirmed means administrative agreement only, not physical return, replacement, credit posting or case execution."
+      },
+      "ShipmentDiscrepancyNote": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "shipment_discrepancy_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "actor_id": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "side": {
+            "enum": [
+              "recipient",
+              "supplier"
+            ]
+          },
+          "case_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "message": {
+            "type": "string"
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "shipment_discrepancy_id",
+          "actor_id",
+          "organization_id",
+          "side",
+          "case_version",
+          "message",
+          "reference",
+          "created_at"
+        ]
+      },
+      "ShipmentDiscrepancyResolution": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "shipment_discrepancy_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "pending_case_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "proposed_by": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "decided_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "type": {
+            "enum": [
+              "return",
+              "replacement",
+              "credit"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "confirmed",
+              "rejected",
+              "withdrawn"
+            ]
+          },
+          "proposal": {
+            "type": "string"
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decision_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decided_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "shipment_discrepancy_id",
+          "pending_case_id",
+          "proposed_by",
+          "decided_by",
+          "type",
+          "status",
+          "proposal",
+          "reference",
+          "decision_note",
+          "decided_at",
+          "created_at",
+          "updated_at"
+        ],
+        "description": "Narrative plan only; no quantity, price, amount, invoice, stock or replacement quota changes. Unique nullable pending_case_id permits at most one pending plan. Confirmed plan cannot be replaced through this workflow."
+      },
+      "ShipmentDiscrepancyContext": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ShipmentDiscrepancyNote"
+            }
+          },
+          "current_page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "per_page": {
+            "type": "integer",
+            "const": 50
+          },
+          "last_page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "order": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "organization_id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "supplier_organization_id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "store_id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "kind": {
+                "enum": [
+                  "wholesale",
+                  "internal_transfer"
+                ]
+              },
+              "status": {
+                "enum": [
+                  "awaiting_approval",
+                  "rejected",
+                  "approved",
+                  "processing",
+                  "dispatched",
+                  "partially_received",
+                  "completed",
+                  "cancelled"
+                ]
+              },
+              "version": {
+                "type": "integer"
+              },
+              "destination_name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "organization_id",
+              "supplier_organization_id",
+              "store_id",
+              "kind",
+              "status",
+              "version",
+              "destination_name"
+            ]
+          },
+          "shipment": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "supply_order_id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "received_at": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "format": "date-time"
+              }
+            },
+            "required": [
+              "id",
+              "supply_order_id",
+              "received_at"
+            ]
+          },
+          "case": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentDiscrepancy"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "snapshot": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentDiscrepancySnapshot"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "pending_resolution": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentDiscrepancyResolution"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolutions": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/ShipmentDiscrepancyResolution"
+                }
+              },
+              "current_page": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "per_page": {
+                "type": "integer",
+                "const": 50
+              },
+              "last_page": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "data",
+              "current_page",
+              "per_page",
+              "last_page",
+              "total"
+            ]
+          },
+          "actions": {
+            "type": "object",
+            "properties": {
+              "report": {
+                "type": "boolean"
+              },
+              "note": {
+                "type": "boolean"
+              },
+              "propose_resolution": {
+                "type": "boolean"
+              },
+              "confirm_resolution": {
+                "type": "boolean"
+              },
+              "reject_resolution": {
+                "type": "boolean"
+              },
+              "withdraw_resolution": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "report",
+              "note",
+              "propose_resolution",
+              "confirm_resolution",
+              "reject_resolution",
+              "withdraw_resolution"
+            ]
+          },
+          "access_side": {
+            "enum": [
+              "recipient",
+              "supplier"
+            ]
+          }
+        },
+        "required": [
+          "data",
+          "current_page",
+          "per_page",
+          "last_page",
+          "total",
+          "order",
+          "shipment",
+          "case",
+          "snapshot",
+          "pending_resolution",
+          "resolutions",
+          "actions",
+          "access_side"
+        ],
+        "description": "Notes use page; closed plans use resolutions_page, each50/descending ID independently. Pending plan always separate. Existing order visibility, assigned source warehouse and inactive-store historical access retained; cashier and central onboarding override denied. Actions are hints; mutations reauthorize. Null snapshot if not received."
+      },
+      "ShipmentDiscrepancyResult": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "shipment_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "case": {
+            "$ref": "#/components/schemas/ShipmentDiscrepancy"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ShipmentDiscrepancyNote"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/ShipmentDiscrepancyResolution"
+          }
+        },
+        "required": [
+          "order_id",
+          "shipment_id",
+          "case"
+        ]
+      },
+      "ShipmentDiscrepancyReportInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "order_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "operation_id",
+          "order_version",
+          "reason"
+        ],
+        "description": "Only documented validated fields are used. No client quantities, prices, amounts or stock disposition. Preserve identical UUID/path/body on uncertain result; replay can be historical. Version is case version except report, which uses parent order_version."
+      },
+      "ShipmentDiscrepancyNoteInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "message"
+        ],
+        "description": "Only documented validated fields are used. No client quantities, prices, amounts or stock disposition. Preserve identical UUID/path/body on uncertain result; replay can be historical. Version is case version except report, which uses parent order_version."
+      },
+      "ShipmentDiscrepancyPlanInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "type": {
+            "enum": [
+              "return",
+              "replacement",
+              "credit"
+            ]
+          },
+          "proposal": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "reference": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "type",
+          "proposal"
+        ],
+        "description": "Only documented validated fields are used. No client quantities, prices, amounts or stock disposition. Preserve identical UUID/path/body on uncertain result; replay can be historical. Version is case version except report, which uses parent order_version."
+      },
+      "ShipmentDiscrepancyConfirmInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "operation_id",
+          "version"
+        ],
+        "description": "Only documented validated fields are used. No client quantities, prices, amounts or stock disposition. Preserve identical UUID/path/body on uncertain result; replay can be historical. Version is case version except report, which uses parent order_version."
+      },
+      "ShipmentDiscrepancyDecisionInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "reason"
+        ],
+        "description": "Only documented validated fields are used. No client quantities, prices, amounts or stock disposition. Preserve identical UUID/path/body on uncertain result; replay can be historical. Version is case version except report, which uses parent order_version."
       }
     }
   }

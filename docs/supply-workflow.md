@@ -29,7 +29,7 @@ Penerima berwenang membuka detail order dan mengisi jumlah yang benar-benar dite
 
 Contoh: dikirim 20 kemasan isi 8; baik 18, rusak 2 → 144 biji usable dan 16 biji quarantined. Order tetap partially_received. Jika hanya 18 yang dikirim dari pesanan 20 dan semuanya baik, sisa 2 dapat dikirim berikutnya; setelah seluruh 20 diterima baik, order menjadi completed.
 
-Jika 20 sudah dikirim tetapi 2 hilang/rusak, kuota pengganti tidak bertambah otomatis. Resolusi retur/kredit/pengganti belum tersedia; catatan dan selisih dipertahankan untuk tindak lanjut. Sistem tidak membuat penerimaan fiktif atau perubahan invoice otomatis.
+Jika 20 sudah dikirim tetapi 2 hilang/rusak, kuota pengganti tidak bertambah otomatis. [Kasus selisih dan rencana penyelesaian](shipment-discrepancies.md) kini tersedia di API/web: penerima melaporkan snapshot aktual, pusat mengusulkan rencana dan pimpinan mitra mengonfirmasi. Eksekusi retur/kredit/pengganti belum tersedia; kesepakatan rencana dan catatan dipertahankan untuk tindak lanjut. Sistem tidak membuat penerimaan fiktif atau perubahan invoice otomatis.
 
 Ledger kini dapat dibaca melalui [riwayat stok Flutter](native-stock-ledger.md) oleh petugas berizin, dengan snapshot batch dan filter periode/sumber/bucket. Referensi sumber ledger berbeda dari UUID request.
 

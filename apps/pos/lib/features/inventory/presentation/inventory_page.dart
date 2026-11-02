@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import '../data/inventory_repository.dart';
+import '../data/batch_expiry_repository.dart';
+import 'batch_expiry_page.dart';
 import '../domain/stock_batch.dart';
 import 'stock_minimum_page.dart';
 import 'stock_ledger_page.dart';
@@ -69,6 +71,18 @@ class _InventoryPageState extends State<InventoryPage> {
             builder: (_) => StockMinimumPage(
               repository: widget.repository,
               storeId: widget.storeId,
+            ),
+          ),
+        ),
+      ),
+      TextButton.icon(
+        icon: const Icon(Icons.event_outlined),
+        label: const Text('Telusuri kedaluwarsa batch'),
+        onPressed: () => Navigator.of(context).push<void>(
+          MaterialPageRoute(
+            builder: (_) => BatchExpirySearchPage(
+              repository: BatchExpiryRepository(widget.repository.api),
+              store: widget.storeId,
             ),
           ),
         ),

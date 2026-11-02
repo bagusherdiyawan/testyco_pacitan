@@ -54,7 +54,7 @@ Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan
 
 Riwayat pergerakan kini dapat dibaca pada [web](docs/web-stock-ledger.md) serta Flutter **Stok → Riwayat pergerakan stok**, termasuk filter periode WIB, sumber/bucket dan batch historis. Lihat [panduan ledger native](docs/native-stock-ledger.md).
 
-Penelusuran [kedaluwarsa batch](docs/batch-expiry.md) kini tersedia di web, dengan batas tanggal pilihan pengguna dan filter batch bersaldo. Periode peringatan, recall dan blok penjualan otomatis belum ditetapkan.
+Penelusuran [kedaluwarsa batch](docs/batch-expiry.md) kini tersedia di web dan [Flutter](docs/native-batch-expiry.md), dengan batas tanggal pilihan pengguna dan filter batch bersaldo termasuk karantina. Pada Flutter buka **Stok → Telusuri kedaluwarsa batch**. Periode peringatan, recall dan blok penjualan otomatis belum ditetapkan.
 
 ## Stok minimum
 

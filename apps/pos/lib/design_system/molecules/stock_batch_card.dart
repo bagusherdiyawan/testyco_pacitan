@@ -9,6 +9,7 @@ class StockBatchCard extends StatelessWidget {
     required this.packSize,
     required this.usable,
     required this.quarantined,
+    this.condition = '',
     this.opened = 0,
     this.ready = 0,
     this.waste = 0,
@@ -17,7 +18,7 @@ class StockBatchCard extends StatelessWidget {
     super.key,
   });
   final Widget? action;
-  final String sku, name, batch, expiry;
+  final String sku, name, batch, expiry, condition;
   final int packSize, usable, quarantined, opened, ready, waste, revision;
   @override
   Widget build(BuildContext context) => Card(
@@ -29,6 +30,7 @@ class StockBatchCard extends StatelessWidget {
           Text('$sku · $name', style: Theme.of(context).textTheme.titleMedium),
           Text('Batch $batch · Kedaluwarsa kemasan $expiry'),
           Text('Isi kemasan historis: $packSize biji'),
+          if (condition.isNotEmpty) Text('Kondisi: $condition'),
           const SizedBox(height: 8),
           Text('Utuh: $usable biji'),
           Text('Beku terbuka: $opened biji'),

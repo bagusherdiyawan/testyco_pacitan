@@ -27,3 +27,5 @@ Ganti sandi: ikon Ganti kata sandi pada pilih toko/toolbar toko, verifikasi sand
 Audit: modul berizin pengelola organisasi, filter periode WIB/aksi/pelaku/objek dan snapshot sebelum/sesudah. Flag FEATURE_AUDIT bukan izin API; lihat [panduan](../../docs/native-audit.md).
 
 Persetujuan ulang: detail Pesanan/Gudang → Persetujuan ulang dan riwayat. Pengurangan jumlah sebelum pengiriman pertama, tinjauan sebelum/sesudah, approve/reject/withdraw berizin dan retry immutable saat unknown. Lihat [panduan](../../docs/native-order-reapproval.md); composer amendment lama tetap khusus sebelum approval.
+
+Penelusuran tanggal kemasan: Stok → Telusuri kedaluwarsa batch; batas inklusif opsional terpisah, SKU/kode batch dan saldo termasuk karantina, pagination scoped dan read-only bagi assigned cashier juga. Lihat [panduan](../../docs/native-batch-expiry.md).

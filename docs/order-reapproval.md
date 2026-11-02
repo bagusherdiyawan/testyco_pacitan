@@ -1,6 +1,6 @@
 # Pengurangan pesanan setelah persetujuan
 
-Irisan PRD 04-EXC/BRR-01: API dan web menyediakan usulan pengurangan jumlah pesanan yang telah disetujui. Ini belum seluruh resolusi pengecualian order.
+Irisan PRD 04-EXC/BRR-01: API, web dan [Flutter](native-order-reapproval.md) menyediakan usulan pengurangan jumlah pesanan yang telah disetujui. Ini belum seluruh resolusi pengecualian order.
 
 ## Alur operasional
 
@@ -20,8 +20,10 @@ Web tetap BFF HTTP, tidak membaca DB API. Session server menyimpan path/body/UUI
 
 Session bukan antrean tahan restart: logout/401 menghapus session; login berhasil juga membersihkan pending akun sebelumnya. Setelah kehilangan session, tinjau riwayat/order sebelum membuat operasi baru. Tidak ada jaminan recovery lintas perangkat/session atau sinkronisasi offline. Token/cookie API tidak ditaruh dalam HTML. Komponen atomic existing digunakan bersama organisme order-change; domain tetap pada API.
 
+Layar [persetujuan ulang Flutter](native-order-reapproval.md) kini tersedia dari detail Pesanan/Gudang, dengan review dan retry immutable yang terpisah dari amendment lama. Pending native hanya di memori halaman, bukan session server web.
+
 ## Migrasi dan batas
 
 Migrasi `2026_11_02_000006_create_order_changes` hanya menambah tabel history. FK restrict dan nullable unique pending_order_id memastikan satu usulan aktif per pesanan; seluruh mutasi mengunci parent yang sama dengan workflow/pengiriman. Rollback ditolak jika tabel sudah pernah dipakai agar history tidak terhapus; gunakan perbaikan maju atau restore yang ditinjau. Migrasi development dijalankan tanpa reset data. Pengujian SQLite tidak membuktikan concurrency PostgreSQL multi-koneksi.
 
-Belum tersedia penghapusan seluruh baris, penambahan jumlah/SKU, substitusi, perubahan harga/metode/alamat, revisi sesudah pengiriman, retur/pengganti/kredit/refund, invoice, notifikasi push, maupun layar composer reapproval Flutter. Endpoint amendment native lama tetap khusus awaiting_approval/rejected; jangan perluas PUT lama untuk melewati workflow ini. UI native existing mematuhi capability hold dan API menolak mutasi stale. Browser/perangkat nyata, UAT dan PostgreSQL tetap perlu verifikasi.
+Belum tersedia penghapusan seluruh baris, penambahan jumlah/SKU, substitusi, perubahan harga/metode/alamat, revisi sesudah pengiriman, retur/pengganti/kredit/refund, invoice, notifikasi push. Endpoint amendment native lama tetap khusus awaiting_approval/rejected; jangan perluas PUT lama untuk melewati workflow ini. UI native existing mematuhi capability hold dan API menolak mutasi stale. Browser/perangkat nyata, UAT dan PostgreSQL tetap perlu verifikasi.

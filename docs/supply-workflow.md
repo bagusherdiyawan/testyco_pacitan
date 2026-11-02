@@ -15,7 +15,7 @@ Kepala toko yang ditugaskan atau pimpinan membuka **Pesanan dan stok → Buat pe
 
 Pimpinan mitra meninjau detail dan menyetujui, menolak dengan alasan, atau mengubah jumlah/item sebelum approval. Harga/konversi yang berubah sebelum approval menimbulkan 409 agar pengajuan diperbarui dan ditinjau lagi. Persetujuan tidak mengurangi stok.
 
-Toko sendiri memakai SKU pusat yang sama, persetujuan owner/admin pusat, dan tipe transfer internal; tidak menciptakan penjualan mitra atau invoice. Edit langsung setelah approval tetap ditolak. [Usulan pengurangan terpisah](order-reapproval.md) kini tersedia pada web/API sebelum pengiriman pertama; pending menahan proses/dispatch/cancel sampai penerima memutuskan atau pemasok menarik. Pembatalan beralasan dapat dilakukan pimpinan sebelum kiriman pertama.
+Toko sendiri memakai SKU pusat yang sama, persetujuan owner/admin pusat, dan tipe transfer internal; tidak menciptakan penjualan mitra atau invoice. Edit langsung setelah approval tetap ditolak. [Usulan pengurangan terpisah](order-reapproval.md) kini tersedia pada web/API/[Flutter](native-order-reapproval.md) sebelum pengiriman pertama; pending menahan proses/dispatch/cancel sampai penerima memutuskan atau pemasok menarik. Pembatalan beralasan dapat dilakukan pimpinan sebelum kiriman pertama.
 
 ## Pemrosesan pusat
 
@@ -45,6 +45,6 @@ Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok ya
 
 ## Batas berikutnya
 
-Belum ada reservasi stok, substitusi/penambahan/penghapusan baris atau revisi sesudah kirim, composer reapproval Flutter, resolusi barang rusak/hilang, pembuktian foto/suhu terstruktur, kontrak harga khusus mitra, pengiriman notifikasi stok minimum, refund POS/QRIS, billing atau offline. PostgreSQL/concurrency dan UAT belum diverifikasi. Gunakan untuk development dan pengujian alur ini dahulu.
+Belum ada reservasi stok, substitusi/penambahan/penghapusan baris atau revisi sesudah kirim, resolusi barang rusak/hilang, pembuktian foto/suhu terstruktur, kontrak harga khusus mitra, pengiriman notifikasi stok minimum, refund POS/QRIS, billing atau offline. PostgreSQL/concurrency dan UAT belum diverifikasi. Gunakan untuk development dan pengujian alur ini dahulu.
 
 Pembukaan kemasan, pengukusan dan opname/susut berapproval kini tersedia pada [kontrol stok](stock-control.md). Pengiriman tetap hanya mengambil stok utuh; proses tidak membuat kuota pengganti atau perubahan tagihan.

@@ -41,4 +41,6 @@ Ordering mengekspos metadata recipient_actions; Fulfillment/Inventory tetap memi
 
 DTO, repository, controller dan page/form terpisah. Molecule ShipmentReceiptFields menerima nilai/controller tampilan tanpa mengubah ledger. Domain stock/cash tetap di API. Tidak ada migrasi/dependensi baru.
 
-Widget mobile 390px dengan text scale 1,5 dan tablet 1200px, akses API, retry dan atomic receipt sudah diuji. Ini belum build/perangkat Android/iOS, UAT gudang/toko, PostgreSQL concurrency atau bukti kualitas pangan. QRIS, refund, retur/kredit/pengganti, perubahan setelah approval dan offline tetap belum tersedia. Pemilihan sumber/dispatch kini tersedia pada modul Gudang.
+Widget mobile 390px dengan text scale 1,5 dan tablet 1200px, akses API, retry dan atomic receipt sudah diuji. Ini belum build/perangkat Android/iOS, UAT gudang/toko, PostgreSQL concurrency atau bukti kualitas pangan. QRIS, refund, retur/kredit/pengganti, revisi SKU/penambahan/penghapusan baris, revisi setelah kirim dan offline tetap belum tersedia. Pemilihan sumber/dispatch kini tersedia pada modul Gudang.
+
+Pengurangan jumlah pascapersetujuan sebelum pengiriman pertama kini melalui **Persetujuan ulang dan riwayat** dari detail pesanan. Lihat [panduan native](native-order-reapproval.md) untuk review, keputusan dan retry immutable terpisah dari amendment sebelum approval.

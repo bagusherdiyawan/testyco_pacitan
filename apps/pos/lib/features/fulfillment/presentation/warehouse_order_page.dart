@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../../design_system/molecules/dispatch_batch_field.dart';
 import '../../../design_system/molecules/dispatch_review.dart';
 import '../application/warehouse_controller.dart';
+import '../../ordering/data/order_changes_repository.dart';
+import '../../ordering/presentation/order_changes_page.dart';
 import '../data/warehouse_repository.dart';
 import '../domain/warehouse_context.dart';
 
@@ -203,6 +205,29 @@ class _WarehouseOrderPageState extends State<WarehouseOrderPage> {
                     '${line['sku']}: diminta ${line['quantity_packs']} · terkirim ${line['sent_packs']} · sisa ${line['remaining_packs']} kemasan',
                   ),
               ],
+              if (c != null &&
+                  const bool.fromEnvironment(
+                    'FEATURE_ORDERING',
+                    defaultValue: true,
+                  ))
+                OutlinedButton(
+                  onPressed: model.editable
+                      ? () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => OrderChangesPage(
+                                repository: OrderChangesRepository(
+                                  widget.repository.api,
+                                ),
+                                orderId: widget.order,
+                              ),
+                            ),
+                          );
+                          if (mounted) await model.load();
+                        }
+                      : null,
+                  child: const Text('Persetujuan ulang dan riwayat'),
+                ),
               if (model.pending != null) ...[
                 const Text(
                   'Hasil belum diketahui. Ulangi operasi yang sama; jangan membuat kiriman pengganti.',

@@ -3,6 +3,8 @@ import '../application/recipient_order_controller.dart';
 import '../data/orders_repository.dart';
 import '../domain/recipient_order.dart';
 import 'shipment_receipt_form.dart';
+import 'order_changes_page.dart';
+import '../data/order_changes_repository.dart';
 import 'order_entry_page.dart';
 import '../data/order_entry_repository.dart';
 
@@ -135,6 +137,24 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 spacing: 8,
                 runSpacing: 8,
                 children: [
+                  OutlinedButton(
+                    onPressed: model.canAct
+                        ? () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => OrderChangesPage(
+                                  repository: OrderChangesRepository(
+                                    widget.repository.api,
+                                  ),
+                                  orderId: widget.id,
+                                ),
+                              ),
+                            );
+                            if (mounted) await model.load();
+                          }
+                        : null,
+                    child: const Text('Persetujuan ulang dan riwayat'),
+                  ),
                   if (o.allows('amend') && o.storeId.isNotEmpty)
                     OutlinedButton(
                       onPressed: model.canAct ? () => amend(o) : null,
@@ -213,7 +233,7 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                 ),
             ],
             const Text(
-              'Pengajuan baru tersedia dari daftar Pesanan. Perubahan sebelum persetujuan tersedia bagi pimpinan berwenang. Pengiriman gudang masih melalui web. Penerimaan/keputusan ini online; pemulihan otomatis setelah aplikasi ditutup paksa belum tersedia.',
+              'Pengajuan baru tersedia dari daftar Pesanan. Perubahan sebelum persetujuan tersedia bagi pimpinan berwenang. Pemilihan sumber dan pengiriman tersedia melalui modul Gudang. Penerimaan/keputusan ini online; pemulihan otomatis setelah aplikasi ditutup paksa belum tersedia.',
             ),
           ],
         ),

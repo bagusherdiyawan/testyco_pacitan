@@ -14,4 +14,4 @@ Riwayat struk: POS → Riwayat struk, pencarian nomor dan pasangan tanggal WIB o
 
 Kedaluwarsa batch: Pesanan dan stok toko → Telusuri kedaluwarsa batch; batas kemasan inklusif opsional dan filter saldo termasuk karantina, tanpa horizon otomatis. Lihat [panduan](../../docs/batch-expiry.md).
 
-Pengurangan jumlah pascapersetujuan sebelum pengiriman pertama kini tersedia melalui API/web, dengan hold, snapshot dan approve/reject/withdraw. Lihat [panduan reapproval](../../docs/order-reapproval.md) untuk scope, peran, retry session dan migrasi history; revisi sesudah kirim/composer Flutter tetap backlog.
+Pengurangan jumlah pascapersetujuan sebelum pengiriman pertama kini tersedia melalui API/web, dengan hold, snapshot dan approve/reject/withdraw. Lihat [panduan reapproval](../../docs/order-reapproval.md) untuk scope, peran, retry session dan migrasi history; revisi sesudah kirim tetap backlog, layar reapproval Flutter kini tersedia (docs/native-order-reapproval.md).

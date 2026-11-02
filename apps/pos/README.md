@@ -25,3 +25,5 @@ Riwayat struk: POS → Riwayat struk, periode WIB/nomor dan pagination 50, scope
 Ganti sandi: ikon Ganti kata sandi pada pilih toko/toolbar toko, verifikasi sandi lama, ACK mencabut seluruh sesi, lalu login ulang. Hasil belum pasti tidak diulang otomatis; lihat [panduan](../../docs/native-password-change.md).
 
 Audit: modul berizin pengelola organisasi, filter periode WIB/aksi/pelaku/objek dan snapshot sebelum/sesudah. Flag FEATURE_AUDIT bukan izin API; lihat [panduan](../../docs/native-audit.md).
+
+Persetujuan ulang: detail Pesanan/Gudang → Persetujuan ulang dan riwayat. Pengurangan jumlah sebelum pengiriman pertama, tinjauan sebelum/sesudah, approve/reject/withdraw berizin dan retry immutable saat unknown. Lihat [panduan](../../docs/native-order-reapproval.md); composer amendment lama tetap khusus sebelum approval.

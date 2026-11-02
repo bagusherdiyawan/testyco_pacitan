@@ -270,3 +270,10 @@ Identity UserAccountStatus mengelola status User global dengan otorisasi organis
 Operations UUID menyimpan hasil reaktivasi historis, sehingga replay lama sesudah deaktivasi berikutnya tidak menghidupkan akun. POST rechecks exact membership/permissions dan versi inactive terbaru. Legacy deactivate tetap kompatibel, menaikkan versi dan mencatat actual before state. Audit user.reactivated masuk allowlist onboarding secara eksplisit dengan before/after active/version/reason, tanpa harga/password/token atau perluasan scope operasional. Migration down ditolak setelah versi/receipt terpakai.
 
 Web menambah review/konfirmasi/retry lewat Backend HTTP, escaped user-access-summary dan session pending immutable. Context/assignment identity, capability/versi sebelum kirim dan ACK parent/user/status/version+1 diperiksa. Unknown ditahan melewati denial,401/login/logout membatasi session; pasca ACK membaca context baru. Tidak ada queue lintas restart atau auto-login token. Lihat docs/account-reactivation.md.
+
+
+## ADR-033: ekspor audit bounded dari query yang sama
+
+Identity AuditHistory membagi private scope query/entry mapping untuk reader pagination50 dan export bounded. Authorization/allowlist dipasang sebelum filter; global null-org events tetap tersembunyi. Export membutuhkan interval timezone <=31days, cursor10001 mendeteksi row overflow dan encoded-row bytes8MiB sebelum mengirim JSON. Tidak ada offset pagination, silent truncation, master join atau audit/write side effect. AuditQuery berbagi validasi HTTP tanpa mengubah legacy all-history read.
+
+Web AuditSearch membagi kalender WibPeriod/whitelist; export memakai applied filters tanpa page/URL client. API memberikan JSON data scoped, BFF memeriksa organisasi tiap row/ID/type/size kemudian mengubahnya ke CSV privat, fixed filename/BOM/fputcsv/CsvText. Null dan legacy snapshot dipertahankan sebagai data teks, prefix formula dinetralkan; tidak ada restore/import promise atau cookie/header API diteruskan. Tidak menulis file permanen/session bisnis/ledger/audit. Lihat docs/audit-export.md.

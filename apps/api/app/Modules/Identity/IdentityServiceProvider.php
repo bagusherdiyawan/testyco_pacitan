@@ -3,6 +3,7 @@
 namespace App\Modules\Identity;
 
 use App\Modules\Identity\Presentation\ActiveUser;
+use App\Modules\Identity\Presentation\AuditExportController;
 use App\Modules\Identity\Presentation\AuthController;
 use App\Modules\Identity\Presentation\IdentityController;
 use App\Modules\Identity\Presentation\UserReactivationController;
@@ -37,6 +38,7 @@ final class IdentityServiceProvider extends ServiceProvider
             Route::post('organizations/{organization}/users/{user}/deactivate', [IdentityController::class, 'deactivateUser'])->whereNumber('user');
             Route::get('organizations/{organization}/users/{user}/reactivation', [UserReactivationController::class, 'show'])->whereNumber('user');
             Route::post('organizations/{organization}/users/{user}/reactivate', [UserReactivationController::class, 'store'])->whereNumber('user');
+            Route::get('organizations/{organization}/audit/export', AuditExportController::class);
             Route::get('organizations/{organization}/audit', [IdentityController::class, 'audit']);
         });
     }

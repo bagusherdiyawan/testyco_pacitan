@@ -181,14 +181,7 @@ final class IdentityController
 
     public function audit(Request $r, string $organization): mixed
     {
-        $v = $r->validate([
-            'page' => 'sometimes|integer|min:1',
-            'action' => 'nullable|string|max:80',
-            'subject_id' => 'nullable|string|max:80',
-            'actor_id' => 'nullable|integer|min:1',
-            'from' => ['nullable', 'required_with:to', 'string', 'date', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'],
-            'to' => ['nullable', 'required_with:from', 'string', 'date', 'after:from', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'],
-        ]);
+        $v = AuditQuery::validate($r);
 
         return response()->json(app(\App\Modules\Identity\Application\AuditHistory::class)->read($r->user(), $organization, $v))
             ->header('Cache-Control', 'private, no-store');

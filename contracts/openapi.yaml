@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.21.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation."
+    "version": "0.22.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation. Bounded read-only audit export shares organization/central onboarding scope and exact filters. API provides JSON rows (maximum10000 and8MiB encoded records, explicit timezone period up to31days), web validates scope then formats private UTF8 CSV with spreadsheet-formula protection. No audit or business writes."
   },
   "security": [
     {
@@ -8345,6 +8345,142 @@
         },
         "description": "Organization management and exact membership required before idempotency lookup and under locked user. Self and owner in any membership denied; multi-organization status change requires central administrator. Review organization must be active. Current inactive user access_version must match version; increments once. Preserves password, roles and assignments; deletes all tokens and audits user.reactivated before/after/reason in invoked organization only (included in central onboarding audit allowlist). Shared Operations atomically stores UUID/actor/scope/validated payload result. Identical retry replays historical result even after later deactivation, without changing current state. Different actor/scope/payload UUID conflicts. After ACK reload context, then user must login again; no token is issued here. No stock/cash writes."
       }
+    },
+    "/api/v1/organizations/{organization}/audit/export": {
+      "get": {
+        "operationId": "exportOrganizationAudit",
+        "summary": "Bounded audit rows for scoped export",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuditExport"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required or token expired",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/store/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Inactive organization/store or unavailable state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid period/filter or export exceeds10000rows/8MiB; narrow filters. No partial export.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limit exceeded",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "description": "Read-only same authorization/filter query as paginated audit; global null-organization events excluded. Active organization managers see full organization events; central administrator without managing membership receives existing onboarding allowlist before user filters. from/to timezone required, max31days; from inclusive/to exclusive. Every matching row descending ID, no pagination, max10000rows/8MiB encoded rows. Limits fail422, never truncate. API emits JSON rows; web BFF creates CSV. No mutation/audit-write/receipt. One database SELECT cursor; PostgreSQL multi-connection concurrency/production performance not verified.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Paired timezone interval, maximum 31 days; from inclusive, to exclusive.",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Paired timezone interval, maximum 31 days; from inclusive, to exclusive.",
+            "required": true
+          },
+          {
+            "in": "query",
+            "name": "action",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "description": "Exact value; does not broaden visibility."
+          },
+          {
+            "in": "query",
+            "name": "subject_id",
+            "schema": {
+              "type": "string",
+              "maxLength": 80
+            },
+            "description": "Exact value; does not broaden visibility."
+          },
+          {
+            "in": "query",
+            "name": "actor_id",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": "Exact actor user ID; no lookup of other organizations."
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -8913,7 +9049,10 @@
             "type": "string"
           },
           "actor_id": {
-            "type": "integer"
+            "type": [
+              "integer",
+              "null"
+            ]
           },
           "organization_id": {
             "type": [
@@ -12941,6 +13080,110 @@
         "required": [
           "organization_id",
           "user"
+        ]
+      },
+      "AuditExportRow": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "actor_id": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "organization_id": {
+            "type": "string"
+          },
+          "action": {
+            "type": "string"
+          },
+          "subject_id": {
+            "type": "string"
+          },
+          "before": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "JSON-encoded audit payload; no credential values"
+          },
+          "after": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Explicit UTC representation of raw created_at."
+          }
+        },
+        "required": [
+          "id",
+          "actor_id",
+          "organization_id",
+          "action",
+          "subject_id",
+          "before",
+          "after",
+          "created_at",
+          "occurred_at"
+        ]
+      },
+      "AuditExport": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "array",
+            "maxItems": 10000,
+            "items": {
+              "$ref": "#/components/schemas/AuditExportRow"
+            }
+          },
+          "row_count": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "organization": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name"
+            ]
+          },
+          "visibility": {
+            "enum": [
+              "organization",
+              "onboarding"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "data",
+          "row_count",
+          "organization",
+          "visibility",
+          "observed_at"
         ]
       }
     }

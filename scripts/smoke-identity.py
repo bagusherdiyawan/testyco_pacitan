@@ -470,6 +470,14 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         central_html=central_browser.open(web+'/app/'+audit_path+'?'+web_audit_query).read().decode()
         assert 'hanya data onboarding' in central_html and 'Tidak ada audit pada filter ini.' in central_html
         assert 'wholesale_price' not in central_html
+        with opener.open(web+'/app/'+audit_path+'/export?'+web_audit_query) as response:
+            audit_csv=list(csv.reader(io.StringIO(response.read().decode('utf-8-sig'))))
+            assert response.headers['Content-Type'].startswith('text/csv') and 'no-store' in response.headers['Cache-Control']
+        assert len(audit_csv)==2 and audit_csv[1][2]=='organization' and audit_csv[1][5]=='sale.completed'
+        assert json.loads(audit_csv[1][8])['total_amount']==12000
+        with central_browser.open(web+'/app/'+audit_path+'/export?'+web_audit_query) as response:
+            limited_csv=list(csv.reader(io.StringIO(response.read().decode('utf-8-sig'))))
+        assert len(limited_csv)==1 and limited_csv[0][0]=='audit_id'
         try:
             central_browser.open(web+f'/app/stores/{store}/pos/sales?'+web_receipt_query).read()
             raise AssertionError('Central onboarding must not read partner receipts')
@@ -535,7 +543,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST','auth/logout',{},changed_session,204)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, password rotation/revoked sessions, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, password rotation/revoked sessions, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.21.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.22.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -74,7 +74,7 @@ Web dan Flutter menyediakan filter periode/toko, perbandingan toko dan rincian p
 
 ## Jejak audit
 
-Pengelola organisasi dapat menelusuri perubahan melalui [halaman audit web](docs/web-audit.md) dan [modul Audit Flutter](docs/native-audit.md), dengan filter periode WIB, aksi, pelaku dan objek serta snapshot sebelum/sesudah. Akses mengikuti API; audit organisasi tidak tersedia bagi kasir/kepala toko/gudang.
+Pengelola organisasi dapat menelusuri perubahan melalui [halaman audit web](docs/web-audit.md) dan [modul Audit Flutter](docs/native-audit.md), dengan filter periode WIB, aksi, pelaku dan objek serta snapshot sebelum/sesudah. Akses mengikuti API; audit organisasi tidak tersedia bagi kasir/kepala toko/gudang. Web kini menyediakan [CSV audit berfilter](docs/audit-export.md), maksimal10.000 catatan/8MiB dengan scope yang sama dan perlindungan formula spreadsheet.
 
 ## Flutter pada perangkat
 

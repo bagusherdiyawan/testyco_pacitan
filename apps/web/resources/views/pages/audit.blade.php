@@ -18,6 +18,7 @@
     @if(isset($filters['actor_id']))<p>Pelaku diterapkan: {{ $filters['actor_id'] }}</p>@endif
     <p>Diamati {{ \Carbon\CarbonImmutable::parse($metadata['observed_at'])->timezone('Asia/Jakarta')->format('d M Y H:i:s') }} WIB. Setiap halaman dibaca terpisah; bukan snapshot beku.</p>
     <p>Snapshot kosong berarti tidak ada snapshot tersimpan. ID objek bukan UUID operasi. Catatan keamanan global tanpa organisasi tidak termasuk halaman ini.</p>
+    <p><a href="/app/organizations/{{ $organization }}/audit/export?{{ http_build_query($filters) }}">Unduh CSV audit dengan filter aktif</a> · Maksimal 10.000 catatan / 8 MiB snapshot; persempit filter jika melebihi batas. Unduhan mencakup semua halaman yang cocok.</p>
     @forelse($entries as $entry)
         <x-organisms.audit-record :entry="$entry" />
     @empty

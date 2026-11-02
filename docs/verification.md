@@ -4,17 +4,17 @@ Validasi terbaru pada lingkungan onboarding, 2 November 2026; catatan irisan seb
 
 | Pemeriksaan | Hasil |
 | --- | --- |
-| API PHPUnit | 178 tes lulus, 1683 assertions |
-| Web PHPUnit | 89 tes lulus, 637 assertions |
+| API PHPUnit | 183 tes lulus, 1734 assertions |
+| Web PHPUnit | 96 tes lulus, 735 assertions |
 | Flutter | 190 tes lulus; penelusuran tanggal kemasan/filter batch bersaldo390px (text scale1,5 + keyboard)/1200px; persetujuan ulang dari detail Pesanan/Gudang, review/unknown/keyboard390px (text scale1,5)/1200px; audit organisasi/filter/snapshot 390px (text scale 1,5 + keyboard)/1200px dan delapan modul navigasi, perubahan sandi 390px (text scale 1,5 + keyboard)/1200px, sesi/route reset dan hasil unknown, riwayat struk/filter/pagination 390px (text scale 1,5)/1200px dan toko nonaktif, riwayat ledger/filter/batch 390px (text scale 1,5)/1200px, penerimaan awal gudang/review 390px (text scale 1,5)/1200px dan pending/pop guard, gudang/process/dispatch 390px (text scale 1,5)/1200px, editor ambang 390px (text scale 1,5)/1200px dan keyboard mobile, kas shift/review 390px (text scale 1,5)/1200px dan navigasi overflow mobile, perubahan pengajuan 390px/1200px, composer pengajuan 390px/1200px dan reset sesi, penerimaan/pesanan 390px (text scale 1,5)/1200px, laporan 390px (text scale 1,5)/1200px, kontrol stok 390px/1200px, peringatan stok 390px/1200px, POS 390px/1200px, stok 390px/1024px dan pemulihan pembayaran |
-| Total | 457 tes lulus |
+| Total | 469 tes lulus |
 | Flutter analyze setelah formatting | Lulus tanpa issue |
 | Migrasi kontrol stok, POS, ambang, histori revisi dan versi akses akun pada DB development | Lulus tanpa reset saldo lama |
 | Compose API/web dan smoke metadata | Healthy dan lulus |
 | Smoke HTTP nyata terisolasi | CSRF/login, supply/kontrol stok, POS tunai, retry draft/pembayaran, reprint, kas keluar, tutup shift dan ambang/peringatan stok rendah, laporan tunai/CSV privat serta capability penerimaan serta preview/create/amend pengajuan native dan metadata/replay kas shift serta detail/konfigurasi minimum native dan inbox/context gudang serta katalog/preview/intake hash-bound serta ledger scoped/filter/snapshot UTC lulus |
 | Composer validate --strict | Kedua aplikasi lulus |
 | JavaScript stock-control/pos-cart/receipt | Syntax check Node lulus; interaksi dropdown pada browser nyata belum diuji |
-| OpenAPI 0.21.0 | 79 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
+| OpenAPI 0.22.0 | 80 operation ID unik, referensi schema dan parameter path konsisten; belum memakai validator OpenAPI eksternal |
 | PostgreSQL/concurrency multi-koneksi | Belum diverifikasi; development memakai SQLite |
 | Android/iOS, printer dan Flutter release web | Belum diverifikasi; unduhan Web SDK sebelumnya ditolak proxy storage.googleapis.com |
 
@@ -310,3 +310,13 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - Full checks ekuivalen scripts/check: API178/1683 assertions, web89/637, Flutter190, total457 tes lulus; analyzer bersih dengan native SDK host fallback terverifikasi. Compose healthy, metadata smoke, Blade cache dan Composer validate strict lulus. Pint pada file PHP baru lulus setelah perapian. OpenAPI0.21.0:79 operasi unik, refs/path parameters/required lists diperiksa lokal; bukan validator eksternal.
 - Status tetap global, bukan membership activation. Perlindungan owner diperketat ke seluruh membership pada deaktivasi/reaktivasi; owner/self/multi-org bukan capability yang boleh diinferensi frontend. Reactivation tidak mengubah kredensial/role/assignment, memberi token otomatis, memulihkan session lama, membuka audit operasional mitra, atau menambah mutasi stok/kas. Legacy deactivate tetap204 dan kini menaikkan revision dengan actual before state.
 - Browser interaksi/visual, perangkat fisik, PostgreSQL concurrency, deployment dan UAT belum diverifikasi. Session pending bukan recovery lintas restart; reset email/MFA, owner recovery dan penggabungan membership lintas organisasi tetap backlog.
+
+
+## Ekspor CSV audit web — 2 November 2026
+
+- 5 tes API baru/51 assertions: scope/deny role/tenant/global-null, shared onboarding allowlist termasuk reaktivasi tanpa product snapshot, inactive organization, exact filters/UTC-WIB boundaries,51 matching records melewati pagination50 tanpa page filter, snapshot historis/no master join/no audit/receipt/ledger writes, tepat10.000 diterima dan10.001 ditolak tanpa data parsial,8MiB ditolak serta required period/filter validation.
+- 7 tes web baru/98 assertions: authenticated scoped query whitelist tanpa page/scope/URL/token browser, fixed CSV headers/private/no-store/nosniff dan API cookie/disposition tidak disalin, UTF8 BOM/quoting/comma/newline/JSON/null/actor, prefix formula ASCII/Unicode/full-width/control, explicit UTC, default WIB/applied-link filters, invalid calendar/range/type tanpa API, wrong organization/row/count/duplicate/snapshot/oversized response/timestamp (termasuk tanggal mustahil/relative time), error/limit feedback/connection/401 dan onboarding empty header.
+- Live HTTP terisolasi nyata lulus: pimpinan mitra mengekspor satu sale.completed yang sama dengan reader, after snapshot Rp12.000, scope organization/privateCSV; admin pusat pada cookie jar lain dengan filter sama mendapat header-only onboarding, tanpa kebocoran event penjualan. GET/export tidak menambah audit atau ledger dan semua flow supply/reapproval/accountreactivation/stock/POS/cash/report/password sebelumnya tetap lulus. Tidak ada fixture di DB development.
+- Final equivalent checks scripts/check: API183/1734 assertions, web96/735, Flutter190, total469 lulus; analyzer bersih melalui SDK host fallback terverifikasi. Composer strict validate, Pint file PHP baru/shared AuditHistory, Blade cache, Compose healthy dan metadata smoke lulus. OpenAPI0.22.0:80 operasi unik/refs/path/required valid lokal, actor_id nullable diperjelas sesuai response lama; bukan validator eksternal.
+- API export adalah bounded JSON untuk BFF; CSV dibuat di frontend HTTP terpisah tanpa DB access. Query scope/allowlist/entry mapper/validasi digunakan bersama reader; reader all-history pagination50 lama tetap lulus. Tidak ada migrasi/dependensi, perluasan role/allowlist, mutasi audit/keuangan atau file permanen baru. Timestamp dan sel CSV adalah data, bukan executable formula atau snapshot restore.
+- Browser interaksi/visual, perangkat nyata, UAT, load production dan PostgreSQL concurrency belum diverifikasi. Ekspor terjadwal/besar dan unduhan file native belum dibuat.

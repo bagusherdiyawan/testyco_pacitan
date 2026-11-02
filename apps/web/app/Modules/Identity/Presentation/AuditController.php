@@ -3,7 +3,6 @@
 namespace App\Modules\Identity\Presentation;
 
 use App\Modules\Identity\Infrastructure\Backend;
-use App\Shared\Application\WibPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 
@@ -13,19 +12,8 @@ final class AuditController
 
     public function index(Request $r, string $organization): mixed
     {
-        $v = $r->validate([
-            'from_day' => 'sometimes|date_format:Y-m-d',
-            'to_day' => 'sometimes|date_format:Y-m-d',
-            'action' => 'nullable|string|max:80',
-            'subject_id' => 'nullable|string|max:80',
-            'actor_id' => 'nullable|integer|min:1',
-            'page' => 'sometimes|integer|min:1',
-        ]);
-        $period = WibPeriod::fromDays($v['from_day'] ?? null, $v['to_day'] ?? null);
-        $exact = array_filter(array_intersect_key($v, array_flip(['action', 'subject_id', 'actor_id'])), fn ($value) => $value !== null && $value !== '');
-        $page = (int) ($v['page'] ?? 1);
-        $query = [...$exact, ...$period->api(), 'page' => $page];
-        $filters = [...$exact, ...$period->calendar()];
+        [$query, $filters, $page] = AuditSearch::parse($r);
+        $query['page'] = $page;
         $payload = $this->api->request('GET', "organizations/$organization/audit", $query)->json();
         abort_unless(is_array($payload)
             && data_get($payload, 'organization.id') === $organization

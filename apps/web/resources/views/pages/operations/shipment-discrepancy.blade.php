@@ -27,7 +27,9 @@
 @endforeach
 @endif
 <h2>Riwayat rencana yang telah diputuskan</h2>
-@forelse($resolutions as $plan)<x-organisms.shipment-discrepancy-plan :plan="$plan" />@empty<p>Belum ada rencana yang diputuskan.</p>@endforelse
+@forelse($resolutions as $plan)<x-organisms.shipment-discrepancy-plan :plan="$plan" />
+@if($plan['status'] === 'confirmed' && $plan['type'] === 'replacement')<p><a href="/app/orders/{{ $order }}/shipments/{{ $shipment }}/discrepancy/replacements">Buka pengiriman dan penerimaan pengganti</a></p>@endif
+@empty<p>Belum ada rencana yang diputuskan.</p>@endforelse
 <x-molecules.pagination :items="$resolutions" />
 @if($c['actions']['note'])<form class="panel" method="post" action="/app/orders/{{ $order }}/shipments/{{ $shipment }}/discrepancy/notes">@csrf<x-molecules.operation-key :remember="false" /><input type="hidden" name="version" value="{{ $c['case']['version'] }}"><x-molecules.field name="message" label="Catatan tindak lanjut (dibaca kedua pihak)" maxlength="2000" :remember="false" required /><x-molecules.field name="reference" label="Referensi bukti (opsional)" maxlength="500" :remember="false" /><x-atoms.button>Tambahkan catatan tindak lanjut</x-atoms.button></form>@endif
 <h2>Riwayat catatan</h2>@forelse($notes as $note)<article class="panel"><p>Versi {{ $note['case_version'] }} · {{ $note['side'] }} · Aktor #{{ $note['actor_id'] }} · {{ $note['created_at'] }}</p><p>{{ $note['message'] }}</p><p>{{ $note['reference'] ?? '' }}</p></article>@empty<p>Belum ada catatan tindak lanjut.</p>@endforelse

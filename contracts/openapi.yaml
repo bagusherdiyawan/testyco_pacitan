@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.24.0",
-    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation. Bounded read-only audit export shares organization/central onboarding scope and exact filters. API provides JSON rows (maximum10000 and8MiB encoded records, explicit timezone period up to31days), web validates scope then formats private UTF8 CSV with spreadsheet-formula protection. No audit or business writes. Bounded stock-ledger export uses the same staff/store/batch query as history. API JSON export supports web CSV with signed integer piece deltas and historical batch snapshots, never balances. Shared limits10000rows/8MiB and explicit timezone period<=31days; no stock/audit writes. Receipt discrepancy cases freeze damaged/missing quantities, append shared notes and provide narrative wholesale plans approved by center owner/admin then confirmed by recipient partner_lead. Plan confirmation does not execute stock returns, replacement shipments or financial credits. Internal transfer cases allow recording only; their resolution approval policy remains undecided."
+    "version": "0.25.0",
+    "description": "Authenticated organization/store-scoped identity, catalog, ordering and supply workflow. Development SQLite; not a complete production POS. Operation IDs are UUIDs, stable for identical retries; reuse for different actor/scope/payload returns 409. All stock writes and operation results commit atomically. Stock controls add frozen pack opening, actual cooking yield/loss, and separate-user stock count approval. All stock movements increment batch revision; stale physical snapshots cannot overwrite new movements. Cash POS: durable unreserved server drafts, one sale per intent, authoritative retail pricing, atomic stock/cash posting and versioned shift close. Cash only; refunds, promotions, automatic payments and offline settlement are not implemented. Live per-store/SKU minimum-stock warnings and versioned threshold configuration are available. These are on-demand warnings, not push notifications or an automatic replenishment workflow. Native Flutter stock controls use the same server process/count/review rules and an Inventory-owned capability context. Scoped cash-sales reporting adds store comparison, historical product breakdown and bounded private CSV exports. B2B revenue, transfers, debt, refunds and non-cash are outside this report. Native recipient ordering adds permission/status/active-target hints for approve/reject/cancel/actual receipt, using existing versioned and idempotent workflows. Native order entry uses a read-only authoritative preview and optional review_hash on create for optimistic review binding; pending requests remain immutable and idempotent. Native preapproval amendments share the composer, bind review to original order/version and preserve order identity under idempotent PUT. Postapproval quantity reductions use a separate proposal/history API before the first shipment. Original approved quantities remain until recipient approval; pending proposals hold processing, dispatch and cancellation. No replacement, credit or stock writes. Versioned account reactivation restores existing global account status only, preserving roles/assignments/password and revoking all old tokens. Central administrators alone may change multi-organization identities; self/owner identities are protected. Reactivation UUID replay may be historical and never re-enables an account disabled after that operation. Bounded read-only audit export shares organization/central onboarding scope and exact filters. API provides JSON rows (maximum10000 and8MiB encoded records, explicit timezone period up to31days), web validates scope then formats private UTF8 CSV with spreadsheet-formula protection. No audit or business writes. Bounded stock-ledger export uses the same staff/store/batch query as history. API JSON export supports web CSV with signed integer piece deltas and historical batch snapshots, never balances. Shared limits10000rows/8MiB and explicit timezone period<=31days; no stock/audit writes. Receipt discrepancy cases freeze damaged/missing quantities, append shared notes and provide narrative wholesale plans approved by center owner/admin then confirmed by recipient partner_lead. Plan confirmation does not execute stock returns, replacement shipments or financial credits. Internal transfer cases allow recording only; their resolution approval policy remains undecided. Confirmed wholesale replacement plans now support bounded partial physical dispatch and actual receipt through atomic stock ledger posting, independent of original shipment/order quantities. Secondary damage/shortage requires follow-up; return/credit plans do not authorize replacement execution."
   },
   "security": [
     {
@@ -3775,7 +3775,9 @@
                 "inventory_cook",
                 "stock_count",
                 "stock_waste",
-                "pos_sale"
+                "pos_sale",
+                "replacement_dispatch",
+                "replacement_receipt"
               ]
             }
           },
@@ -8585,7 +8587,9 @@
                 "inventory_cook",
                 "stock_count",
                 "stock_waste",
-                "pos_sale"
+                "pos_sale",
+                "replacement_dispatch",
+                "replacement_receipt"
               ]
             }
           },
@@ -9390,6 +9394,324 @@
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/ShipmentDiscrepancyDecisionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{order}/shipments/{shipment}/discrepancy/replacements": {
+      "get": {
+        "operationId": "getReplacementContext",
+        "summary": "Read confirmed replacement execution",
+        "description": "Read confirmed replacement execution. Existing authorized order-view scope; per-shipment receipt capability, global quota and supplier-only batch choices. Execution fulfilled only when every original issue pack is received good; damaged/missing replacements require follow-up without automatic quota. Private/no-store. No original order version/status/quantities, original receipt, invoice, cash or credit writes. All quantities use frozen pack conversion; current master renames/prices cannot replace historical metadata.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale case, no confirmed replacement plan, inactive stores/organizations, duplicate receipt, insufficient usable stock or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; idempotent replay may be historical, reload context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReplacementContext"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "dispatchReplacement",
+        "summary": "Dispatch partial replacement from original source warehouse",
+        "description": "Dispatch partial replacement from original source warehouse. Supplier owner/admin or assigned source warehouse; confirmed replacement plan, current case version and active source/destination required. Distinct original issue lines, distinct batches per line, sums within remaining quota; batches match source/product/historical pack/condition. Debits usable stock, increments stock revision, records replacement_dispatch ledger and audits both parties atomically with case version and operation receipt. Private/no-store. No original order version/status/quantities, original receipt, invoice, cash or credit writes. All quantities use frozen pack conversion; current master renames/prices cannot replace historical metadata.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale case, no confirmed replacement plan, inactive stores/organizations, duplicate receipt, insufficient usable stock or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "201": {
+            "description": "Success; idempotent replay may be historical, reload context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReplacementResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacementDispatchInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/orders/{order}/shipments/{shipment}/discrepancy/replacements/{replacement}/receive": {
+      "post": {
+        "operationId": "receiveReplacement",
+        "summary": "Receive actual replacement packs",
+        "description": "Receive actual replacement packs. Recipient staff authority and active source/destination; exact pending shipment and current case version required. Every replacement line exactly once, explicit good/damaged including zero, sum<=sent, nonblank condition note for shortage/damage. Credits usable/quarantined through stock ledger, records replacement_receipt, case version and both-party audit atomically. Missing packs are not credited; original damaged stock remains quarantined. Private/no-store. No original order version/status/quantities, original receipt, invoice, cash or credit writes. All quantities use frozen pack conversion; current master renames/prices cannot replace historical metadata.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "order",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "replacement",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "401": {
+            "description": "Authentication expired/inactive account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized organization/store/action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale case, no confirmed replacement plan, inactive stores/organizations, duplicate receipt, insufficient usable stock or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid input, quantities or batch mapping",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "200": {
+            "description": "Success; idempotent replay may be historical, reload context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ReplacementResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReplacementReceiptInput"
               }
             }
           }
@@ -10502,7 +10824,9 @@
               "inventory_cook",
               "stock_count",
               "stock_waste",
-              "pos_sale"
+              "pos_sale",
+              "replacement_dispatch",
+              "replacement_receipt"
             ]
           },
           "source_id": {
@@ -13470,7 +13794,9 @@
               "inventory_cook",
               "stock_count",
               "stock_waste",
-              "pos_sale"
+              "pos_sale",
+              "replacement_dispatch",
+              "replacement_receipt"
             ]
           },
           "page": {
@@ -14144,7 +14470,9 @@
               "inventory_cook",
               "stock_count",
               "stock_waste",
-              "pos_sale"
+              "pos_sale",
+              "replacement_dispatch",
+              "replacement_receipt"
             ]
           },
           "source_id": {
@@ -15015,6 +15343,614 @@
           "reason"
         ],
         "description": "Only documented validated fields are used. No client quantities, prices, amounts or stock disposition. Preserve identical UUID/path/body on uncertain result; replay can be historical. Version is case version except report, which uses parent order_version."
+      },
+      "ReplacementLine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "replacement_shipment_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "original_shipment_line_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "inventory_batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "local_product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "local_sku": {
+            "type": "string"
+          },
+          "local_name": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          },
+          "batch_code": {
+            "type": "string"
+          },
+          "expires_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "pack_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quantity_packs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "good_packs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "damaged_packs": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "condition_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "replacement_shipment_id",
+          "original_shipment_line_id",
+          "inventory_batch_id",
+          "local_product_id",
+          "sku",
+          "name",
+          "local_sku",
+          "local_name",
+          "condition",
+          "batch_code",
+          "expires_on",
+          "pack_size",
+          "quantity_packs",
+          "good_packs",
+          "damaged_packs",
+          "condition_note"
+        ]
+      },
+      "ReplacementShipment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "case_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "resolution_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "source_store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "dispatched_by": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "received_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "handler": {
+            "type": "string"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "receipt_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dispatched_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "received_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplacementLine"
+            }
+          },
+          "can_receive": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "case_id",
+          "resolution_id",
+          "source_store_id",
+          "dispatched_by",
+          "handler",
+          "dispatched_at",
+          "lines"
+        ]
+      },
+      "ReplacementQuota": {
+        "type": "object",
+        "properties": {
+          "shipment_line_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "order_line_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "source_batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "local_sku": {
+            "type": "string"
+          },
+          "local_name": {
+            "type": "string"
+          },
+          "batch_code": {
+            "type": "string"
+          },
+          "expires_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "pack_size": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "sent_packs": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "good_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "damaged_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "damaged_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "missing_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "condition_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "supplier_product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "limit_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "replacement_sent_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "replacement_good_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "in_transit_packs": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "remaining_packs": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "shipment_line_id",
+          "order_line_id",
+          "source_batch_id",
+          "sku",
+          "name",
+          "local_sku",
+          "local_name",
+          "batch_code",
+          "expires_on",
+          "pack_size",
+          "sent_packs",
+          "good_packs",
+          "damaged_packs",
+          "missing_packs",
+          "damaged_pieces",
+          "missing_pieces",
+          "condition_note",
+          "supplier_product_id",
+          "limit_packs",
+          "replacement_sent_packs",
+          "replacement_good_packs",
+          "in_transit_packs",
+          "remaining_packs"
+        ],
+        "description": "Per original shipment line. limit=original damaged+missing; remaining=limit minus ALL replacement packs sent, including later damaged/missing. Never unsent original order remainder. No recursive quota."
+      },
+      "ReplacementContext": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "shipment_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "case_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "case_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "source_store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "resolution": {
+            "$ref": "#/components/schemas/ShipmentDiscrepancyResolution"
+          },
+          "execution_status": {
+            "enum": [
+              "ready",
+              "in_transit",
+              "partially_fulfilled",
+              "requires_follow_up",
+              "fulfilled"
+            ]
+          },
+          "quota": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplacementQuota"
+            }
+          },
+          "batches": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "store_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "product_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "batch_code": {
+                  "type": "string"
+                },
+                "expires_on": {
+                  "type": "string",
+                  "format": "date"
+                },
+                "pack_size": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "condition": {
+                  "type": "string"
+                },
+                "usable_pieces": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "stock_revision": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "required": [
+                "id",
+                "store_id",
+                "product_id",
+                "batch_code",
+                "expires_on",
+                "pack_size",
+                "condition",
+                "usable_pieces",
+                "stock_revision"
+              ]
+            }
+          },
+          "can_dispatch": {
+            "type": "boolean"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReplacementShipment"
+            }
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "current_page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "last_page": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "per_page": {
+            "type": "integer",
+            "const": 50
+          }
+        },
+        "required": [
+          "order_id",
+          "shipment_id",
+          "case_id",
+          "case_version",
+          "source_store_id",
+          "store_id",
+          "resolution",
+          "execution_status",
+          "quota",
+          "batches",
+          "can_dispatch",
+          "data",
+          "total",
+          "current_page",
+          "last_page",
+          "per_page"
+        ],
+        "description": "Authorized parent order view. Confirmed wholesale replacement plan only. Consistent locked context; global quotas independent of 50-row descending shipment history. Each history row has can_receive. Source batch choices only for authorized dispatcher; no supplier prices or recipient POS data. Inactive stores remain readable; all stock writes require both active source and destination."
+      },
+      "ReplacementDispatchInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          },
+          "handler": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 120
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "properties": {
+                "original_shipment_line_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "allocations": {
+                  "type": "array",
+                  "minItems": 1,
+                  "maxItems": 100,
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "batch_id": {
+                        "type": "string",
+                        "description": "ULID"
+                      },
+                      "quantity_packs": {
+                        "type": "integer",
+                        "minimum": 1,
+                        "maximum": 10000
+                      }
+                    },
+                    "required": [
+                      "batch_id",
+                      "quantity_packs"
+                    ]
+                  }
+                }
+              },
+              "required": [
+                "original_shipment_line_id",
+                "allocations"
+              ]
+            }
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "handler",
+          "lines"
+        ]
+      },
+      "ReplacementReceiptInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2000
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 10000,
+            "items": {
+              "type": "object",
+              "properties": {
+                "replacement_line_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "good_packs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                "damaged_packs": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 10000
+                },
+                "condition_note": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 2000
+                }
+              },
+              "required": [
+                "replacement_line_id",
+                "good_packs",
+                "damaged_packs"
+              ]
+            }
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "lines"
+        ]
+      },
+      "ReplacementResult": {
+        "type": "object",
+        "properties": {
+          "order_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "shipment_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "case_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "case_version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "replacement": {
+            "$ref": "#/components/schemas/ReplacementShipment"
+          },
+          "execution_status": {
+            "enum": [
+              "ready",
+              "in_transit",
+              "partially_fulfilled",
+              "requires_follow_up",
+              "fulfilled"
+            ]
+          }
+        },
+        "required": [
+          "order_id",
+          "shipment_id",
+          "case_id",
+          "case_version",
+          "replacement",
+          "execution_status"
+        ]
       }
     }
   }

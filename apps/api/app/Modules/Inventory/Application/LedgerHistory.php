@@ -11,7 +11,7 @@ use Illuminate\Support\Facades\DB;
 
 final class LedgerHistory
 {
-    public const SOURCES = ['warehouse_intake', 'shipment_dispatch', 'shipment_receipt', 'inventory_open', 'inventory_cook', 'stock_count', 'stock_waste', 'pos_sale'];
+    public const SOURCES = ['replacement_dispatch', 'replacement_receipt', 'warehouse_intake', 'shipment_dispatch', 'shipment_receipt', 'inventory_open', 'inventory_cook', 'stock_count', 'stock_waste', 'pos_sale'];
 
     public function __construct(private Access $access) {}
 

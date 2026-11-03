@@ -547,6 +547,43 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']==before_case_batches
         assert api(base,'GET',f'orders/{order_id}',token=lead_token)['data']['version']==before_case_order['version']
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
+        # Execute confirmed replacement with actual inventory posting, using real CSRF forms.
+        replacement_path=case_path+'/replacements'
+        replacement_api=case_api+'/replacements'
+        replacement_context=api(base,'GET',replacement_api,token=owner)
+        assert replacement_context['execution_status']=='ready' and replacement_context['can_dispatch']
+        original_line=replacement_context['quota'][0]['shipment_line_id']
+        source_product=replacement_context['quota'][0]['supplier_product_id']
+        api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':source_product,'batch_code':'REPLACEMENT-STOCK','expires_on':'2030-01-01','quantity_packs':2,'note':'Physical replacement stock replenishment'},owner,201)
+        replacement_context=api(base,'GET',replacement_api,token=owner)
+        source_batch=next(b for b in replacement_context['batches'] if b['product_id']==source_product and b['pack_size']==8 and b['usable_pieces']>=16)
+        source_before=source_batch['usable_pieces']
+        target_before=sum(b['usable_pieces'] for b in before_case_batches)
+        damaged_before=sum(b['quarantined_pieces'] for b in before_case_batches)
+        replacement_html=central_browser.open(web+replacement_path).read().decode()
+        dispatch_form=fields(replacement_html,replacement_path)
+        dispatch_form.update({'handler':'Replacement courier','note':'Two physical replacements','lines[0][original_shipment_line_id]':original_line,'lines[0][batch_id]':source_batch['id'],'lines[0][quantity_packs]':'2'})
+        central_browser.open(Request(web+replacement_path,data=urlencode(dispatch_form).encode())).read()
+        replacement_context=api(base,'GET',replacement_api,token=lead_token)
+        assert replacement_context['execution_status']=='in_transit' and replacement_context['quota'][0]['remaining_packs']==0
+        replacement_id=replacement_context['data'][0]['id']
+        receipt_url=replacement_path+'/'+replacement_id+'/receive'
+        replacement_html=opener.open(web+replacement_path).read().decode()
+        replacement_receipt=fields(replacement_html,receipt_url)
+        replacement_receipt.update({'lines[0][good_packs]':'2','lines[0][damaged_packs]':'0','note':'Replacement physically received'})
+        web_post(receipt_url,replacement_receipt).read()
+        original_receipt={'operation_id':replacement_receipt['operation_id'],'version':replacement_receipt['version'],'note':replacement_receipt['note'],'lines':[{'replacement_line_id':replacement_receipt['lines[0][replacement_line_id]'],'good_packs':'2','damaged_packs':'0'}]}
+        api(base,'POST',replacement_api+'/'+replacement_id+'/receive',original_receipt,lead_token)
+        final_replacement=api(base,'GET',replacement_api,token=lead_token)
+        assert final_replacement['execution_status']=='fulfilled' and final_replacement['quota'][0]['replacement_good_packs']==2
+        source_after=next(b for b in api(base,'GET',f'stores/{source}/inventory/batches',token=owner)['data'] if b['id']==source_batch['id'])
+        target_after=api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']
+        assert source_after['usable_pieces']==source_before-16
+        assert sum(b['usable_pieces'] for b in target_after)==target_before+16
+        assert sum(b['quarantined_pieces'] for b in target_after)==damaged_before
+        assert api(base,'GET',f'orders/{order_id}',token=lead_token)['data']['version']==before_case_order['version']
+        assert api(base,'GET',f'stores/{store}/inventory/ledger?source_type=replacement_receipt',token=manager_token)['data'][0]['quantity_pieces']==16
+        ledger_before+=1
         # Disposable account: real web CSRF reactivation, stale version and old-token denial.
         member=api(base,'POST',f'organizations/{org}/users',{'name':'Returning staff','email':'returning@smoke.test','password':PASSWORD,'role':'cashier','store_ids':[store]},lead_token,201)['data']
         member_path=f'organizations/{org}/users/{member["id"]}'
@@ -585,7 +622,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST','auth/logout',{},changed_session,204)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, stock ledger CSV/scoped signed pieces, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, receipt discrepancy case and supplier-plan/partner-confirmation with no stock execution, password rotation/revoked sessions, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, stock ledger CSV/scoped signed pieces, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, receipt discrepancy case and supplier-plan/partner-confirmation and physical replacement dispatch/actual receipt with once-only stock posting, password rotation/revoked sessions, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

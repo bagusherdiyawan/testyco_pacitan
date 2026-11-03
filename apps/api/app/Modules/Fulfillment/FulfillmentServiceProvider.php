@@ -3,6 +3,7 @@
 namespace App\Modules\Fulfillment;
 
 use App\Modules\Fulfillment\Presentation\FulfillmentController;
+use App\Modules\Fulfillment\Presentation\ReplacementController;
 use App\Modules\Fulfillment\Presentation\ShipmentDiscrepancyController;
 use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Inventory\InventoryServiceProvider;
@@ -31,6 +32,9 @@ final class FulfillmentServiceProvider extends ServiceProvider
             Route::post('orders/{order}/shipments/{shipment}/discrepancy/notes', [ShipmentDiscrepancyController::class, 'note']);
             Route::post('orders/{order}/shipments/{shipment}/discrepancy/resolutions', [ShipmentDiscrepancyController::class, 'proposeResolution']);
             Route::post('orders/{order}/shipments/{shipment}/discrepancy/resolutions/{resolution}/{action}', [ShipmentDiscrepancyController::class, 'decideResolution'])->where('action', 'confirm|reject|withdraw');
+            Route::get('orders/{order}/shipments/{shipment}/discrepancy/replacements', [ReplacementController::class, 'show']);
+            Route::post('orders/{order}/shipments/{shipment}/discrepancy/replacements', [ReplacementController::class, 'dispatch']);
+            Route::post('orders/{order}/shipments/{shipment}/discrepancy/replacements/{replacement}/receive', [ReplacementController::class, 'receive']);
             Route::post('shipments/{shipment}/receive', [$c, 'receive']);
         });
     }

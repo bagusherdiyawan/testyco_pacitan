@@ -25,12 +25,12 @@ final class StockLedger
         return $record->fresh()->toArray();
     }
 
-    public function dispatch(string $batchId, string $store, string $product, int $packSize, int $packs, int $actor, string $sourceId): array
+    public function dispatch(string $batchId, string $store, string $product, int $packSize, int $packs, int $actor, string $sourceId, string $sourceType = 'shipment_dispatch'): array
     {
         $batch = InventoryBatch::where('store_id', $store)->where('product_id', $product)->where('pack_size', $packSize)->lockForUpdate()->findOrFail($batchId);
         $pieces = $packs * $packSize;
         abort_unless($batch->usable_pieces >= $pieces, 409, 'Stok batch tidak cukup; stok karantina tidak dapat dikirim.');
-        $this->apply($batch, $actor, ['usable' => -$pieces], 'shipment_dispatch', $sourceId);
+        $this->apply($batch, $actor, ['usable' => -$pieces], $sourceType, $sourceId);
 
         return $batch->fresh()->toArray();
     }

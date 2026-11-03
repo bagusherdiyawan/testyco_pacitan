@@ -26,4 +26,6 @@ Ekspor audit organisasi kini melalui bounded JSON API dan CSV web, dengan query 
 
 CSV pergerakan stok web kini melalui bounded JSON ledger API dengan query staff/store/batch yang sama. Angka bertanda tetap delta biji, bukan saldo; lihat [panduan](../../docs/ledger-export.md).
 
-Kasus selisih kiriman kini tersedia melalui API/web: snapshot penerimaan aktual, catatan bersama, usulan rencana owner/admin pusat lalu konfirmasi pimpinan mitra. Tidak mengeksekusi retur/pengganti/kredit atau mengubah stok/order/invoice. Lihat [panduan kasus](../../docs/shipment-discrepancies.md).
+Kasus selisih kiriman kini tersedia melalui API/web: snapshot penerimaan aktual, catatan bersama, usulan rencana owner/admin pusat lalu konfirmasi pimpinan mitra. Operasi kasus/rencana tidak mengeksekusi stok; workflow pengganti terpisah kini mendebit/mengkredit stok melalui ledger, tanpa mengubah order asal/invoice. Retur/kredit belum tersedia. Lihat [panduan kasus](../../docs/shipment-discrepancies.md).
+
+[Pengiriman pengganti](../../docs/replacement-fulfillment.md): rencana dikonfirmasi → batch/dispatch parsial → receipt aktual → status fulfilled.

@@ -7,6 +7,8 @@ class LedgerFilterException implements Exception {
 
 const stockSourceLabels = {
   'warehouse_intake': 'Penerimaan awal gudang',
+  'replacement_dispatch': 'Kirim pengganti',
+  'replacement_receipt': 'Terima pengganti',
   'shipment_dispatch': 'Pengiriman',
   'shipment_receipt': 'Penerimaan pesanan',
   'inventory_open': 'Buka kemasan',

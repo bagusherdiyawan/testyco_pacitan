@@ -8,6 +8,7 @@ use App\Modules\Operations\Presentation\BatchExpiryController;
 use App\Modules\Operations\Presentation\LedgerExportController;
 use App\Modules\Operations\Presentation\OperationsController;
 use App\Modules\Operations\Presentation\OrderChangeController;
+use App\Modules\Operations\Presentation\ReplacementController;
 use App\Modules\Operations\Presentation\ShipmentDiscrepancyController;
 use App\Modules\Operations\Presentation\StockControlController;
 use App\Modules\Operations\Presentation\StockLedgerController;
@@ -46,6 +47,10 @@ final class OperationsServiceProvider extends ServiceProvider
             Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/resolutions', [ShipmentDiscrepancyController::class, 'propose']);
             Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/resolutions/{resolution}/{action}', [ShipmentDiscrepancyController::class, 'decide'])->where('action', 'confirm|reject|withdraw');
             Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/retry', [ShipmentDiscrepancyController::class, 'retry']);
+            Route::get('/app/orders/{order}/shipments/{shipment}/discrepancy/replacements', [ReplacementController::class, 'show']);
+            Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/replacements', [ReplacementController::class, 'dispatch']);
+            Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/replacements/{replacement}/receive', [ReplacementController::class, 'receive']);
+            Route::post('/app/orders/{order}/shipments/{shipment}/discrepancy/replacements/retry', [ReplacementController::class, 'retry']);
             Route::get('/app/orders/{order}/changes', [OrderChangeController::class, 'index']);
             Route::post('/app/orders/{order}/changes', [OrderChangeController::class, 'propose']);
             Route::post('/app/orders/{order}/changes/retry', [OrderChangeController::class, 'retry']);

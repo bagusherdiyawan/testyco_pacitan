@@ -8,7 +8,7 @@ use Illuminate\Pagination\LengthAwarePaginator;
 
 final class StockLedgerController
 {
-    public const SOURCES = ['warehouse_intake' => 'Penerimaan awal gudang', 'shipment_dispatch' => 'Pengiriman', 'shipment_receipt' => 'Penerimaan pesanan', 'inventory_open' => 'Buka kemasan', 'inventory_cook' => 'Pengukusan', 'stock_count' => 'Stok opname', 'stock_waste' => 'Susut disetujui', 'pos_sale' => 'Penjualan POS'];
+    public const SOURCES = ['replacement_dispatch' => 'Kirim pengganti', 'replacement_receipt' => 'Terima pengganti', 'warehouse_intake' => 'Penerimaan awal gudang', 'shipment_dispatch' => 'Pengiriman', 'shipment_receipt' => 'Penerimaan pesanan', 'inventory_open' => 'Buka kemasan', 'inventory_cook' => 'Pengukusan', 'stock_count' => 'Stok opname', 'stock_waste' => 'Susut disetujui', 'pos_sale' => 'Penjualan POS'];
 
     public const BUCKETS = ['usable' => 'Utuh', 'opened' => 'Beku terbuka', 'ready' => 'Siap jual', 'quarantined' => 'Karantina', 'waste' => 'Susut'];
 

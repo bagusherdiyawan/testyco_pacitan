@@ -70,7 +70,7 @@ $u = App\\Models\\User::create(['name'=>'Smoke Owner','email'=>'owner@smoke.test
 if (!Illuminate\\Support\\Facades\\Hash::check(getenv('TEST_PASSWORD'),$u->fresh()->password)) throw new RuntimeException('Test password hashing mismatch');
 Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organization_id'=>$org->id,'user_id'=>$u->id,'role'=>'owner']);
 ''')
-        common = ['--user', f'{os.getuid()}:{os.getgid()}', '--network', NAME, '-p', '127.0.0.1::8000', '-v', f'{ROOT}:/app', '-e', 'APP_ENV=testing', '-e', 'APP_DEBUG=false', '-e', 'NO_PROXY=api,localhost,127.0.0.1', '-e', 'no_proxy=api,localhost,127.0.0.1']
+        common = ['--user', f'{os.getuid()}:{os.getgid()}', '--network', NAME, '-p', '127.0.0.1::8000', '-v', f'{ROOT}:/app', '-e', 'APP_ENV=testing', '-e', 'PRIVATE_STORAGE_PATH=/tmp/private-assets', '-e', 'APP_DEBUG=false', '-e', 'NO_PROXY=api,localhost,127.0.0.1', '-e', 'no_proxy=api,localhost,127.0.0.1']
         api_name = NAME + '-api'
         docker('run', '-d', '--name', api_name, '--network-alias', 'api', *common, '-e', 'DB_DATABASE=/tmp/smoke.sqlite', '-e', 'TEST_PASSWORD', '-v', directory + ':/fixtures:ro', '-w', '/app/apps/api', IMAGE, 'sh', '-c', 'touch /tmp/smoke.sqlite && php artisan migrate --force --no-interaction && php /fixtures/seed.php && php artisan serve --host=0.0.0.0 --port=8000 --no-reload')
         created.append(api_name)
@@ -353,7 +353,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         response = web_post(cart_path, cart); html = response.read().decode(); intent_id = response.url.rsplit('/',1)[1]
         assert 'Tinjau pembayaran' in html and 'Total Rp 12000' in html
         assert web_post(cart_path, cart).url.endswith(intent_id)
-        pay_path = f'/app/pos/intents/{intent_id}/pay'; payment = fields(html, pay_path); payment['cash_received']='20000'
+        pay_path = f'/app/pos/intents/{intent_id}/pay'; payment = fields(html, pay_path); payment.update({'cash_received':'20000','payment_method':'cash'})
         response = web_post(pay_path, payment); html=response.read().decode(); sale_id=response.url.rsplit('/',1)[1]
         assert '12.000' in html and '8.000' in html and 'Cetak melalui browser' in html
         assert web_post(pay_path,payment).url.endswith(sale_id)
@@ -429,6 +429,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
             rows=list(csv.reader(io.StringIO(response.read().decode('utf-8-sig'))))
             assert 'no-store' in response.headers['Cache-Control']
         assert len(rows)==2 and rows[1][0]==sale['number'] and rows[1][8]=='12000'
+        cashier_browser=opener
         opener=build_opener(HTTPCookieProcessor(http.cookiejar.CookieJar()))
         html=opener.open(web+'/login').read().decode()
         csrf=re.search(r'name="_token" value="([^"]+)"',html).group(1)
@@ -609,6 +610,132 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',audit_path+'?'+urlencode({'action':'user.reactivated','subject_id':str(member['id'])}),token=lead_token)['total']==1
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
         api(base,'POST','auth/logout',{},new_member_token,204)
+        # Respect the unchanged180/min per-user business limiter before the second workflow group.
+        print('Pacing isolated HTTP checks for the next rate-limit window.',flush=True)
+        time.sleep(60)
+        # DL12/14/17: revisions, effective prices, private images, bundle stock and contract consent.
+        new_source=api(base,'POST',f'organizations/{center}/products',{'sku':'UDANG-8','name':'Smoke Udang','condition':'frozen','pack_size':8,'portion_size':4,'wholesale_price':24000,'retail_price':4000},owner,201)['data']
+        new_local=api(base,'POST',f'organizations/{org}/products',{'sku':'LOCAL-UDANG8','name':'Smoke Local Udang','condition':'frozen','pack_size':8,'portion_size':4,'wholesale_price':24000,'retail_price':4000},lead_token,201)['data']
+        original=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
+        revision_path=f'/app/orders/{order_id}/revisions'
+        revision_html=opener.open(web+revision_path).read().decode()
+        proposal=fields(revision_html,revision_path)
+        proposal.update({'existing[0][quantity_packs]':'20','additions[0][supplier_product_id]':new_source['id'],'additions[0][local_product_id]':new_local['id'],'additions[0][quantity_packs]':'3','reason':'Add shrimp after actual initial shipment'})
+        preview_html=web_post(revision_path,proposal).read().decode()
+        assert '432000' in preview_html and 'Konfirmasi ajukan revisi' in preview_html
+        assert api(base,'GET',f'orders/{order_id}/revisions',token=lead_token)['total']==0
+        confirm_revision=revision_path+'/confirm'
+        web_post(confirm_revision,fields(preview_html,confirm_revision)).read()
+        revised=api(base,'GET',f'orders/{order_id}/revisions',token=lead_token)
+        assert revised['pending']['after']['total_amount']==432000
+        revision_id=revised['pending']['id'];accept_revision=revision_path+'/'+revision_id+'/approve'
+        revision_html=central_browser.open(web+revision_path).read().decode()
+        central_browser.open(Request(web+accept_revision,data=urlencode(fields(revision_html,accept_revision)).encode())).read()
+        revised=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
+        assert len(revised['lines'])==2 and revised['total_amount']==432000
+        new_line=next(l for l in revised['lines'] if l['supplier_product_id']==new_source['id'])
+        new_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':new_source['id'],'batch_code':'UDANG-NEW','expires_on':'2030-01-01','quantity_packs':3,'note':'Actual shrimp stock'},owner,201)['data']
+        extra_shipment=api(base,'POST',f'orders/{order_id}/shipments',{'operation_id':str(uuid.uuid4()),'version':revised['version'],'handler':'Shrimp dispatch','lines':[{'order_line_id':new_line['id'],'allocations':[{'batch_id':new_stock['id'],'quantity_packs':3}]}]},owner,201)['data']
+        api(base,'POST',f'shipments/{extra_shipment["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':extra_shipment['order']['version'],'lines':[{'shipment_line_id':extra_shipment['shipment']['lines'][0]['id'],'good_packs':3,'damaged_packs':0}]},lead_token)
+        stocks=api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']
+        old_batch=next(b for b in stocks if b['product_id']==local_product_id and b['usable_pieces']>=8)
+        new_batch=next(b for b in stocks if b['product_id']==new_local['id'])
+        for physical in [old_batch,new_batch]:
+            api(base,'POST',f'stores/{store}/inventory/processes',{'operation_id':str(uuid.uuid4()),'batch_id':physical['id'],'expected_revision':physical['stock_revision'],'kind':'open','quantity_packs':1,'reason':'Open actual pack for recipe components'},lead_token,201)
+        today=(datetime.now(timezone.utc)+timedelta(hours=7)).date().isoformat()
+        config_path=f'/app/organizations/{org}/products/{new_local["id"]}/configuration'
+        config_html=opener.open(web+config_path).read().decode();price_path=config_path+'/prices'
+        price_form=fields(config_html,price_path);price_form.update({'channel':'retail','starts_on':today,'ends_on':today,'price':'5000','reason':'Reviewed price period'})
+        web_post(price_path,price_form).read()
+        assert next(p for p in api(base,'GET',f'stores/{store}/catalog',token=cashier_token)['data'] if p['id']==new_local['id'])['retail_price']==5000
+        png='iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jmWQAAAAASUVORK5CYII='
+        api(base,'POST',f'organizations/{org}/products/{new_local["id"]}/image',{'operation_id':str(uuid.uuid4()),'version':0,'image_base64':png},lead_token)
+        with opener.open(web+f'/app/organizations/{org}/products/{new_local["id"]}/image') as image_response:
+            assert image_response.headers['Content-Type']=='image/png' and 'no-store' in image_response.headers['Cache-Control']
+        assert api(base,'GET',f'stores/{store}/catalog/{new_local["id"]}/image-data',token=cashier_token)['image_base64']==png
+        bundle=api(base,'POST',f'organizations/{org}/products',{'sku':'BUNDLE-AYAM-UDANG','name':'Smoke bundle2 ayam1 udang','condition':'frozen','pack_size':1,'portion_size':1,'wholesale_price':0,'retail_price':14000},lead_token,201)['data']
+        api(base,'POST',f'organizations/{org}/products/{bundle["id"]}/recipe',{'operation_id':str(uuid.uuid4()),'version':0,'active':True,'components':[{'product_id':local_product_id,'pieces':2},{'product_id':new_local['id'],'pieces':1}]},lead_token)
+        bundle_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Bundle terminal','opening_cash':0},cashier_token,201)['data']
+        bundle_path=f'/app/stores/{store}/pos/bundles/{bundle["id"]}'
+        bundle_html=cashier_browser.open(web+bundle_path).read().decode();bundle_form=fields(bundle_html,bundle_path)
+        bundle_form.update({'quantity':'1','components[0][stock]':old_batch['id']+':opened','components[1][stock]':new_batch['id']+':opened'})
+        bundle_response=cashier_browser.open(Request(web+bundle_path,data=urlencode(bundle_form).encode()));bundle_html=bundle_response.read().decode();bundle_intent=bundle_response.url.rsplit('/',1)[1]
+        assert 'Total Rp 14000' in bundle_html
+        bundle_pay=f'/app/pos/intents/{bundle_intent}/pay';bundle_payment=fields(bundle_html,bundle_pay);bundle_payment.update({'cash_received':'14000','payment_method':'cash'})
+        bundle_response=cashier_browser.open(Request(web+bundle_pay,data=urlencode(bundle_payment).encode()));bundle_response.read();bundle_sale=bundle_response.url.rsplit('/',1)[1]
+        actual_bundle=api(base,'GET',f'sales/{bundle_sale}',token=cashier_token)['data']
+        assert actual_bundle['total_amount']==14000 and len(actual_bundle['lines'][0]['recipe_snapshot']['components'])==2
+        stocks=api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']
+        assert next(b for b in stocks if b['id']==old_batch['id'])['opened_pieces']==old_batch['opened_pieces']+8-2
+        assert next(b for b in stocks if b['id']==new_batch['id'])['opened_pieces']==new_batch['opened_pieces']+8-1
+        current_shift=api(base,'GET',f'shifts/{bundle_shift["id"]}',token=cashier_token)['data']
+        api(base,'POST',f'shifts/{bundle_shift["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':current_shift['version'],'counted_cash':14000},cashier_token)
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before+7
+        ledger_before+=7
+        contract=api(base,'POST',f'organizations/{center}/contracts',{'operation_id':str(uuid.uuid4()),'partner_id':org,'title':'Reviewed partnership','mode':'buyout','starts_on':today,'ends_on':'2030-12-31','terms':'Agreed written terms','brand_terms':'Agreed branding','data_scope':'Onboarding only','facilities':'No automatic asset charges'},owner,201)['data']
+        assert api(base,'GET',f'organizations/{org}/contracts',token=lead_token)['total']==0
+        center_contract_path=f'/app/organizations/{center}/contracts'
+        contract_html=central_browser.open(web+center_contract_path).read().decode();publish_path=center_contract_path+'/'+contract['id']+'/publish'
+        central_browser.open(Request(web+publish_path,data=urlencode(fields(contract_html,publish_path)).encode())).read()
+        partner_contract_path=f'/app/organizations/{org}/contracts';contract_html=opener.open(web+partner_contract_path).read().decode();accept_path=partner_contract_path+'/'+contract['id']+'/accept'
+        consent=fields(contract_html,accept_path);consent.update({'consent':'1','consent_name':'Smoke partner director'})
+        web_post(accept_path,consent).read()
+        assert api(base,'GET',f'organizations/{org}/contracts',token=lead_token)['data'][0]['status']=='accepted'
+        # DL13/15/16: real return quarantine, explicit invoice/credit/consignment and manual POS adjustments.
+        finance_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':supplier_id,'batch_code':'FINANCE-RETURN','expires_on':'2030-01-01','quantity_packs':2,'note':'Actual return fixture stock'},owner,201)['data']
+        fo=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':supplier_id,'local_product_id':local_product_id,'quantity_packs':2}]},lead_token,201)['data']
+        for action,actor,extra in [('approve',lead_token,{}),('process',owner,{'source_store_id':source})]:
+            fo=api(base,'POST',f'orders/{fo["id"]}/{action}',{'operation_id':str(uuid.uuid4()),'version':fo['version'],**extra},actor)['data']
+        fd=api(base,'POST',f'orders/{fo["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':fo['version'],'handler':'Actual finance shipment','lines':[{'order_line_id':fo['lines'][0]['id'],'allocations':[{'batch_id':finance_stock['id'],'quantity_packs':2}]}]},owner,201)['data']
+        fr=api(base,'POST',f'shipments/{fd["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':fd['order']['version'],'lines':[{'shipment_line_id':fd['shipment']['lines'][0]['id'],'good_packs':1,'damaged_packs':1,'condition_note':'One pack physically damaged'}]},lead_token)['data']
+        fp=f'orders/{fo["id"]}/shipments/{fd["shipment"]["id"]}/discrepancy'
+        fc=api(base,'POST',fp,{'operation_id':str(uuid.uuid4()),'order_version':fr['order']['version'],'reason':'Actual damaged pack returned'},lead_token,201)['data']
+        plan=api(base,'POST',fp+'/resolutions',{'operation_id':str(uuid.uuid4()),'version':1,'type':'return','proposal':'Return damaged pack to center quarantine; credit reviewed separately'},owner,201)['data']
+        api(base,'POST',fp+'/resolutions/'+plan['resolution']['id']+'/confirm',{'operation_id':str(uuid.uuid4()),'version':2},lead_token)
+        return_path='/app/'+fp+'/returns';return_html=opener.open(web+return_path).read().decode();return_form=fields(return_html,return_path)
+        return_context=api(base,'GET',fp+'/returns',token=lead_token)
+        return_form.update({'handler':'Physical return courier','lines[0][batch_id]':return_context['batches'][0]['id'],'lines[0][quantity_packs]':'1'})
+        web_post(return_path,return_form).read()
+        returned=api(base,'GET',fp+'/returns',token=owner)['data'][0];return_receive=return_path+'/'+returned['id']+'/receive'
+        return_html=central_browser.open(web+return_path).read().decode();return_form=fields(return_html,return_receive);return_form['lines[0][received_packs]']='1'
+        central_browser.open(Request(web+return_receive,data=urlencode(return_form).encode())).read()
+        assert api(base,'GET',fp+'/returns',token=owner)['execution_status']=='fulfilled'
+        bp=f'/app/orders/{fo["id"]}/billing';bh=central_browser.open(web+bp).read().decode()
+        proposal={'_token':fields(bh,bp)['_token'],'action':'invoice','operation_id':str(uuid.uuid4()),'mode':'buyout','basis':'dispatched','shipment_ids[0]':fd['shipment']['id'],'due_on':'2030-12-31','discount_amount':'0','shipping_amount':'0','tax_basis_points':'1100','rounding':'half_up','note':'Explicit shipment basis, tax and due date for partner review'}
+        central_browser.open(Request(web+bp,data=urlencode(proposal).encode())).read()
+        fi=api(base,'GET',f'orders/{fo["id"]}/billing',token=lead_token)['invoices']['data'][0]
+        assert fi['status']=='pending' and fi['total_amount']==39960
+        bh=opener.open(web+bp).read().decode();web_post(bp,{'_token':fields(bh,bp)['_token'],'action':'invoice_accept','operation_id':str(uuid.uuid4()),'invoice_id':fi['id'],'version':fi['version'],'consent':'1','reason':'Explicit terms reviewed and accepted'}).read()
+        fi=api(base,'POST',f'orders/{fo["id"]}/billing/invoices/{fi["id"]}/payments',{'operation_id':str(uuid.uuid4()),'version':2,'kind':'collection','method':'bank_transfer','amount':10000,'reference':'BANK-PARTIAL-1','paid_on':today,'verified':True,'note':'Actual bank receipt verified manually'},owner,201)['data']
+        assert fi['outstanding_amount']==29960
+        fi=api(base,'POST',f'orders/{fo["id"]}/billing/invoices/{fi["id"]}/credits',{'operation_id':str(uuid.uuid4()),'version':3,'case_id':fc['case']['id'],'base_amount':18000,'tax_amount':1980,'reason':'One physically returned pack at historical price'},owner,201)['data']
+        fi=api(base,'POST',f'orders/{fo["id"]}/billing/invoices/{fi["id"]}/credits/{fi["credits"][0]["id"]}/accept',{'operation_id':str(uuid.uuid4()),'version':4,'consent':True,'reason':'Partner confirms returned-goods credit'},lead_token)['data']
+        assert fi['outstanding_amount']==9980 and fi['credit_amount']==19980
+        api(base,'GET',f'orders/{fo["id"]}/billing',token=cashier_token,expected=403)
+        cc=api(base,'POST',f'organizations/{center}/contracts',{'operation_id':str(uuid.uuid4()),'partner_id':org,'title':'Explicit consignment','mode':'consignment','starts_on':today,'ends_on':'2030-12-31','terms':'Manual sold report and review','brand_terms':'Agreed branding','data_scope':'Sold reports only','facilities':'None'},owner,201)['data']
+        cc=api(base,'POST',f'organizations/{center}/contracts/{cc["id"]}/publish',{'operation_id':str(uuid.uuid4()),'version':1},owner)['data']
+        api(base,'POST',f'organizations/{org}/contracts/{cc["id"]}/accept',{'operation_id':str(uuid.uuid4()),'version':2,'consent':True,'consent_name':'Partner director'},lead_token)
+        cr=api(base,'POST',f'orders/{order_id}/billing/reports',{'operation_id':str(uuid.uuid4()),'contract_id':cc['id'],'period_start':today,'period_end':today,'note':'Four actual pieces sold under consignment','lines':[{'order_line_id':original['lines'][0]['id'],'quantity_pieces':4}]},lead_token,201)['data']
+        api(base,'POST',f'orders/{order_id}/billing/reports/{cr["id"]}/accept',{'operation_id':str(uuid.uuid4()),'version':1,'consent':True,'reason':'Actual sold report checked'},owner)
+        ci=api(base,'POST',f'orders/{order_id}/billing/invoices',{'operation_id':str(uuid.uuid4()),'mode':'consignment','basis':'consignment_report','report_id':cr['id'],'due_on':'2030-12-31','discount_amount':0,'shipping_amount':0,'tax_basis_points':0,'rounding':'half_up','note':'Explicit report-only settlement'},owner,201)['data']
+        assert ci['subtotal']==9000
+        api(base,'POST',f'orders/{order_id}/billing/invoices/{ci["id"]}/accept',{'operation_id':str(uuid.uuid4()),'version':1,'consent':True,'reason':'Report invoice accepted'},lead_token)
+        voucher=api(base,'POST',f'organizations/{org}/vouchers',{'operation_id':str(uuid.uuid4()),'code':'SMOKE1001','funding_organization_id':org,'kind':'fixed','value':1001,'maximum_discount':1001,'minimum_subtotal':0,'usage_limit':1,'starts_on':today,'ends_on':today,'store_ids':[store],'product_ids':[local_product_id],'restore_policy':'on_full_refund','terms':'Issuer funds; quota restored once on full refund'},lead_token,201)['data']
+        assert 'SMOKE1001' in opener.open(web+f'/app/organizations/{org}/vouchers').read().decode()
+        digital_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Manual noncash','opening_cash':0},cashier_token,201)['data']
+        di=api(base,'POST',f'stores/{store}/sales/intents',{'operation_id':str(uuid.uuid4()),'shift_id':digital_shift['id'],'voucher_code':'SMOKE1001','lines':[{'product_id':local_product_id,'unit':'piece','quantity':2,'allocations':[{'batch_id':old_batch['id'],'bucket':'opened','quantity':2}]}]},cashier_token,201)['data']
+        assert di['total_amount']==4999
+        dp=f'/app/pos/intents/{di["id"]}/pay';dh=cashier_browser.open(web+f'/app/pos/intents/{di["id"]}').read().decode();payment=fields(dh,dp);payment.update({'payment_method':'qris_manual','payment_reference':'QRIS-MANUAL-1','verified':'1','verified_amount':'4999'})
+        dr=cashier_browser.open(Request(web+dp,data=urlencode(payment).encode()));dr.read();digital_sale=dr.url.rsplit('/',1)[1]
+        ds=api(base,'GET',f'shifts/{digital_shift["id"]}',token=lead_token)['data'];assert ds['expected_cash']==0 and ds['noncash_sales']==4999
+        rp=f'/app/pos/sales/{digital_sale}/refunds';rh=opener.open(web+rp).read().decode();rf=fields(rh,rp+'/preview');rf.update({'shift':digital_shift['id']+':'+str(ds['version']),'stock_disposition':'quarantine','reference':'REFUND-QRIS-1','reason':'Actual returned goods and original QRIS refund verified','lines[0][quantity]':'2'})
+        rh=web_post(rp+'/preview',rf).read().decode();confirm=fields(rh,rp+'/confirm');confirm['verified']='1';web_post(rp+'/confirm',confirm).read()
+        refunded=api(base,'GET',f'sales/{digital_sale}',token=lead_token)['data'];assert refunded['refunds'][0]['amount']==4999 and refunded['payment_method']=='qris_manual'
+        ds=api(base,'GET',f'shifts/{digital_shift["id"]}',token=cashier_token)['data'];assert ds['expected_cash']==0 and ds['noncash_refunds']==4999
+        assert api(base,'GET',f'organizations/{org}/vouchers',token=lead_token)['data'][0]['used_count']==0
+        api(base,'POST',f'shifts/{digital_shift["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':ds['version'],'counted_cash':0},cashier_token)
+        ledger_before+=5
+        assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'
@@ -622,7 +749,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST','auth/logout',{},changed_session,204)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
-        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, stock ledger CSV/scoped signed pieces, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, receipt discrepancy case and supplier-plan/partner-confirmation and physical replacement dispatch/actual receipt with once-only stock posting, password rotation/revoked sessions, logout')
+        print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, stock ledger CSV/scoped signed pieces, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, receipt discrepancy case and supplier-plan/partner-confirmation and physical replacement dispatch/actual receipt with once-only stock posting, revision preview/substitution after shipping, private product image and effective price, recipe component checkout, published contract/explicit consent, physical return quarantine, explicit invoice/tax/partial collection/confirmed credit, contract-backed sold-report consignment, scoped retail voucher/manual QRIS payment/reviewed original-method refund and restored quota, password rotation/revoked sessions, logout')
 finally:
     for name in reversed(created):
         subprocess.run(['docker', 'rm', '-f', name], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

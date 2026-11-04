@@ -6,6 +6,7 @@ class CartEntry {
   String unit = 'piece';
   int quantity = 1;
   String? stock;
+  final componentStocks = <String, String>{};
   int get piecesPerUnit => unit == 'pack'
       ? product.packSize
       : unit == 'portion'

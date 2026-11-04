@@ -9,7 +9,7 @@ class ChangeLine {
       packs = j['quantity_packs'] as int,
       size = j['pack_size'] as int,
       price = j['unit_price'] as int {
-    if (id.isEmpty || packs < 1 || size < 1 || price < 0) {
+    if (id.isEmpty || packs < 0 || size < 1 || price < 0) {
       throw const ApiException('Snapshot baris usulan tidak valid.');
     }
   }
@@ -41,6 +41,7 @@ class OrderChangeRecord {
       orderId = j['supply_order_id'] as String,
       status = j['status'] as String,
       reason = j['reason'] as String,
+      kind = j['kind'] as String? ?? 'reduction',
       baseVersion = j['base_version'] as int,
       pendingVersion = j['pending_version'] as int,
       requestedBy = j['requested_by'] as int,
@@ -49,12 +50,13 @@ class OrderChangeRecord {
       decidedAt = j['decided_at'] as String?,
       before = ChangeSnapshot.fromJson(j['before'] as Map<String, dynamic>),
       after = ChangeSnapshot.fromJson(j['after'] as Map<String, dynamic>) {
-    if (id.isEmpty ||
+    if (!['reduction', 'revision'].contains(kind) ||
+        id.isEmpty ||
         !['pending', 'approved', 'rejected', 'withdrawn'].contains(status) ||
         baseVersion < 1 ||
         pendingVersion != baseVersion + 1 ||
         (decidedAt != null && DateTime.tryParse(decidedAt!) == null) ||
-        before.lines.length != after.lines.length ||
+        (kind != 'revision' && before.lines.length != after.lines.length) ||
         !before.lines.every(
           (l) => after.lines.any(
             (v) =>
@@ -69,7 +71,7 @@ class OrderChangeRecord {
       throw const ApiException('Riwayat usulan tidak valid.');
     }
   }
-  final String id, orderId, status, reason;
+  final String id, orderId, status, reason, kind;
   final String? note, decidedAt;
   final int baseVersion, pendingVersion, requestedBy;
   final int? decidedBy;
@@ -80,6 +82,11 @@ class OrderChangeContext {
   OrderChangeContext.fromJson(Map<String, dynamic> j)
     : orderId = (j['order'] as Map)['id'] as String,
       destination = (j['order'] as Map)['destination_name'] as String,
+      supplierProducts = List.unmodifiable(
+        (j['supplier_products'] as List?) ?? [],
+      ),
+      localProducts = List.unmodifiable((j['local_products'] as List?) ?? []),
+      sent = Map.unmodifiable((j['sent_packs'] as Map<String, dynamic>?) ?? {}),
       status = (j['order'] as Map)['status'] as String,
       kind = (j['order'] as Map)['kind'] as String,
       version = (j['order'] as Map)['version'] as int,
@@ -98,6 +105,8 @@ class OrderChangeContext {
   final int version, page, lastPage, total;
   final bool held;
   final ChangeSnapshot original;
+  final List<dynamic> supplierProducts, localProducts;
+  final Map<String, dynamic> sent;
   final Map<String, dynamic> actions;
   final List<OrderChangeRecord> rows;
   bool allows(String action) => actions[action] == true;

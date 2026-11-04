@@ -29,3 +29,7 @@ Audit: modul berizin pengelola organisasi, filter periode WIB/aksi/pelaku/objek 
 Persetujuan ulang: detail Pesanan/Gudang → Persetujuan ulang dan riwayat. Pengurangan jumlah sebelum pengiriman pertama, tinjauan sebelum/sesudah, approve/reject/withdraw berizin dan retry immutable saat unknown. Lihat [panduan](../../docs/native-order-reapproval.md); composer amendment lama tetap khusus sebelum approval.
 
 Penelusuran tanggal kemasan: Stok → Telusuri kedaluwarsa batch; batas inklusif opsional terpisah, SKU/kode batch dan saldo termasuk karantina, pagination scoped dan read-only bagi assigned cashier juga. Lihat [panduan](../../docs/native-batch-expiry.md).
+
+Delivery DL-12/14/17: [kasus/pengganti Flutter](../../docs/native-shipment-cases.md), [revisi SKU/sisa pesanan](../../docs/order-revisions.md) dan [gambar/harga efektif/resep paket/kontrak](../../docs/catalog-and-contracts.md). Kontrak pengelolaan dan consent melalui API/web; POS paket dan gambar/harga melalui Flutter. Keuangan DL-13/15/16 menunggu keputusan bisnis yang belum dijawab.
+
+Delivery4 November2026: lihat [retur/keuangan/POS](../../docs/finance-and-pos-adjustments.md). Modul Billing/Promotions eksplisit; administrasi keuangan di web, retur/pembayaran/voucher/refund operasional juga di Flutter. Verifikasi pembayaran manual, bukan gateway atau offline.

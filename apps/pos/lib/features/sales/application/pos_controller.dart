@@ -36,7 +36,11 @@ class PosController extends ChangeNotifier {
   }
 
   bool _uncertain(Object e) =>
-      e is ApiException && (e.status == 0 || e.status >= 500);
+      e is! ApiException ||
+      e.status == 0 ||
+      e.status >= 500 ||
+      e.status == 408 ||
+      e.status == 429;
   Future<void> _perform(Future<void> Function() task) async {
     if (busy) {
       return;
@@ -147,6 +151,33 @@ class PosController extends ChangeNotifier {
     _notify();
   }
 
+  List<Map<String, dynamic>> componentChoices(
+    Map<String, dynamic> component,
+  ) => [
+    for (final b in batches)
+      if (b['product_id'] == component['product_id'] &&
+          b['condition'] == component['condition'])
+        for (final bucket in ['opened', 'ready'])
+          if ((b['${bucket}_pieces'] as int? ?? 0) > 0)
+            {
+              'key': '${b['id']}:$bucket',
+              'batch_id': b['id'],
+              'bucket': bucket,
+              'pieces': b['${bucket}_pieces'],
+              'label':
+                  '${b['batch_code']} · $bucket · ${b['${bucket}_pieces']} biji',
+            },
+  ];
+  void componentStock(CartEntry entry, String component, String? value) {
+    if (cartLocked) return;
+    if (value == null) {
+      entry.componentStocks.remove(component);
+    } else {
+      entry.componentStocks[component] = value;
+    }
+    _notify();
+  }
+
   List<Map<String, dynamic>> choices(CartEntry entry) {
     final choices = <Map<String, dynamic>>[];
     for (final b in batches) {
@@ -199,7 +230,7 @@ class PosController extends ChangeNotifier {
       rethrow;
     }
   });
-  Future<void> review() => _perform(() async {
+  Future<void> review({String voucherCode = ''}) => _perform(() async {
     if (shift == null) {
       throw const ApiException('Buka shift terlebih dahulu.');
     }
@@ -214,6 +245,48 @@ class PosController extends ChangeNotifier {
       }
       final lines = <Map<String, dynamic>>[];
       for (final entry in cart.values) {
+        if (entry.product.isBundle) {
+          if (entry.quantity < 1 || entry.quantity > 10000) {
+            throw const ApiException('Isi jumlah paket1–10000.');
+          }
+          final current = products
+              .where((p) => p.id == entry.product.id)
+              .firstOrNull;
+          if (current?.recipe?['version'] != entry.product.recipe!['version']) {
+            throw const ApiException(
+              'Resep berubah. Hapus paket dan pilih lagi setelah memuat ulang.',
+            );
+          }
+          final allocations = <Map<String, dynamic>>[];
+          for (final component in entry.product.components) {
+            final selected = componentChoices(component)
+                .where(
+                  (b) =>
+                      b['key'] ==
+                      entry.componentStocks[component['product_id']],
+                )
+                .firstOrNull;
+            final pieces = (component['pieces'] as int) * entry.quantity;
+            if (selected == null || (selected['pieces'] as int) < pieces) {
+              throw const ApiException(
+                'Pilih stok cukup untuk semua komponen paket.',
+              );
+            }
+            allocations.add({
+              'component_product_id': component['product_id'],
+              'batch_id': selected['batch_id'],
+              'bucket': selected['bucket'],
+              'quantity': pieces,
+            });
+          }
+          lines.add({
+            'product_id': entry.product.id,
+            'unit': 'piece',
+            'quantity': entry.quantity,
+            'allocations': allocations,
+          });
+          continue;
+        }
         if (entry.quantity < 1 ||
             entry.quantity > 10000 ||
             entry.stock == null) {
@@ -247,6 +320,7 @@ class PosController extends ChangeNotifier {
       _createRequest = {
         'operation_id': const Uuid().v4(),
         'shift_id': shift!['id'],
+        if (voucherCode.trim().isNotEmpty) 'voucher_code': voucherCode.trim(),
         'lines': lines,
       };
     }
@@ -280,33 +354,67 @@ class PosController extends ChangeNotifier {
     _payRequest = null;
     cart.clear();
   });
-  Future<void> pay(String cashText) => _perform(() async {
-    if (intent == null) {
-      return;
-    }
+  Future<void> pay(
+    String cashText, {
+    String method = 'cash',
+    String reference = '',
+    bool verified = false,
+    String verifiedAmount = '',
+  }) => _perform(() async {
+    if (intent == null) return;
+    final wasUnknown = _payRequest != null;
     final cash = int.tryParse(cashText);
-    if (_payRequest == null &&
-        (cash == null || cash < (intent!['total_amount'] as int))) {
-      throw const ApiException('Tunai diterima belum mencukupi.');
+    if (!wasUnknown) {
+      if (!['cash', 'qris_manual', 'bank_transfer'].contains(method)) {
+        throw const ApiException('Metode tidak valid.');
+      }
+      if (method == 'cash' &&
+          (cash == null || cash < (intent!['total_amount'] as int))) {
+        throw const ApiException('Tunai diterima belum mencukupi.');
+      }
+      if (method != 'cash' &&
+          (!verified ||
+              reference.trim().isEmpty ||
+              int.tryParse(verifiedAmount) != intent!['total_amount'])) {
+        throw const ApiException(
+          'Periksa referensi, nominal persis dan konfirmasi verifikasi pembayaran aktual.',
+        );
+      }
+      _payRequest = {
+        'operation_id': const Uuid().v4(),
+        'payment_method': method,
+        if (method == 'cash')
+          'cash_received': cash
+        else ...{
+          'payment_reference': reference.trim(),
+          'verified': true,
+          'verified_amount': int.parse(verifiedAmount),
+        },
+      };
     }
-    _payRequest ??= {
-      'operation_id': const Uuid().v4(),
-      'payment_method': 'cash',
-      'cash_received': cash,
-    };
     try {
-      receipt = await repository.post(
+      final d = await repository.post(
         'sales/intents/${intent!['id']}/pay',
         _payRequest!,
       );
+      final p = _payRequest!;
+      if (d['id'] is! String ||
+          d['sale_intent_id'] != intent!['id'] ||
+          d['store_id'] != store ||
+          d['total_amount'] != intent!['total_amount'] ||
+          d['payment_method'] != p['payment_method'] ||
+          (p['payment_method'] == 'cash'
+              ? d['cash_received'] != p['cash_received']
+              : d['payment_reference'] != p['payment_reference'])) {
+        throw const ApiException('ACK pembayaran tidak sesuai.');
+      }
+      receipt = d;
       intent = null;
       _payRequest = null;
       cart.clear();
       await _refresh();
     } catch (e) {
-      if (!_uncertain(e)) {
-        _payRequest = null;
-      }
+      if (!wasUnknown && !_uncertain(e)) _payRequest = null;
       rethrow;
     }
   });

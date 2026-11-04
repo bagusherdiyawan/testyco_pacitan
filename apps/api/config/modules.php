@@ -1,17 +1,29 @@
 <?php
 
+use App\Modules\Billing\BillingServiceProvider;
 use App\Modules\Catalog\CatalogServiceProvider;
+use App\Modules\Fulfillment\FulfillmentServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
+use App\Modules\Inventory\InventoryServiceProvider;
+use App\Modules\Ordering\OrderingServiceProvider;
+use App\Modules\Partnership\PartnershipServiceProvider;
+use App\Modules\Promotions\PromotionsServiceProvider;
+use App\Modules\Reporting\ReportingServiceProvider;
+use App\Modules\Sales\SalesServiceProvider;
+use App\Modules\Shifts\ShiftsServiceProvider;
 use App\Modules\Workspace\WorkspaceServiceProvider;
 
 return ['providers' => [
     IdentityServiceProvider::class,
     CatalogServiceProvider::class,
-    \App\Modules\Inventory\InventoryServiceProvider::class,
-    \App\Modules\Ordering\OrderingServiceProvider::class,
-    \App\Modules\Fulfillment\FulfillmentServiceProvider::class,
-    \App\Modules\Shifts\ShiftsServiceProvider::class,
-    \App\Modules\Sales\SalesServiceProvider::class,
-    \App\Modules\Reporting\ReportingServiceProvider::class,
+    PartnershipServiceProvider::class,
+    InventoryServiceProvider::class,
+    OrderingServiceProvider::class,
+    FulfillmentServiceProvider::class,
+    ShiftsServiceProvider::class,
+    PromotionsServiceProvider::class,
+    SalesServiceProvider::class,
+    BillingServiceProvider::class,
+    ReportingServiceProvider::class,
     WorkspaceServiceProvider::class,
 ]];

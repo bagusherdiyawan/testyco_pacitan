@@ -5,6 +5,7 @@ namespace App\Modules\Identity\Presentation;
 use App\Models\User;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Application\Audit;
+use App\Modules\Identity\Application\AuditHistory;
 use App\Modules\Identity\Application\UserAccountStatus;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
@@ -183,7 +184,7 @@ final class IdentityController
     {
         $v = AuditQuery::validate($r);
 
-        return response()->json(app(\App\Modules\Identity\Application\AuditHistory::class)->read($r->user(), $organization, $v))
+        return response()->json(app(AuditHistory::class)->read($r->user(), $organization, $v))
             ->header('Cache-Control', 'private, no-store');
     }
 }

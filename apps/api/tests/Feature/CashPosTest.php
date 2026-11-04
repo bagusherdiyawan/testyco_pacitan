@@ -8,6 +8,8 @@ use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
 use App\Modules\Inventory\Application\StockLedger;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
+use App\Modules\Sales\Infrastructure\Sale;
+use App\Modules\Sales\Infrastructure\SaleIntent;
 use App\Modules\Shifts\Infrastructure\CashShift;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -511,7 +513,9 @@ class CashPosTest extends TestCase
         $this->cashier->update(['name' => 'Kasir baru']);
         $tables = ['sales', 'sale_lines', 'stock_entries', 'operation_receipts', 'audit_entries'];
         $before = [];
-        foreach ($tables as $table) $before[$table] = DB::table($table)->count();
+        foreach ($tables as $table) {
+            $before[$table] = DB::table($table)->count();
+        }
         $batch = $this->batch->fresh()->toArray();
         $cash = CashShift::findOrFail($shift['id'])->toArray();
         $url = '/api/v1/stores/'.$this->store->id.'/sales?'.http_build_query(['from' => '2026-10-30T00:00:00+07:00', 'to' => '2026-10-31T00:00:00+07:00']);
@@ -522,7 +526,9 @@ class CashPosTest extends TestCase
         $receipt = $this->getJson('/api/v1/sales/'.$ids[1])->assertOk()->json('data');
         $this->assertSame('Ayam', $receipt['lines'][0]['name']);
         $this->assertSame(3000, $receipt['lines'][0]['unit_price']);
-        foreach ($before as $table => $count) $this->assertDatabaseCount($table, $count);
+        foreach ($before as $table => $count) {
+            $this->assertDatabaseCount($table, $count);
+        }
         $this->assertSame($batch, $this->batch->fresh()->toArray());
         $this->assertSame($cash, CashShift::findOrFail($shift['id'])->toArray());
     }
@@ -532,9 +538,9 @@ class CashPosTest extends TestCase
         $sale = $this->pay($this->intent($this->open()));
         // Read-model fixtures only: no checkout or stock/cash accounting is inferred from these copies.
         for ($i = 0; $i < 50; $i++) {
-            $intent = \App\Modules\Sales\Infrastructure\SaleIntent::findOrFail($sale['sale_intent_id'])->replicate();
+            $intent = SaleIntent::findOrFail($sale['sale_intent_id'])->replicate();
             $intent->save();
-            $copy = \App\Modules\Sales\Infrastructure\Sale::findOrFail($sale['id'])->replicate();
+            $copy = Sale::findOrFail($sale['id'])->replicate();
             $copy->sale_intent_id = $intent->id;
             $copy->number = 'HISTORY-FIXTURE-'.$i;
             $copy->save();

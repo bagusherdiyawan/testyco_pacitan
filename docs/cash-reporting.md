@@ -35,3 +35,6 @@ Reporting backend bergantung pada Identity dan Sales, dan hanya membaca melalui 
 API: `GET /api/v1/organizations/{organization}/reports/cash-sales`, `/products`, `/export`. Semua memakai from/to ISO-8601 bertimezone dan store_id opsional; products memakai page (50 baris). Tanpa store_id berarti seluruh toko yang berwenang pada organisasi itu, bukan seluruh database. Tidak ada endpoint publik untuk membaca angka bisnis. Tidak memerlukan migrasi/dependensi baru.
 
 SQLite development dan widget 390px/1200px telah diuji, termasuk text scale 1,5 pada mobile. PostgreSQL/concurrency, load produksi, perangkat Android/iOS, backup/restore dan UAT bisnis belum diverifikasi. Belum ada ekspor async di atas batas, export native, refund, laporan non-tunai/B2B, margin atau akuntansi penuh.
+
+
+Pembaruan4 November2026 (menggantikan keterangan backlog keuangan/retur/non-tunai pada irisan lama): [retur, tagihan dan penyesuaian POS](finance-and-pos-adjustments.md) kini diimplementasikan untuk DL-13/DL-15/DL-16 dengan input eksplisit, persetujuan dan verifikasi manual. D-01/D-03/D-08 belum menjadi kebijakan global; gateway, bagi hasil otomatis dan pendanaan promo lintas organisasi belum aktif. Laporan tunai tetap struk tunai sebelum pengurangan refund; histori refund/shift terpisah.

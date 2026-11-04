@@ -6,10 +6,12 @@ use App\Models\User;
 use App\Modules\Catalog\Application\RetailPricing;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Inventory\Application\SaleStock;
+use App\Modules\Promotions\Application\VoucherBook;
 use App\Modules\Sales\Infrastructure\Sale;
 use App\Modules\Sales\Infrastructure\SaleAllocation;
 use App\Modules\Sales\Infrastructure\SaleIntent;
 use App\Modules\Sales\Infrastructure\SaleLine;
+use App\Modules\Sales\Infrastructure\SaleRefund;
 use App\Modules\Shifts\Application\PosAccess;
 use App\Modules\Shifts\Application\ShiftBook;
 use App\Shared\Application\Operations;
@@ -17,14 +19,14 @@ use Illuminate\Support\Str;
 
 final class CashCheckout
 {
-    public function __construct(private PosAccess $access, private ShiftBook $shifts, private RetailPricing $pricing, private SaleStock $stock, private Operations $operations) {}
+    public function __construct(private PosAccess $access, private ShiftBook $shifts, private RetailPricing $pricing, private SaleStock $stock, private Operations $operations, private VoucherBook $vouchers) {}
 
     private function flatten(array $items, bool $ids = false): array
     {
         $allocations = [];
         foreach ($items as $index => $item) {
             foreach ($item['allocations'] as $a) {
-                $allocations[] = [...$a, 'product_id' => $item['product_id'], 'condition' => $item['condition'], 'unit' => $item['unit'], 'pieces_per_unit' => $item['pieces_per_unit'], 'line_index' => $index, ...($ids ? ['allocation_id' => (string) Str::ulid()] : [])];
+                $allocations[] = [...$a, 'product_id' => $a['component_product_id'] ?? $item['product_id'], 'condition' => isset($a['component_product_id']) ? $a['condition'] : $item['condition'], 'unit' => isset($a['component_product_id']) ? 'piece' : $item['unit'], 'pieces_per_unit' => isset($a['component_product_id']) ? 1 : $item['pieces_per_unit'], 'line_index' => $index, ...($ids ? ['allocation_id' => (string) Str::ulid()] : [])];
             }
         }
 
@@ -33,7 +35,7 @@ final class CashCheckout
 
     public function receipt(string $id): array
     {
-        return Sale::with('lines')->findOrFail($id)->toArray();
+        return [...Sale::with('lines')->findOrFail($id)->toArray(), 'refunds' => SaleRefund::where('sale_id', $id)->orderBy('id')->get()->toArray()];
     }
 
     public function create(User $user, string $store, array $v): array
@@ -46,7 +48,11 @@ final class CashCheckout
             abort_if(SaleIntent::where('cash_shift_id', $shift->id)->where('status', 'pending')->count() >= 20, 409, 'Selesaikan atau batalkan draft lama (maksimal 20 draft aktif).');
             $snapshot = $this->pricing->snapshot($s->organization_id, $v['lines'], true);
             $this->stock->inspect($store, $this->flatten($snapshot['items']));
-            $intent = SaleIntent::create(['organization_id' => $s->organization_id, 'store_id' => $store, 'cash_shift_id' => $shift->id, 'cashier_id' => $user->id, 'status' => 'pending', ...$snapshot]);
+            $voucher = $this->vouchers->quote($s->organization_id, $store, $snapshot['items'], $v['voucher_code'] ?? null, true);
+            $gross = $snapshot['total_amount'];
+            $discount = $voucher['discount_amount'] ?? 0;
+            $snapshot['total_amount'] = $gross - $discount;
+            $intent = SaleIntent::create(['subtotal' => $gross, 'discount_amount' => $discount, 'voucher_snapshot' => $voucher, 'organization_id' => $s->organization_id, 'store_id' => $store, 'cash_shift_id' => $shift->id, 'cashier_id' => $user->id, 'status' => 'pending', ...$snapshot]);
             Audit::record($user->id, $s->organization_id, 'sale.intent_created', $intent->id, null, ['shift_id' => $shift->id, 'total_amount' => $intent->total_amount]);
 
             return $intent->toArray();
@@ -80,10 +86,12 @@ final class CashCheckout
         return $this->operations->run($s->organization_id, $user->id, $v['operation_id'], 'sale.pay:'.$id, $v, function () use ($user, $initial, $id, $s, $v) {
             $shift = $this->shifts->lockOwned($user, $s->id, $initial->cash_shift_id);
             $intent = SaleIntent::lockForUpdate()->findOrFail($id);
-            $cash = (int) $v['cash_received'];
+            $method = $v['payment_method'];
+            $cash = $method === 'cash' ? (int) ($v['cash_received'] ?? 0) : 0;
+            $reference = $method === 'cash' ? null : $v['payment_reference'];
             if ($intent->status === 'paid') {
                 $sale = Sale::where('sale_intent_id', $id)->firstOrFail();
-                abort_unless($sale->cash_received === $cash && $v['payment_method'] === 'cash', 409, 'Draft sudah dibayar dengan nominal berbeda.');
+                abort_unless($sale->cash_received === $cash && $sale->payment_method === $method && $sale->payment_reference === $reference && ($method === 'cash' || (($v['verified'] ?? false) === true && (int) ($v['verified_amount'] ?? -1) === $sale->total_amount)), 409, 'Draft sudah dibayar dengan nominal berbeda.');
 
                 return $this->receipt($sale->id);
             }
@@ -91,12 +99,19 @@ final class CashCheckout
             $this->shifts->assertOpen($shift);
             $current = $this->pricing->snapshot($s->organization_id, $intent->items, true);
             abort_unless(hash_equals($intent->price_hash, $current['price_hash']), 409, 'Harga/konversi berubah. Batalkan draft dan tinjau ulang keranjang.');
-            abort_unless($cash >= $intent->total_amount, 422, 'Uang tunai kurang dari total.');
-            $sale = new Sale(['organization_id' => $s->organization_id, 'store_id' => $s->id, 'cash_shift_id' => $shift->id, 'sale_intent_id' => $id, 'cashier_id' => $user->id, 'number' => 'POS-'.(string) Str::ulid(), 'store_name' => $s->name, 'store_address' => $s->address, 'cashier_name' => $user->name, 'status' => 'completed', 'currency' => 'IDR', 'payment_method' => 'cash', 'subtotal' => $intent->total_amount, 'discount_amount' => 0, 'total_amount' => $intent->total_amount, 'cash_received' => $cash, 'change_amount' => $cash - $intent->total_amount, 'sold_at' => now()]);
+            if ($method === 'cash') {
+                abort_unless($cash >= $intent->total_amount, 422, 'Uang tunai kurang dari total.');
+            } else {
+                abort_unless(($v['verified'] ?? false) === true && (int) ($v['verified_amount'] ?? -1) === $intent->total_amount, 422, 'Periksa bukti pembayaran dan nominal persis secara manual.');
+                abort_if(Sale::where('organization_id', $s->organization_id)->where('payment_method', $method)->where('payment_reference', $reference)->exists(), 409, 'Referensi pembayaran telah digunakan.');
+            }
+            $voucher = $this->vouchers->quote($s->organization_id, $s->id, $current['items'], $intent->voucher_snapshot['code'] ?? null, true);
+            abort_unless($voucher === $intent->voucher_snapshot, 409, 'Voucher/kuota berubah. Tinjau draft baru.');
+            $sale = new Sale(['organization_id' => $s->organization_id, 'store_id' => $s->id, 'cash_shift_id' => $shift->id, 'sale_intent_id' => $id, 'cashier_id' => $user->id, 'number' => 'POS-'.(string) Str::ulid(), 'store_name' => $s->name, 'store_address' => $s->address, 'cashier_name' => $user->name, 'status' => 'completed', 'currency' => 'IDR', 'version' => 1, 'voucher_snapshot' => $voucher, 'payment_reference' => $reference, 'payment_verified_by' => $method === 'cash' ? null : $user->id, 'payment_verified_at' => $method === 'cash' ? null : now(), 'payment_method' => $method, 'subtotal' => $intent->subtotal ?? $intent->total_amount, 'discount_amount' => $intent->discount_amount, 'total_amount' => $intent->total_amount, 'cash_received' => $cash, 'change_amount' => $method === 'cash' ? $cash - $intent->total_amount : 0, 'sold_at' => now()]);
             $sale->save();
             $lines = [];
             foreach ($intent->items as $index => $item) {
-                $lines[$index] = SaleLine::create(['sale_id' => $sale->id, ...array_intersect_key($item, array_flip(['product_id', 'sku', 'name', 'condition', 'unit', 'quantity', 'pieces_per_unit', 'unit_price', 'line_total']))]);
+                $lines[$index] = SaleLine::create(['sale_id' => $sale->id, 'discount_amount' => $voucher['line_discounts'][$item['product_id']] ?? 0, ...array_intersect_key($item, array_flip(['product_id', 'sku', 'name', 'condition', 'unit', 'quantity', 'pieces_per_unit', 'unit_price', 'line_total', 'recipe_snapshot']))]);
             }
             $allocations = $this->stock->inspect($s->id, $this->flatten($intent->items, true), true, $user->id);
             foreach ($allocations as $a) {
@@ -104,7 +119,10 @@ final class CashCheckout
                 $allocation->id = $a['allocation_id'];
                 $allocation->save();
             }
-            $this->shifts->recordSale($shift, $intent->total_amount);
+            $this->shifts->recordSale($shift, $intent->total_amount, $method);
+            if ($voucher) {
+                $this->vouchers->redeem($voucher, $sale->id);
+            }
             $intent->fill(['status' => 'paid']);
             $intent->save();
             Audit::record($user->id, $s->organization_id, 'sale.completed', $sale->id, null, ['number' => $sale->number, 'total_amount' => $sale->total_amount, 'shift_id' => $shift->id]);

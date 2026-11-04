@@ -157,6 +157,6 @@ class LedgerExportTest extends TestCase
         foreach ([['from' => '2026-10-30'], ['to' => '2026-10-29T00:00:00Z'], ['from' => '2026-09-01T00:00:00Z'], ['batch_id' => 'bad'], ['bucket' => 'bogus'], ['source_type' => 'bogus'], ['q' => ['array']]] as $q) {
             $this->getJson($this->url($q))->assertUnprocessable();
         }
-        $this->assertDatabaseCount('stock_entries',0);
+        $this->assertDatabaseCount('stock_entries', 0);
     }
 }

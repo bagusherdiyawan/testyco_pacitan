@@ -17,6 +17,6 @@ final class SaleIntent extends Model
 
     protected function casts(): array
     {
-        return ['items' => 'array', 'total_amount' => 'integer'];
+        return ['subtotal' => 'integer', 'discount_amount' => 'integer', 'voucher_snapshot' => 'array', 'items' => 'array', 'total_amount' => 'integer'];
     }
 }

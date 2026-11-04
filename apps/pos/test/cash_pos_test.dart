@@ -44,6 +44,8 @@ class FakeCashServer {
   };
   Map<String, dynamic> get receipt => {
     'id': 'SALE',
+    'sale_intent_id': 'INTENT',
+    'payment_method': 'cash',
     'number': 'POS-123',
     'store_id': 'STORE',
     'store_name': 'Toko Pacitan',

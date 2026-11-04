@@ -28,6 +28,7 @@
 @endif
 <h2>Riwayat rencana yang telah diputuskan</h2>
 @forelse($resolutions as $plan)<x-organisms.shipment-discrepancy-plan :plan="$plan" />
+@if($plan['status'] === 'confirmed' && $plan['type'] === 'return')<p><a href="/app/orders/{{ $order }}/shipments/{{ $shipment }}/discrepancy/returns">Buka retur karantina</a></p>@endif
 @if($plan['status'] === 'confirmed' && $plan['type'] === 'replacement')<p><a href="/app/orders/{{ $order }}/shipments/{{ $shipment }}/discrepancy/replacements">Buka pengiriman dan penerimaan pengganti</a></p>@endif
 @empty<p>Belum ada rencana yang diputuskan.</p>@endforelse
 <x-molecules.pagination :items="$resolutions" />

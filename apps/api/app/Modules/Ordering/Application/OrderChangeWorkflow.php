@@ -24,7 +24,7 @@ final class OrderChangeWorkflow
 
     private function eligible(SupplyOrder $order): bool
     {
-        return in_array($order->status, ['approved', 'processing'], true) && ! DB::table('shipments')->where('supply_order_id', $order->id)->exists();
+        return $order->lines->every(fn ($l) => $l->quantity_packs > 0) && in_array($order->status, ['approved', 'processing'], true) && ! DB::table('shipments')->where('supply_order_id', $order->id)->exists();
     }
 
     private function snapshot(SupplyOrder $order): array
@@ -45,13 +45,14 @@ final class OrderChangeWorkflow
     {
         $order = SupplyOrder::with('lines')->findOrFail($id);
         $this->access->view($user, $order);
-        $pending = OrderChange::pending($id);
+        $held = OrderChange::pending($id);
+        $pending = OrderChange::where('supply_order_id', $id)->where('kind', 'reduction')->whereNotNull('pending_order_id')->exists();
         $supplier = in_array($this->identity->role($user, $order->supplier_organization_id)?->value, ['owner', 'admin'], true);
         $operating = Store::whereKey($order->store_id)->where('active', true)->exists() && Organization::whereKey($order->organization_id)->where('active', true)->exists();
         $decide = $operating && in_array($this->identity->role($user, $order->organization_id)?->value, $order->kind === 'internal_transfer' ? ['owner', 'admin'] : ['partner_lead'], true);
         $supplierActive = Organization::whereKey($order->supplier_organization_id)->where('active', true)->exists();
 
-        return [...OrderChange::where('supply_order_id', $id)->orderByDesc('id')->paginate(50)->toArray(), 'order' => $order->toArray(), 'actions' => ['propose' => $supplier && $operating && ! $pending && $this->eligible($order), 'approve' => $pending && $decide && $supplierActive, 'reject' => $pending && $decide, 'withdraw' => $pending && $supplier], 'change_pending' => $pending];
+        return [...OrderChange::where('supply_order_id', $id)->where('kind', 'reduction')->orderByDesc('id')->paginate(50)->toArray(), 'order' => $order->toArray(), 'actions' => ['propose' => $supplier && $operating && ! $held && $this->eligible($order), 'approve' => $pending && $decide && $supplierActive, 'reject' => $pending && $decide, 'withdraw' => $pending && $supplier], 'change_pending' => $held];
     }
 
     public function propose(User $user, string $id, array $v): array
@@ -98,7 +99,7 @@ final class OrderChangeWorkflow
 
         return $this->operations->run($org, $user->id, $v['operation_id'], 'order.change_'.$action.':'.$id.':'.$changeId, $v, function () use ($user, $id, $changeId, $action, $v) {
             $order = $this->book->lock($id);
-            $change = OrderChange::where('supply_order_id', $id)->lockForUpdate()->findOrFail($changeId);
+            $change = OrderChange::where('supply_order_id', $id)->where('kind', 'reduction')->lockForUpdate()->findOrFail($changeId);
             abort_unless($change->status === 'pending' && $change->pending_order_id === $id && $change->pending_version === $order->version && $order->version === (int) $v['version'] && $this->eligible($order), 409, 'Usulan atau versi pesanan berubah. Muat ulang dan tinjau kembali.');
             if ($action === 'approve') {
                 $this->access->targetActive($order);

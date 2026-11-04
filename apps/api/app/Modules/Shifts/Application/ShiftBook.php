@@ -29,10 +29,35 @@ final class ShiftBook
         abort_unless($shift->status === 'open', 409, 'Shift sudah ditutup.');
     }
 
-    public function recordSale(CashShift $shift, int $amount): void
+    public function recordSale(CashShift $shift, int $amount, string $method = 'cash'): void
     {
         $this->assertOpen($shift);
-        $shift->fill(['expected_cash' => Rupiah::add($shift->expected_cash, $amount), 'cash_sales' => Rupiah::add($shift->cash_sales, $amount), 'version' => $shift->version + 1]);
+        $shift->fill($method === 'cash' ? ['expected_cash' => Rupiah::add($shift->expected_cash, $amount), 'cash_sales' => Rupiah::add($shift->cash_sales, $amount), 'version' => $shift->version + 1] : ['noncash_sales' => Rupiah::add($shift->noncash_sales, $amount), 'version' => $shift->version + 1]);
+        $shift->save();
+    }
+
+    public function refundShift(User $user, string $store, string $id, int $version): CashShift
+    {
+        $this->access->manager($user, $store);
+        $shift = CashShift::where('store_id', $store)->lockForUpdate()->findOrFail($id);
+        $this->assertOpen($shift);
+        abort_unless($shift->version === $version, 409, 'Versi shift refund berubah.');
+
+        return $shift;
+    }
+
+    public function recordRefund(CashShift $shift, User $user, int $amount, string $method, string $reference, string $reason): void
+    {
+        $this->assertOpen($shift);
+        if ($method === 'cash') {
+            abort_unless($amount <= $shift->expected_cash, 409, 'Kas shift tidak cukup untuk refund.');
+            $shift->fill(['expected_cash' => $shift->expected_cash - $amount, 'cash_out' => Rupiah::add($shift->cash_out, $amount)]);
+            if ($amount > 0) {
+                CashMovement::create(['cash_shift_id' => $shift->id, 'actor_id' => $user->id, 'kind' => 'out', 'amount' => $amount, 'category' => 'refund', 'reason' => $reference.' · '.$reason, 'created_at' => now()]);
+            }
+        } else {
+            $shift->noncash_refunds = Rupiah::add($shift->noncash_refunds, $amount);
+        }$shift->version++;
         $shift->save();
     }
 

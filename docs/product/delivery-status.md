@@ -14,13 +14,13 @@ Tanggal baseline:3 November2026. Ini daftar paket delivery untuk memantau peruba
 | DL-08 | POS tunai online, draft server, struk dan kas/shift | Selesai API/web/Flutter |
 | DL-09 | Riwayat struk, ledger, audit dan laporan penjualan tunai | Selesai API/web/Flutter; CSV di web |
 | DL-10 | Kasus selisih, catatan bersama, rencana pusat→konfirmasi mitra | Selesai API/web |
-| DL-11 | Pengganti grosir SKU/pack/sumber asli: kirim parsial→terima aktual→stok→selesai baik | **Selesai API/web — berubah pada delivery ini** |
-| DL-12 | Layar Flutter kasus, rencana dan eksekusi pengganti | Belum |
-| DL-13 | Retur fisik/disposisi karantina dan pembukuan kredit | Belum; aturan keuangan/disposisi perlu ditetapkan |
-| DL-14 | Substitusi SKU, tambah/hapus baris dan revisi setelah pengiriman | Belum |
-| DL-15 | Invoice/piutang/pembayaran grosir/pajak/konsinyasi | Belum; D-01 terbuka |
-| DL-16 | Refund POS, QRIS/non-tunai, promo/voucher | Belum; D-03/D-08 terkait |
-| DL-17 | Gambar/resep/paket, harga efektif, kontrak/consent kemitraan | Belum |
+| DL-11 | Pengganti grosir SKU/pack/sumber asli: kirim parsial→terima aktual→stok→selesai baik | Selesai API/web |
+| DL-12 | Layar Flutter kasus, rencana dan eksekusi pengganti | **Selesai Flutter mobile/tablet** |
+| DL-13 | Retur fisik/disposisi karantina dan pembukuan kredit | **Selesai API/web/Flutter untuk retur karantina; kredit pusat→mitra di API/web; susut melalui review stok** |
+| DL-14 | Substitusi SKU, tambah/hapus baris dan revisi setelah pengiriman | **Selesai API/web/Flutter; bagian belum dikirim, histori fisik tetap** |
+| DL-15 | Invoice/piutang/pembayaran grosir/pajak/konsinyasi | **Selesai API/web dengan ketentuan eksplisit per dokumen, persetujuan dan verifikasi manual; konsinyasi laporan disetujui** |
+| DL-16 | Refund POS, QRIS/non-tunai, promo/voucher | **Selesai API/web/Flutter: verifikasi non-tunai manual, refund ditinjau, voucher retail didanai penerbit** |
+| DL-17 | Gambar/resep/paket, harga efektif, kontrak/consent kemitraan | **Selesai API/web; Flutter gambar/harga/checkout paket** |
 | DL-18 | Push/email/inbox, recall/FEFO/blok jual dan SOP masa simpan hasil olahan | Belum; D-05 terkait |
 | DL-19 | Reset email/MFA, sesi perangkat aman dan antrean lintas restart/offline | Belum; D-06 terkait |
 | DL-20 | Aset/kontrak freezer/perangkat dan laporan B2B/piutang/margin | Belum |
@@ -31,3 +31,8 @@ Gate kesiapan produksi dilacak terpisah: PostgreSQL/concurrency, backup/restore,
 
 - Sebelum delivery ini DL-11 belum dapat dieksekusi: hanya ada rencana naratif. Sesudahnya, pengganti benar-benar didebit dari gudang dan diterima ke stok mitra hingga `fulfilled`, dengan batas selisih dan retry idempoten. Retur/kredit DL-13 dan native DL-12 tidak dipindahkan menjadi “selesai”.
 - Sumber bukti: [alur operasional](../replacement-fulfillment.md), [verifikasi](../verification.md), API `ReplacementTest`, web `ReplacementWebTest` dan isolated HTTP smoke. Perubahan master tidak mengganti snapshot, penerimaan awal tidak ditulis ulang, dan kerusakan pengganti tidak membuat kuota baru otomatis.
+
+
+Delivery3 November2026 berikutnya menutup DL-12, DL-14 dan DL-17; lihat [kasus native](../native-shipment-cases.md), [revisi](../order-revisions.md), [katalog/kontrak](../catalog-and-contracts.md). DL-13/DL-15/DL-16 dilanjutkan pada4 November2026 dengan [alur keuangan dan POS](../finance-and-pos-adjustments.md) yang mewajibkan pilihan eksplisit per dokumen, persetujuan dan verifikasi manual. Saran chat tidak dijadikan kebijakan global. D-01/D-03/D-08 masih terbuka untuk otomatisasi/default bisnis; gateway, bagi hasil otomatis, pelepasan mutu karantina dan promo lintas organisasi tidak termasuk cakupan selesai tersebut.
+
+Enam ID DL-12–DL-17 sudah diimplementasikan dalam cakupan development di atas. Gate produksi dan DL-18–DL-20 tetap terpisah; jumlah paket tidak ditambah untuk mengganti arti pekerjaan yang telah diselesaikan.

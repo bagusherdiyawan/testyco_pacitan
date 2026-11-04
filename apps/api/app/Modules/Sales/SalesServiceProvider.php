@@ -7,6 +7,7 @@ use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Inventory\InventoryServiceProvider;
 use App\Modules\Sales\Application\PendingIntents;
 use App\Modules\Sales\Presentation\PosController;
+use App\Modules\Sales\Presentation\RefundController;
 use App\Modules\Shifts\Application\ShiftBlockers;
 use App\Modules\Shifts\ShiftsServiceProvider;
 use Illuminate\Support\Facades\Route;
@@ -34,6 +35,9 @@ final class SalesServiceProvider extends ServiceProvider
             Route::post('sales/intents/{intent}/pay', [$c, 'pay']);
             Route::post('sales/intents/{intent}/cancel', [$c, 'cancel']);
             Route::get('stores/{store}/sales', [$c, 'sales']);
+            Route::get('sales/{sale}/refunds', [RefundController::class, 'context']);
+            Route::post('sales/{sale}/refunds/preview', [RefundController::class, 'preview']);
+            Route::post('sales/{sale}/refunds', [RefundController::class, 'refund']);
             Route::get('sales/{sale}', [$c, 'receipt']);
             Route::get('stores/{store}/sales/summary', [$c, 'summary']);
         });

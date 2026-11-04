@@ -3,6 +3,7 @@
 namespace App\Modules\Fulfillment\Presentation;
 
 use App\Modules\Fulfillment\Application\FulfillmentWorkflow;
+use App\Modules\Fulfillment\Application\WarehouseReadModel;
 use App\Modules\Ordering\Application\OrderAccess;
 use App\Modules\Ordering\Infrastructure\SupplyOrder;
 use Illuminate\Http\Request;
@@ -11,14 +12,14 @@ final class FulfillmentController
 {
     public function __construct(private FulfillmentWorkflow $workflow) {}
 
-    public function warehouseInbox(Request $r, string $store, \App\Modules\Fulfillment\Application\WarehouseReadModel $read): mixed
+    public function warehouseInbox(Request $r, string $store, WarehouseReadModel $read): mixed
     {
         $r->validate(['page' => 'sometimes|integer|min:1']);
 
         return response()->json($read->inbox($r->user(), $store))->header('Cache-Control', 'private, no-store');
     }
 
-    public function warehouseContext(Request $r, string $store, string $order, \App\Modules\Fulfillment\Application\WarehouseReadModel $read): mixed
+    public function warehouseContext(Request $r, string $store, string $order, WarehouseReadModel $read): mixed
     {
         return response()->json(['data' => $read->context($r->user(), $store, $order)])->header('Cache-Control', 'private, no-store');
     }

@@ -3,6 +3,8 @@ import '../application/recipient_order_controller.dart';
 import '../data/orders_repository.dart';
 import '../domain/recipient_order.dart';
 import 'shipment_receipt_form.dart';
+import '../../fulfillment/presentation/shipment_case_page.dart';
+import '../../fulfillment/data/shipment_case_repository.dart';
 import 'order_changes_page.dart';
 import '../data/order_changes_repository.dart';
 import 'order_entry_page.dart';
@@ -155,6 +157,25 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                         : null,
                     child: const Text('Persetujuan ulang dan riwayat'),
                   ),
+                  OutlinedButton(
+                    onPressed: model.canAct
+                        ? () async {
+                            await Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => OrderChangesPage(
+                                  repository: OrderChangesRepository(
+                                    widget.repository.api,
+                                    advanced: true,
+                                  ),
+                                  orderId: o.id,
+                                ),
+                              ),
+                            );
+                            if (mounted) await model.load();
+                          }
+                        : null,
+                    child: const Text('Revisi SKU dan sisa pesanan'),
+                  ),
                   if (o.allows('amend') && o.storeId.isNotEmpty)
                     OutlinedButton(
                       onPressed: model.canAct ? () => amend(o) : null,
@@ -209,6 +230,26 @@ class _OrderDetailPageState extends State<OrderDetailPage> {
                           if (l.conditionNote != null)
                             Text('Kondisi: ${l.conditionNote}'),
                         ],
+                        if (s.receivedAt != null)
+                          OutlinedButton(
+                            onPressed: model.canAct
+                                ? () async {
+                                    await Navigator.of(context).push(
+                                      MaterialPageRoute(
+                                        builder: (_) => ShipmentCasePage(
+                                          repository: ShipmentCaseRepository(
+                                            widget.repository.api,
+                                            o.id,
+                                            s.id,
+                                          ),
+                                        ),
+                                      ),
+                                    );
+                                    if (mounted) await model.load();
+                                  }
+                                : null,
+                            child: const Text('Kasus selisih dan penyelesaian'),
+                          ),
                         if (s.receiptNote != null)
                           Text('Catatan penerimaan: ${s.receiptNote}'),
                         if (o.allows('receive') &&

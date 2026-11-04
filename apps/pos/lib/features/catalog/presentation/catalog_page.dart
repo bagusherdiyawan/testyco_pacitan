@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../../../core/network/api_client.dart';
 import '../data/catalog_repository.dart';
 import '../domain/catalog_product.dart';
 import '../../../design_system/molecules/error_panel.dart';
@@ -103,7 +105,21 @@ class _CatalogPageState extends State<CatalogPage> {
                             'Kemasan ${p.packSize} biji · Porsi ${p.portionSize} biji',
                           ),
                           const SizedBox(height: 8),
-                          Text('Rp ${p.retailPrice} / biji'),
+                          Text(
+                            'Rp ${p.retailPrice} / ${p.isBundle ? 'paket' : 'biji'}',
+                          ),
+                          if (p.hasImage)
+                            TextButton(
+                              onPressed: () => showDialog<void>(
+                                context: context,
+                                builder: (_) => _ProductImage(
+                                  repository: widget.repository,
+                                  store: widget.storeId,
+                                  product: p,
+                                ),
+                              ),
+                              child: const Text('Lihat gambar produk'),
+                            ),
                         ],
                       ),
                     ),
@@ -113,6 +129,76 @@ class _CatalogPageState extends State<CatalogPage> {
             );
           },
         ),
+      ),
+    ],
+  );
+}
+
+class _ProductImage extends StatefulWidget {
+  const _ProductImage({
+    required this.repository,
+    required this.store,
+    required this.product,
+  });
+  final CatalogRepository repository;
+  final String store;
+  final CatalogProduct product;
+  @override
+  State<_ProductImage> createState() => _ProductImageState();
+}
+
+class _ProductImageState extends State<_ProductImage> {
+  late final Future<Map<String, dynamic>> data;
+  @override
+  void initState() {
+    super.initState();
+    data = widget.repository.api.request(
+      'GET',
+      'stores/${Uri.encodeComponent(widget.store)}/catalog/${Uri.encodeComponent(widget.product.id)}/image-data',
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(widget.product.name),
+    content: SizedBox(
+      width: 320,
+      height: 320,
+      child: FutureBuilder<Map<String, dynamic>>(
+        future: data,
+        builder: (context, s) {
+          if (s.hasError) return Text('${s.error}');
+          if (!s.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          try {
+            final d = s.data!;
+            if (d['product_id'] != widget.product.id ||
+                ![
+                  'image/png',
+                  'image/jpeg',
+                  'image/webp',
+                ].contains(d['mime']) ||
+                d['image_base64'] is! String ||
+                (d['image_base64'] as String).length > 7000000) {
+              throw const ApiException('Gambar produk tidak valid.');
+            }
+            return Image.memory(
+              base64Decode(d['image_base64']),
+              fit: BoxFit.contain,
+              errorBuilder: (_, error, stack) =>
+                  const Text('Gambar tidak dapat dibaca.'),
+            );
+          } catch (e) {
+            return Text('$e');
+          }
+        },
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Tutup'),
       ),
     ],
   );

@@ -348,3 +348,24 @@ Bukti checks: scripts/check lulus 154 API/1315 assertions, 48 web/195 assertions
 - Full equivalent scripts/check: API203/2198 assertions, web115/957, Flutter190, total508 tes; analyzer bersih. SDK Flutter host direkonstruksi ulang dari manifest/layer OCI pinned dengan SHA256 terverifikasi karena /tmp tidak dipertahankan; tidak menjalankan container Flutter besar pada VFS. Composer strict, Pint PHP terkait, Blade cache, Compose healthy/metadata smoke lulus. OpenAPI0.25.0:91 operation IDs unik dan local refs/path parameters/required diperiksa. Tidak menambah dependency.
 - DL-11 selesai dalam cakupan grosir SKU/pack/gudang asli API/web: plan confirmed→dispatch parsial→actual receipt→posting stok→fulfilled. Status ini bukan disposal/retur fisik karantina awal, nota kredit, invoice, perubahan receipt/order awal atau recursive replacement authorization. DL-12 layar native kasus/pengganti dan DL-13 retur/kredit tetap belum selesai. Scope/status dilacak dengan ID tetap di docs/product/delivery-status.md; gate produksi terpisah.
 - Pengujian server/HTML dan regresi widget bukan browser interaktif/visual, perangkat fisik, UAT atau PostgreSQL concurrency. Source ledger baru dapat dibaca/difilter pada web/native; tidak memperluas permission atau audit onboarding. Pending web bukan durable offline/restart queue. Migrasi baru menolak rollback setelah history digunakan.
+
+## Delivery DL-12–DL-17 — 4 November 2026
+
+Pemeriksaan terbaru menggantikan ringkasan jumlah lama di atas untuk checkout development ini:
+
+| Pemeriksaan | Bukti |
+| --- | --- |
+| API PHPUnit | **230 lulus, 2655 assertions** |
+| Web PHPUnit | **132 lulus, 1155 assertions** |
+| Flutter | **213 lulus**; analyze tanpa issue dan formatter tanpa perubahan |
+| Total | **575 tes lulus** |
+| Composer | `validate --strict` kedua aplikasi lulus; dependency lock dipertahankan |
+| Migrasi | Migrasi10–16 pada SQLite development tanpa reset data;14–16 diterapkan setelah lingkungan dipulihkan |
+| Blade/Pint | Cache view dan pemeriksaan gaya PHP kedua aplikasi lulus |
+| Compose | API/web healthy; metadata manifest dan HTTP web→API lulus |
+| HTTP terisolasi | Seluruh alur lama, revisi/substitusi, gambar privat/harga efektif/paket, kontrak consent, retur karantina, invoice/pajak/partial collection/credit dua pihak, kontrak+sold-report konsinyasi, voucher/QRIS manual/refund lewat BFF CSRF serta pemulihan kuota lulus |
+| OpenAPI | Versi0.27.0, **137 operation IDs unik**,170 schemas, referensi lokal dan parameter path tervalidasi |
+
+Uji penting tambahan: refund paket memulihkan komponen dari beberapa batch asal, nominal parsial sesudah diskon dijumlahkan tepat ke total historis, dan kegagalan insert ledger menggulung balik kas/voucher/refund/audit/UUID. Retur tidak memindahkan barang hilang atau karantina menjadi layak jual. Invoice tidak menggandakan kiriman/laporan, koleksi belum terverifikasi tidak mengurangi piutang, kredit setelah lunas disajikan sebagai liabilitas pelanggan. BFF/native mempertahankan request unknown melalui penolakan berikutnya dan reset akun membersihkan session lama.
+
+Pada cloud dengan Docker VFS, pemeriksaan Flutter memakai SDK3.35.7/Dart3.9.2 yang direkonstruksi dari image OCI terkunci dan diverifikasi SHA256 setiap manifest/layer, melalui `/workspace/shared/testyco-native/flutter`. Ini menjalankan analyze/test yang setara bagian Flutter `scripts/check`, tanpa mengekstrak image Docker Flutter penuh. SDK di `/tmp` direkonstruksi kembali sesudah pemulihan cloud; dependencies memakai lock/offline cache yang tersedia. API/web memakai wrapper Composer terkunci sebagaimana `scripts/check`. Tidak ada klaim build release perangkat, PostgreSQL/concurrency multi-koneksi, browser interaktif, UAT atau kesiapan produksi.

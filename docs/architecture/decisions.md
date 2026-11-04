@@ -302,3 +302,29 @@ ReplacementWorkflow berada pada Fulfillment dengan tabel replacement_shipments/l
 StockLedger.dispatch kini menerima source type internal opsional (default legacy), replacement_dispatch/receipt dipakai reader/export web/native. Transaksi mengunci parent→original shipment→case→resolution→replacement→batch; stock/revision, case version, shipment lines, audit kedua organisasi dan Operations UUID commit bersama. Receive mengurutkan destination batch identity dan mempertahankan historic SKU/local product/pack/date, bukan master. Tidak ada financial posting, disposisi quarantine awal atau recursive replacement. Rollback history terpakai ditolak.
 
 Web memakai Backend HTTP, CSRF, server capability dan exact case version; normalized form hanya satu batch per original line per dispatch (API mendukung multi-allocation). Unknown mempertahankan immutable session UUID/path/body/review melalui later denial dan menahan replacement baru. ACK mencocokkan parent/case/plan/source/version serta baris qty dispatch atau receipt actual, lalu reload. Pagination lokal, escaped atomic shipment/plan,401/login/logout cleanup. Kontrak0.25.0 menambah tiga operasi, tanpa dependensi. Lihat docs/replacement-fulfillment.md.
+
+
+## ADR-037: revision kind dan preview shared untuk sisa pesanan
+
+Advanced revisions memakai tabel/history/unique pending lock yang sama dengan reductions, dengan kind terpisah dan endpoint/reader legacy terfilter. Semua existing line dipertahankan dengan sent floor, zero tombstone untuk penghapusan tanpa menghapus bukti, dan additions sebagai quote lot baru. Supplier tidak mendapatkan seluruh katalog lokal; recipient memetakan SKU baru. Counterparty role decides; actor multi-membership dinilai terhadap pihak yang dibutuhkan. Preview read-only mengikat quote/version/party/reason dan mengabaikan ID baru sementara pada hash. UI web/native membekukan review sebelum submit; harga berubah ditolak. Approval hanya order/history/audit, tidak stok atau invoice. Native memakai repository/controller/review existing dengan advanced mode; legacy behavior tetap diuji. Lihat docs/order-revisions.md.
+
+## ADR-038: katalog efektif, komposisi paket dan file privat
+
+CatalogConfiguration memisahkan otorisasi/domain mutation dari HTTP. EffectivePrice memilih periode DATE WIB inklusif dengan scoped tier dan overlap guard pada product lock; bulk metadata reader menjaga katalog100 tanpa N+1. BundlePricing membekukan resep dan mengembangkan alokasi komponen base pieces; CashCheckout/SaleStock memposting semua debit bersama sale/shift/operation receipt. Parent line tetap SKU paket dan harga paket, recipe_snapshot menyimpan komposisi historis. Tidak ada nested recipe atau pembukaan sealed otomatis. Image raster5MiB/4096px serta PDF kontrak5MiB disimpan content-hash/private, read berizin/no-store/nosniff, PDF attachment; Flutter raster di memori. No dependencies/TLS bypass. Lihat docs/catalog-and-contracts.md.
+
+## ADR-039: kesepakatan kemitraan berversi tanpa efek finansial otomatis
+
+Partnership provider terpisah bergantung Identity, eksplisit di registry API/web. Draft center-only termasuk audit, publish membagi dokumen hanya ke mitra tujuan, accept membutuhkan consent dan nama dengan actor/time/version serta terms/PDF SHA256. Accepted immutable; tidak memberikan POS ACL atau profit sharing konsinyasi. Shared web PendingMutation dipakai konfigurasi/kontrak/bundle untuk freeze request, ACK scoped dan retry unknown through later denial; kandidat revision terpisah dari pending. D-01/D-03/D-08 belum ditutup oleh saran default dalam pertanyaan yang belum dijawab; DL-13/15/16 tetap tertahan kebijakan bisnis.
+
+
+## ADR-040: retur fisik dan kredit terpisah
+
+Retur agreed `return` hanya kuota barang rusak fisik dari karantina penerima ke karantina sumber asli. StockLedger dan case version/UUID/audit commit bersama; tidak mengubah order/receipt awal atau membuka stok layak jual. Kredit diproses Billing, dibatasi harga historis yang ditagih dan jumlah retur diterima, kemudian pusat→pimpinan mitra mengonfirmasi nominal. Kualitas/release karantina tetap SOP terpisah.
+
+## ADR-041: dokumen keuangan eksplisit dan konsinyasi manual
+
+Billing menjadi provider eksplisit setelah Ordering/Fulfillment/Partnership. Invoice proposal berisi basis/tax/rounding/due/discount/shipping, diterima pimpinan mitra sebelum koleksi. Klaim baris kiriman/laporan unik saat aktif, histori tidak dihapus. Operations dan parent order mengikat lock ke stok/plan/credit. Saldo bertanda memisahkan piutang dan kredit pelanggan. Pembayaran/reversal manual bukan gateway atau laci POS. Kontrak konsinyasi diterima dan laporan sold pieces disetujui pusat mendahului invoice; tidak membaca POS/bagi hasil otomatis. Pilihan dokumen tidak menetapkan D-01 global.
+
+## ADR-042: voucher online, verifikasi non-tunai dan refund historis
+
+Promotions memiliki voucher/redemption issuer-funded eksplisit; quote draft tidak mereservasi kuota. Checkout mengunci shift→intent→produk→voucher→batch; payment reference unik dan semua posting atomik. Noncash memperbarui counter terpisah. Refund mengunci shift→sale→voucher→batch, menggunakan server preview/hash serta nominal diskon historis kumulatif dan alokasi komponen asal. Proportion menghitung pembagian integer tanpa overflow. Stok kembali hanya karantina, uang keluar memakai metode asal/current open shift. Histori sale immutable selain versi pengaman; refund append-only, quota restoration sekali sesuai pilihan voucher. BFF PendingMutation serta native frozen JSON mempertahankan request unknown sampai ACK atau rekonsiliasi; tidak ada durable native offline queue. D-03/D-08 global tetap terbuka.

@@ -24,6 +24,7 @@ class _OrderChangesPageState extends State<OrderChangesPage> {
   final scroll = ScrollController();
   PendingOrderChange? lastPending;
   final quantities = <String, String>{};
+  final additions = <Map<String, dynamic>>[];
   int epoch = 0;
   @override
   void initState() {
@@ -40,6 +41,7 @@ class _OrderChangesPageState extends State<OrderChangesPage> {
       epoch = model.epoch;
       reason.clear();
       quantities.clear();
+      additions.clear();
       for (final l in model.context?.original.lines ?? <ChangeLine>[]) {
         quantities[l.id] = '${l.packs}';
       }
@@ -93,7 +95,11 @@ class _OrderChangesPageState extends State<OrderChangesPage> {
 
   Future<void> propose() async {
     try {
-      await review(model.propose(quantities, reason.text));
+      await review(
+        widget.repository.advanced
+            ? await model.revise(quantities, additions, reason.text)
+            : model.propose(quantities, reason.text),
+      );
     } catch (e) {
       feedback(e);
     }
@@ -120,11 +126,15 @@ class _OrderChangesPageState extends State<OrderChangesPage> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Text(
-            'Usulkan pengurangan',
+            widget.repository.advanced
+                ? 'Revisi SKU dan sisa pesanan'
+                : 'Usulkan pengurangan',
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          const Text(
-            'Isi semua baris. Minimal satu kemasan per baris dan setidaknya satu baris berkurang. Harga, SKU dan kemasan tetap.',
+          Text(
+            widget.repository.advanced
+                ? 'Pertahankan minimal jumlah yang sudah dikirim; penghapusan memakai0 pada baris belum terkirim. Tambahan ditinjau dengan quote baru.'
+                : 'Isi semua baris. Minimal satu kemasan per baris dan setidaknya satu baris berkurang. Harga, SKU dan kemasan tetap.',
           ),
           for (final l in c.original.lines) ...[
             Text(
@@ -138,6 +148,34 @@ class _OrderChangesPageState extends State<OrderChangesPage> {
               decoration: InputDecoration(labelText: 'Jumlah usulan ${l.sku}'),
               onChanged: (v) => quantities[l.id] = v,
             ),
+          ],
+          if (widget.repository.advanced) ...[
+            const Text(
+              'Jumlah lama minimal yang sudah dikirim; tambahan memakai quote server dan persetujuan pihak lawan.',
+            ),
+            for (final row in additions)
+              Text('Tambah ${row['quantity_packs']} kemasan'),
+            OutlinedButton(
+              onPressed: model.editable
+                  ? () async {
+                      final row = await showDialog<Map<String, dynamic>>(
+                        context: context,
+                        builder: (_) => _RevisionAddition(contextData: c),
+                      );
+                      if (row != null && mounted) {
+                        setState(() => additions.add(row));
+                      }
+                    }
+                  : null,
+              child: const Text('Tambah SKU / substitusi'),
+            ),
+            if (additions.isNotEmpty)
+              TextButton(
+                onPressed: model.editable
+                    ? () => setState(additions.clear)
+                    : null,
+                child: const Text('Hapus semua tambahan'),
+              ),
           ],
           TextField(
             key: const Key('change-proposal-reason'),
@@ -163,7 +201,11 @@ class _OrderChangesPageState extends State<OrderChangesPage> {
         canPop: !model.busy && model.pending == null,
         child: Scaffold(
           appBar: AppBar(
-            title: const Text('Persetujuan ulang'),
+            title: Text(
+              widget.repository.advanced
+                  ? 'Revisi SKU dan jumlah'
+                  : 'Persetujuan ulang',
+            ),
             actions: [
               IconButton(
                 tooltip: 'Muat ulang usulan',
@@ -329,6 +371,101 @@ class _ChangeNoteDialogState extends State<_ChangeNoteDialog> {
       FilledButton(
         onPressed: () => Navigator.pop(context, note.text),
         child: const Text('Tinjau keputusan'),
+      ),
+    ],
+  );
+}
+
+class _RevisionAddition extends StatefulWidget {
+  const _RevisionAddition({required this.contextData});
+  final OrderChangeContext contextData;
+  @override
+  State<_RevisionAddition> createState() => _RevisionAdditionState();
+}
+
+class _RevisionAdditionState extends State<_RevisionAddition> {
+  String? supplier, local, error;
+  final quantity = TextEditingController();
+  @override
+  void dispose() {
+    quantity.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Tambahan atau substitusi SKU'),
+    content: SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'SKU pusat'),
+            items: [
+              for (final p in widget.contextData.supplierProducts)
+                DropdownMenuItem(
+                  value: p['id'] as String,
+                  child: Text(
+                    '${p['sku']} · Isi ${p['pack_size']}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (v) => supplier = v,
+          ),
+          DropdownButtonFormField<String>(
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'SKU lokal'),
+            items: [
+              for (final p in widget.contextData.localProducts)
+                DropdownMenuItem(
+                  value: p['id'] as String,
+                  child: Text(
+                    '${p['sku']} · Isi ${p['pack_size']}',
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+            ],
+            onChanged: (v) => local = v,
+          ),
+          TextField(
+            controller: quantity,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Jumlah kemasan tambahan',
+            ),
+          ),
+          if (error != null) Text(error!),
+          const Text(
+            'Isi dan kondisi SKU harus sama. Quote baru ditinjau dari server; histori barang terkirim tetap.',
+          ),
+        ],
+      ),
+    ),
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Batal'),
+      ),
+      FilledButton(
+        onPressed: () {
+          final n = int.tryParse(quantity.text);
+          if (supplier == null ||
+              local == null ||
+              n == null ||
+              n < 1 ||
+              n > 10000) {
+            setState(() => error = 'Pilih kedua SKU dan jumlah1–10000.');
+            return;
+          }
+          Navigator.pop(context, {
+            'supplier_product_id': supplier,
+            'local_product_id': local,
+            'quantity_packs': n,
+          });
+        },
+        child: const Text('Tambahkan untuk ditinjau'),
       ),
     ],
   );

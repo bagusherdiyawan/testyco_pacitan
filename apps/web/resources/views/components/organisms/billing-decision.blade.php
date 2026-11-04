@@ -1,0 +1,5 @@
+@props(['order','action','version','invoice'=>null,'credit'=>null,'report'=>null])
+<form class="panel" method="post" action="/app/orders/{{ $order }}/billing">@csrf<x-molecules.operation-key :remember="false" /><input type="hidden" name="action" value="{{ $action }}"><input type="hidden" name="version" value="{{ $version }}">@if($invoice)<input type="hidden" name="invoice_id" value="{{ $invoice }}">@endif @if($credit)<input type="hidden" name="credit_id" value="{{ $credit }}">@endif @if($report)<input type="hidden" name="report_id" value="{{ $report }}">@endif
+<x-molecules.field name="reason" label="Catatan keputusan wajib" maxlength="2000" :remember="false" required />
+@if(str_ends_with($action,'_accept'))<label><input type="checkbox" name="consent" value="1" required> Saya telah memeriksa rincian, nominal, dasar, pajak dan ketentuan di atas dan menyetujui dokumen ini.</label>@endif
+<x-atoms.button>{{ str_ends_with($action,'_accept') ? 'Setujui dokumen yang ditinjau' : (str_ends_with($action,'_reject') ? 'Tolak dokumen' : 'Tarik usulan') }}</x-atoms.button></form>

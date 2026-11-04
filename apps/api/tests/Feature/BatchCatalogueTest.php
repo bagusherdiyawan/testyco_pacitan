@@ -19,8 +19,11 @@ class BatchCatalogueTest extends TestCase
     use RefreshDatabase;
 
     private Organization $org;
+
     private Store $store;
+
     private Product $product;
+
     private User $lead;
 
     protected function setUp(): void

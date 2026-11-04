@@ -45,6 +45,9 @@ Flutter mempunyai modul Pesanan untuk role pemohon yang sesuai dan modul Stok ya
 
 ## Batas berikutnya
 
-Belum ada reservasi stok, substitusi/penambahan/penghapusan baris atau revisi sesudah kirim, resolusi barang rusak/hilang, pembuktian foto/suhu terstruktur, kontrak harga khusus mitra, pengiriman notifikasi stok minimum, refund POS/QRIS, billing atau offline. PostgreSQL/concurrency dan UAT belum diverifikasi. Gunakan untuk development dan pengujian alur ini dahulu.
+[Revisi SKU/tambah/hapus bagian belum dikirim](order-revisions.md), kasus/rencana/pengganti termasuk [Flutter](native-shipment-cases.md), harga efektif/khusus mitra serta kontrak/PDF/consent tersedia. Reservasi stok, retur fisik/kredit, pembuktian foto/suhu kasus terstruktur, pengiriman notifikasi stok minimum, refund POS/QRIS, billing dan offline belum tersedia. PostgreSQL/concurrency dan UAT belum diverifikasi. Gunakan untuk development dan pengujian alur ini dahulu.
 
 Pembukaan kemasan, pengukusan dan opname/susut berapproval kini tersedia pada [kontrol stok](stock-control.md). Pengiriman tetap hanya mengambil stok utuh; proses tidak membuat kuota pengganti atau perubahan tagihan.
+
+
+Pembaruan4 November2026 (menggantikan keterangan backlog keuangan/retur/non-tunai pada irisan lama): [retur, tagihan dan penyesuaian POS](finance-and-pos-adjustments.md) kini diimplementasikan untuk DL-13/DL-15/DL-16 dengan input eksplisit, persetujuan dan verifikasi manual. D-01/D-03/D-08 belum menjadi kebijakan global; gateway, bagi hasil otomatis dan pendanaan promo lintas organisasi belum aktif. Laporan tunai tetap struk tunai sebelum pengurangan refund; histori refund/shift terpisah.

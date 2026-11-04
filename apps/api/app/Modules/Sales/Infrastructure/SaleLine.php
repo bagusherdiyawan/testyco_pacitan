@@ -22,6 +22,6 @@ final class SaleLine extends Model
 
     protected function casts(): array
     {
-        return ['quantity' => 'integer', 'pieces_per_unit' => 'integer', 'unit_price' => 'integer', 'line_total' => 'integer'];
+        return ['discount_amount' => 'integer', 'recipe_snapshot' => 'array', 'quantity' => 'integer', 'pieces_per_unit' => 'integer', 'unit_price' => 'integer', 'line_total' => 'integer'];
     }
 }

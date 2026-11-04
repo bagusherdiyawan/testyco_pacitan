@@ -7,7 +7,6 @@ use App\Modules\Catalog\Infrastructure\Product;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
-use App\Modules\Ordering\Application\RecipientOrderActions;
 use App\Modules\Ordering\Infrastructure\SupplyOrder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;

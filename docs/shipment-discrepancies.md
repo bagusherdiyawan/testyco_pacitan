@@ -1,6 +1,6 @@
 # Kasus selisih penerimaan dan rencana penyelesaian
 
-API dan web menyediakan pencatatan kasus dari kiriman yang penerimaannya sudah dikonfirmasi dengan barang rusak atau kurang. Dari detail pesanan, buka **Kasus selisih kiriman** pada kiriman terkait. Ini irisan PRD09-PROB: pencatatan, komunikasi dan kesepakatan rencana. [Pengiriman dan penerimaan pengganti](replacement-fulfillment.md) kini tersedia melalui workflow eksekusi terpisah. Eksekusi retur fisik dan pembukuan kredit/invoice belum tersedia; layar Flutter khusus kasus belum dibuat.
+API dan web menyediakan pencatatan kasus dari kiriman yang penerimaannya sudah dikonfirmasi dengan barang rusak atau kurang. Dari detail pesanan, buka **Kasus selisih kiriman** pada kiriman terkait. Ini irisan PRD09-PROB: pencatatan, komunikasi dan kesepakatan rencana. [Pengiriman dan penerimaan pengganti](replacement-fulfillment.md) kini tersedia melalui workflow eksekusi terpisah. Eksekusi retur fisik dan pembukuan kredit/invoice belum tersedia; [layar Flutter kasus/pengganti](native-shipment-cases.md) juga tersedia.
 
 ## Otoritas yang disepakati
 
@@ -42,4 +42,7 @@ Migrasi tambahan `2026_11_02_000008_create_shipment_discrepancies.php` membuat k
 
 OpenAPI0.24.0 menambah GET/POST `/api/v1/orders/{order}/shipments/{shipment}/discrepancy`, POST `/notes`, POST `/resolutions` dan POST `/resolutions/{resolution}/confirm|reject|withdraw`. Semua respons private/no-store. API tidak menerima nominal, kuantitas retur atau instruksi pemindahan stok.
 
-Workflow pengganti kini membatasi pengiriman pada selisih snapshot dari gudang sumber asli dan mencatat penerimaan aktual. Eksekusi retur masih memerlukan aturan fisik/disposisi karantina, penanggung ongkos, invoice/credit ledger dan pembatalan/revisi rencana terkonfirmasi. Approval transfer internal, lampiran file dan UI Flutter juga belum diimplementasikan. Kesepakatan rencana saat ini tidak dianggap bukti pengiriman pengganti, refund, penerimaan retur atau pelunasan.
+Workflow pengganti kini membatasi pengiriman pada selisih snapshot dari gudang sumber asli dan mencatat penerimaan aktual. Eksekusi retur masih memerlukan aturan fisik/disposisi karantina, penanggung ongkos, invoice/credit ledger dan pembatalan/revisi rencana terkonfirmasi. Approval transfer internal dan lampiran bukti kasus belum diimplementasikan; UI Flutter kini tersedia. Kesepakatan rencana saat ini tidak dianggap bukti pengiriman pengganti, refund, penerimaan retur atau pelunasan.
+
+
+Pembaruan4 November2026 (menggantikan keterangan backlog keuangan/retur/non-tunai pada irisan lama): [retur, tagihan dan penyesuaian POS](finance-and-pos-adjustments.md) kini diimplementasikan untuk DL-13/DL-15/DL-16 dengan input eksplisit, persetujuan dan verifikasi manual. D-01/D-03/D-08 belum menjadi kebijakan global; gateway, bagi hasil otomatis dan pendanaan promo lintas organisasi belum aktif. Laporan tunai tetap struk tunai sebelum pengurangan refund; histori refund/shift terpisah.

@@ -25,3 +25,7 @@ CSV pergerakan stok web kini melalui bounded JSON ledger API dengan query staff/
 Kasus selisih kiriman kini tersedia melalui API/web: snapshot penerimaan aktual, catatan bersama, usulan rencana owner/admin pusat lalu konfirmasi pimpinan mitra. Operasi kasus/rencana tidak mengeksekusi stok; workflow pengganti terpisah kini mendebit/mengkredit stok melalui ledger, tanpa mengubah order asal/invoice. Retur/kredit belum tersedia. Lihat [panduan kasus](../../docs/shipment-discrepancies.md).
 
 [Pengiriman pengganti](../../docs/replacement-fulfillment.md): rencana dikonfirmasi → batch/dispatch parsial → receipt aktual → status fulfilled.
+
+Delivery DL-12/14/17: [kasus/pengganti Flutter](../../docs/native-shipment-cases.md), [revisi SKU/sisa pesanan](../../docs/order-revisions.md) dan [gambar/harga efektif/resep paket/kontrak](../../docs/catalog-and-contracts.md). Kontrak pengelolaan dan consent melalui API/web; POS paket dan gambar/harga melalui Flutter. Keuangan DL-13/15/16 menunggu keputusan bisnis yang belum dijawab.
+
+Delivery4 November2026: lihat [retur/keuangan/POS](../../docs/finance-and-pos-adjustments.md). Modul Billing/Promotions eksplisit; administrasi keuangan di web, retur/pembayaran/voucher/refund operasional juga di Flutter. Verifikasi pembayaran manual, bukan gateway atau offline.

@@ -6,8 +6,8 @@ use App\Models\User;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Infrastructure\Store;
 use App\Modules\Ordering\Domain\OrderState;
-use App\Modules\Ordering\Infrastructure\SupplyOrder;
 use App\Modules\Ordering\Infrastructure\OrderChange;
+use App\Modules\Ordering\Infrastructure\SupplyOrder;
 
 final class RecipientOrderActions
 {

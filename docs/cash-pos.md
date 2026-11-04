@@ -46,3 +46,6 @@ Belum ada QRIS/transfer, promo/voucher, refund/void penjualan lunas, printer fis
 Tes development memakai SQLite; concurrency PostgreSQL multi-koneksi, backup/restore, perangkat Android/iOS/printer dan UAT bisnis belum diverifikasi. Jangan memakai alur ini untuk transaksi nyata sebelum gate pilot dan SOP stok/keuangan selesai.
 
 Laporan tunai lintas toko, rincian produk historis dan ekspor CSV kini tersedia melalui modul Reporting; lihat [panduan laporan](cash-reporting.md).
+
+
+Pembaruan4 November2026 (menggantikan keterangan backlog keuangan/retur/non-tunai pada irisan lama): [retur, tagihan dan penyesuaian POS](finance-and-pos-adjustments.md) kini diimplementasikan untuk DL-13/DL-15/DL-16 dengan input eksplisit, persetujuan dan verifikasi manual. D-01/D-03/D-08 belum menjadi kebijakan global; gateway, bagi hasil otomatis dan pendanaan promo lintas organisasi belum aktif. Laporan tunai tetap struk tunai sebelum pengurangan refund; histori refund/shift terpisah.

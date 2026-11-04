@@ -5,6 +5,8 @@ import '../application/warehouse_controller.dart';
 import '../../ordering/data/order_changes_repository.dart';
 import '../../ordering/presentation/order_changes_page.dart';
 import '../data/warehouse_repository.dart';
+import '../data/shipment_case_repository.dart';
+import 'shipment_case_page.dart';
 import '../domain/warehouse_context.dart';
 
 class WarehouseOrderPage extends StatefulWidget {
@@ -187,6 +189,26 @@ class _WarehouseOrderPageState extends State<WarehouseOrderPage> {
                   style: TextStyle(color: Theme.of(context).colorScheme.error),
                 ),
               if (model.saved) const Text('Pencatatan gudang telah tersimpan.'),
+              if (c != null)
+                OutlinedButton(
+                  onPressed: model.editable
+                      ? () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => OrderChangesPage(
+                                repository: OrderChangesRepository(
+                                  widget.repository.api,
+                                  advanced: true,
+                                ),
+                                orderId: widget.order,
+                              ),
+                            ),
+                          );
+                          if (mounted) await model.load();
+                        }
+                      : null,
+                  child: const Text('Revisi SKU dan sisa pesanan'),
+                ),
               if (c != null) ...[
                 Text(
                   'Order ${c.id} · ${c.order['status']} · versi ${c.version}',
@@ -249,6 +271,26 @@ class _WarehouseOrderPageState extends State<WarehouseOrderPage> {
                     'Tidak ada tindakan gudang yang tersedia. Tidak ada kuota pengganti otomatis untuk barang rusak/hilang.',
                   ),
               ],
+              if (c != null)
+                OutlinedButton(
+                  onPressed: model.editable
+                      ? () async {
+                          await Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => OrderChangesPage(
+                                repository: OrderChangesRepository(
+                                  widget.repository.api,
+                                  advanced: true,
+                                ),
+                                orderId: widget.order,
+                              ),
+                            ),
+                          );
+                          if (mounted) await model.load();
+                        }
+                      : null,
+                  child: const Text('Revisi SKU dan sisa pesanan'),
+                ),
               if (c != null) ...[
                 const SizedBox(height: 16),
                 const Text('Riwayat kiriman'),
@@ -257,6 +299,23 @@ class _WarehouseOrderPageState extends State<WarehouseOrderPage> {
                   Card(
                     child: ListTile(
                       title: Text('Kiriman ${s['id']}'),
+                      onTap: model.editable && s['received_at'] != null
+                          ? () async {
+                              await Navigator.of(context).push(
+                                MaterialPageRoute(
+                                  builder: (_) => ShipmentCasePage(
+                                    repository: ShipmentCaseRepository(
+                                      widget.repository.api,
+                                      widget.order,
+                                      s['id'],
+                                    ),
+                                  ),
+                                ),
+                              );
+                              if (mounted) await model.load();
+                            }
+                          : null,
+
                       subtitle: Text(
                         'Petugas ${s['handler']} · ${s['received_at'] == null ? 'Belum diterima' : 'Penerimaan tercatat'}\n${s['note'] ?? ''}',
                       ),

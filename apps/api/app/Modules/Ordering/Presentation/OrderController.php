@@ -15,6 +15,7 @@ use App\Modules\Ordering\Infrastructure\SupplyOrder;
 use App\Modules\Sales\SalesServiceProvider;
 use App\Modules\Shifts\Application\PosAccess;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 final class OrderController
 {
@@ -30,9 +31,17 @@ final class OrderController
 
     public function catalog(Request $r, string $store, SupplyCatalog $catalog): mixed
     {
-        $this->access->recipient($r->user(), $store, true);
+        $s = $this->access->recipient($r->user(), $store, true);
+        $page = $catalog->available()->orderBy('name')->paginate(100, ['id', 'organization_id', 'sku', 'name', 'condition', 'pack_size', 'wholesale_price']);
+        $today = now('Asia/Jakarta')->format('Y-m-d');
+        $prices = DB::table('product_price_periods')->whereIn('product_id', $page->pluck('id'))->where('channel', 'wholesale')->where('active', true)->where('starts_on', '<=', $today)->where('ends_on', '>=', $today)->where(fn ($q) => $q->whereNull('partner_id')->orWhere('partner_id', $s->organization_id))->get()->groupBy('product_id');
 
-        return $catalog->available()->orderBy('name')->paginate(100, ['id', 'organization_id', 'sku', 'name', 'condition', 'pack_size', 'wholesale_price']);
+        return $page->through(function ($p) use ($prices, $s) {
+            $rows = $prices->get($p->id, collect());
+            $price = $rows->firstWhere('partner_id', $s->organization_id) ?? $rows->firstWhere('partner_id', null);
+
+            return [...$p->toArray(), 'wholesale_price' => (int) ($price?->price ?? $p->wholesale_price)];
+        });
     }
 
     public function index(Request $r, string $store): mixed

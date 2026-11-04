@@ -21,11 +21,19 @@ final class RetailPricing
         foreach ($requested as $row) {
             $product = $products->get($row['product_id']);
             abort_unless($product, 404, 'Produk aktif tidak ditemukan pada organisasi toko.');
+            $recipe = BundlePricing::recipe($product->id);
+            if ($recipe) {
+                $item = BundlePricing::item($product, $row, $recipe);
+                $items[] = $item;
+                $total = Rupiah::add($total, $item['line_total']);
+
+                continue;
+            }
             $quantity = (int) $row['quantity'];
             $pieces = match ($row['unit']) {
                 'piece' => 1,'portion' => $product->portion_size,'pack' => $product->pack_size
             };
-            $price = Rupiah::multiply($product->retail_price, $pieces);
+            $price = Rupiah::multiply(EffectivePrice::for($product, 'retail'), $pieces);
             $amount = Rupiah::multiply($price, $quantity);
             $total = Rupiah::add($total, $amount);
             $allocations = [];

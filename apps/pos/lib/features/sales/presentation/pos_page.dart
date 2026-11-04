@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'receipt_history_page.dart';
+import 'refund_page.dart';
 import '../application/pos_controller.dart';
 import '../data/pos_repository.dart';
 import '../domain/cart_entry.dart';
@@ -16,9 +17,14 @@ class PosPage extends StatefulWidget {
 
 class _PosPageState extends State<PosPage> {
   late final PosController model;
+  String paymentMethod = 'cash';
+  bool paymentVerified = false;
   final device = TextEditingController(),
       opening = TextEditingController(),
       cash = TextEditingController(),
+      voucher = TextEditingController(),
+      paymentReference = TextEditingController(),
+      verifiedAmount = TextEditingController(),
       counted = TextEditingController(),
       note = TextEditingController(),
       cancelReason = TextEditingController();
@@ -32,7 +38,17 @@ class _PosPageState extends State<PosPage> {
   @override
   void dispose() {
     model.dispose();
-    for (final c in [device, opening, cash, counted, note, cancelReason]) {
+    for (final c in [
+      device,
+      opening,
+      cash,
+      counted,
+      note,
+      cancelReason,
+      voucher,
+      paymentReference,
+      verifiedAmount,
+    ]) {
       c.dispose();
     }
     super.dispose();
@@ -120,22 +136,58 @@ class _PosPageState extends State<PosPage> {
               ),
             ],
           ),
-          DropdownButtonFormField<String>(
-            initialValue: entry.unit,
-            decoration: const InputDecoration(labelText: 'Satuan'),
-            items: const [
-              DropdownMenuItem(value: 'piece', child: Text('Biji')),
-              DropdownMenuItem(value: 'portion', child: Text('Porsi')),
-              DropdownMenuItem(value: 'pack', child: Text('Kemasan')),
+          if (entry.product.isBundle) ...[
+            const Text(
+              'Satu unit = satu paket. Stok komponen dipotong saat pembayaran.',
+            ),
+            for (final component in entry.product.components) ...[
+              Text(
+                '${component['sku']} · ${component['pieces']} biji per paket',
+              ),
+              DropdownButtonFormField<String>(
+                key: ValueKey(
+                  'bundle-stock-${entry.product.id}-${component['product_id']}',
+                ),
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Batch komponen'),
+                items: [
+                  for (final b in model.componentChoices(component))
+                    DropdownMenuItem(
+                      value: b['key'] as String,
+                      child: Text(
+                        b['label'] as String,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                onChanged: model.cartLocked
+                    ? null
+                    : (v) => model.componentStock(
+                        entry,
+                        component['product_id'] as String,
+                        v,
+                      ),
+              ),
             ],
-            onChanged: model.cartLocked
-                ? null
-                : (v) {
-                    if (v != null) {
-                      model.unit(entry, v);
-                    }
-                  },
-          ),
+          ],
+          if (!entry.product.isBundle)
+            DropdownButtonFormField<String>(
+              isExpanded: true,
+              initialValue: entry.unit,
+              decoration: const InputDecoration(labelText: 'Satuan'),
+              items: const [
+                DropdownMenuItem(value: 'piece', child: Text('Biji')),
+                DropdownMenuItem(value: 'portion', child: Text('Porsi')),
+                DropdownMenuItem(value: 'pack', child: Text('Kemasan')),
+              ],
+              onChanged: model.cartLocked
+                  ? null
+                  : (v) {
+                      if (v != null) {
+                        model.unit(entry, v);
+                      }
+                    },
+            ),
           TextFormField(
             key: ValueKey('qty-${entry.product.id}'),
             initialValue: '${entry.quantity}',
@@ -144,25 +196,26 @@ class _PosPageState extends State<PosPage> {
             enabled: !model.cartLocked,
             onChanged: (v) => model.quantity(entry, v),
           ),
-          DropdownButtonFormField<String>(
-            key: ValueKey('${entry.product.id}-${entry.unit}-${entry.stock}'),
-            initialValue: entry.stock,
-            isExpanded: true,
-            decoration: const InputDecoration(
-              labelText: 'Batch / keadaan stok',
-            ),
-            items: [
-              for (final c in model.choices(entry))
-                DropdownMenuItem(
-                  value: c['key'] as String,
-                  child: Text(
-                    c['label'] as String,
-                    overflow: TextOverflow.ellipsis,
+          if (!entry.product.isBundle)
+            DropdownButtonFormField<String>(
+              key: ValueKey('${entry.product.id}-${entry.unit}-${entry.stock}'),
+              initialValue: entry.stock,
+              isExpanded: true,
+              decoration: const InputDecoration(
+                labelText: 'Batch / keadaan stok',
+              ),
+              items: [
+                for (final c in model.choices(entry))
+                  DropdownMenuItem(
+                    value: c['key'] as String,
+                    child: Text(
+                      c['label'] as String,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
-                ),
-            ],
-            onChanged: model.cartLocked ? null : (v) => model.stock(entry, v),
-          ),
+              ],
+              onChanged: model.cartLocked ? null : (v) => model.stock(entry, v),
+            ),
           if (entry.stock != null)
             Text(
               'Expiry kemasan: ${model.choices(entry).where((c) => c["key"] == entry.stock).firstOrNull?["expiry"] ?? "—"}',
@@ -176,8 +229,15 @@ class _PosPageState extends State<PosPage> {
     for (final entry in model.cart.values) cartTile(entry),
     if (model.cart.isEmpty)
       const Text('Pilih produk dan sumber stok. Total final dihitung server.'),
+    field(
+      'Kode voucher (opsional)',
+      voucher,
+      enabled: !model.busy && !model.creatingUncertain,
+    ),
     FilledButton(
-      onPressed: model.busy ? null : model.review,
+      onPressed: model.busy
+          ? null
+          : () => model.review(voucherCode: voucher.text),
       child: Text(
         model.creatingUncertain
             ? 'Ulangi pembuatan draft yang sama'
@@ -201,18 +261,77 @@ class _PosPageState extends State<PosPage> {
         'Total Rp ${model.intent!['total_amount']}',
         style: Theme.of(context).textTheme.headlineSmall,
       ),
-      field(
-        'Tunai diterima (Rp)',
-        cash,
-        number: true,
-        enabled: !model.busy && !model.paymentUncertain,
+      if (model.intent!['voucher_snapshot'] != null)
+        Text(
+          'Voucher ${model.intent!['voucher_snapshot']['code']} · Diskon Rp ${model.intent!['discount_amount']}',
+        ),
+      DropdownButtonFormField<String>(
+        isExpanded: true,
+        initialValue: paymentMethod,
+        decoration: const InputDecoration(labelText: 'Metode pembayaran'),
+        items: const [
+          DropdownMenuItem(value: 'cash', child: Text('Tunai')),
+          DropdownMenuItem(
+            value: 'qris_manual',
+            child: Text('QRIS · verifikasi manual'),
+          ),
+          DropdownMenuItem(
+            value: 'bank_transfer',
+            child: Text('Transfer · verifikasi manual'),
+          ),
+        ],
+        onChanged: model.busy || model.paymentUncertain
+            ? null
+            : (v) => setState(() {
+                paymentMethod = v!;
+                paymentVerified = false;
+              }),
       ),
+      if (paymentMethod == 'cash')
+        field(
+          'Tunai diterima (Rp)',
+          cash,
+          number: true,
+          enabled: !model.busy && !model.paymentUncertain,
+        ),
+      if (paymentMethod != 'cash') ...[
+        field(
+          'Referensi bukti pembayaran',
+          paymentReference,
+          enabled: !model.busy && !model.paymentUncertain,
+        ),
+        field(
+          'Nominal aktual terverifikasi (Rp)',
+          verifiedAmount,
+          number: true,
+          enabled: !model.busy && !model.paymentUncertain,
+        ),
+        CheckboxListTile(
+          value: paymentVerified,
+          onChanged: model.busy || model.paymentUncertain
+              ? null
+              : (v) => setState(() => paymentVerified = v!),
+          title: const Text(
+            'Saya telah memeriksa bukti dan pembayaran aktual. Pemilihan metode saja tidak berarti lunas.',
+          ),
+        ),
+      ],
       FilledButton(
-        onPressed: model.busy ? null : () => model.pay(cash.text),
+        onPressed: model.busy
+            ? null
+            : () => model.pay(
+                cash.text,
+                method: paymentMethod,
+                reference: paymentReference.text,
+                verified: paymentVerified,
+                verifiedAmount: verifiedAmount.text,
+              ),
         child: Text(
           model.paymentUncertain
               ? 'Coba ulang pembayaran yang sama'
-              : 'Konfirmasi tunai',
+              : (paymentMethod == 'cash'
+                    ? 'Konfirmasi tunai'
+                    : 'Konfirmasi pembayaran diverifikasi'),
         ),
       ),
       if (model.paymentUncertain)
@@ -248,11 +367,35 @@ class _PosPageState extends State<PosPage> {
           children: [
             ...header(),
             SaleReceipt(sale: model.receipt!),
+            if (model.context?['can_manage'] == true)
+              OutlinedButton(
+                onPressed: model.busy
+                    ? null
+                    : () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => RefundPage(
+                              api: widget.repository.api,
+                              sale: model.receipt!['id'],
+                            ),
+                          ),
+                        );
+                        if (mounted) {
+                          await model.showReceipt(model.receipt!['id']);
+                        }
+                      },
+                child: const Text('Tinjau refund'),
+              ),
             FilledButton(
               onPressed: model.busy
                   ? null
                   : () {
                       cash.clear();
+                      voucher.clear();
+                      paymentReference.clear();
+                      verifiedAmount.clear();
+                      paymentMethod = 'cash';
+                      paymentVerified = false;
                       model.newSale();
                     },
               child: const Text('Transaksi baru'),

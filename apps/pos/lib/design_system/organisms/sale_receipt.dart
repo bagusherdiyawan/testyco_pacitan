@@ -40,8 +40,18 @@ class SaleReceipt extends StatelessWidget {
             'Total Rp ${sale['total_amount']}',
             style: Theme.of(context).textTheme.titleLarge,
           ),
-          Text('Tunai Rp ${sale['cash_received']}'),
-          Text('Kembalian Rp ${sale['change_amount']}'),
+          Text(
+            'Diskon Rp ${sale['discount_amount'] ?? 0} · ${sale['payment_method'] ?? 'cash'}',
+          ),
+          if ((sale['payment_method'] ?? 'cash') == 'cash') ...[
+            Text('Tunai Rp ${sale['cash_received']}'),
+            Text('Kembalian Rp ${sale['change_amount']}'),
+          ] else
+            Text('Referensi terverifikasi ${sale['payment_reference'] ?? ''}'),
+          for (final r in sale['refunds'] ?? [])
+            Text(
+              'Refund Rp ${r['amount']} · ${r['payment_method']} · ${r['reference']}',
+            ),
           const Text('Struk digital · pencetakan perangkat belum terintegrasi'),
         ],
       ),

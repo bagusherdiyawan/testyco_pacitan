@@ -14,7 +14,7 @@ class PosWebTest extends TestCase
 
     private function sale(): array
     {
-        return ['id' => 'SALE', 'store_id' => 'STORE', 'number' => 'POS-123', 'store_name' => 'Toko Pacitan', 'store_address' => 'Pacitan', 'cashier_name' => 'Kasir', 'sold_at' => '2026-10-28T03:00:00Z', 'currency' => 'IDR', 'status' => 'completed', 'payment_method' => 'cash', 'subtotal' => 12000, 'discount_amount' => 0, 'total_amount' => 12000, 'cash_received' => 20000, 'change_amount' => 8000, 'lines' => [['sku' => 'AYAM', 'name' => 'Ayam lama', 'quantity' => 4, 'unit' => 'piece', 'pieces_per_unit' => 1, 'unit_price' => 3000, 'line_total' => 12000]]];
+        return ['id' => 'SALE', 'sale_intent_id' => 'INTENT', 'store_id' => 'STORE', 'number' => 'POS-123', 'store_name' => 'Toko Pacitan', 'store_address' => 'Pacitan', 'cashier_name' => 'Kasir', 'sold_at' => '2026-10-28T03:00:00Z', 'currency' => 'IDR', 'status' => 'completed', 'payment_method' => 'cash', 'subtotal' => 12000, 'discount_amount' => 0, 'total_amount' => 12000, 'cash_received' => 20000, 'change_amount' => 8000, 'lines' => [['sku' => 'AYAM', 'name' => 'Ayam lama', 'quantity' => 4, 'unit' => 'piece', 'pieces_per_unit' => 1, 'unit_price' => 3000, 'line_total' => 12000]]];
     }
 
     public function test_pos_requires_session_and_renders_open_shift_without_exposing_token(): void
@@ -80,7 +80,7 @@ class PosWebTest extends TestCase
     public function test_pending_intent_page_has_cash_confirmation_and_explicit_cancel(): void
     {
         Http::fake(['*' => Http::response(['data' => ['intent' => ['id' => 'INTENT', 'store_id' => 'STORE', 'status' => 'pending', 'total_amount' => 12000, 'items' => [['sku' => 'AYAM', 'name' => 'Ayam', 'quantity' => 4, 'unit' => 'piece', 'unit_price' => 3000, 'line_total' => 12000]]], 'sale' => null, 'is_owner' => true]])]);
-        $this->withSession($this->apiSession())->get('/app/pos/intents/INTENT')->assertOk()->assertSee('Konfirmasi pembayaran tunai')->assertSee('Batalkan draft')->assertDontSee('QRIS');
+        $this->withSession($this->apiSession())->get('/app/pos/intents/INTENT')->assertOk()->assertSee('Konfirmasi pembayaran tunai')->assertSee('Batalkan draft')->assertSee('QRIS diverifikasi manual')->assertSee('Nominal aktual terverifikasi');
     }
 
     public function test_receipt_history_is_paginated_and_reads_api_scope(): void

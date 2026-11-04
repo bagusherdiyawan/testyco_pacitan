@@ -22,6 +22,6 @@ final class Sale extends Model
 
     protected function casts(): array
     {
-        return ['subtotal' => 'integer', 'discount_amount' => 'integer', 'total_amount' => 'integer', 'cash_received' => 'integer', 'change_amount' => 'integer', 'sold_at' => 'datetime'];
+        return ['version' => 'integer', 'voucher_snapshot' => 'array', 'payment_verified_at' => 'datetime', 'subtotal' => 'integer', 'discount_amount' => 'integer', 'total_amount' => 'integer', 'cash_received' => 'integer', 'change_amount' => 'integer', 'sold_at' => 'datetime'];
     }
 }

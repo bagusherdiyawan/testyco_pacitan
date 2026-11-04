@@ -785,6 +785,6 @@ class SupplyWorkflowTest extends TestCase
         $this->act($this->lead)->getJson('/api/v1/orders/'.$order['id'])->assertJsonPath('data.recipient_actions.amend', false);
         $this->postJson('/api/v1/orders/'.$order['id'].'/preview', $body)->assertConflict();
         $this->putJson('/api/v1/orders/'.$order['id'], [...$body, 'operation_id' => (string) Str::uuid()])->assertConflict();
-        $this->assertDatabaseCount('supply_orders',1);
+        $this->assertDatabaseCount('supply_orders', 1);
     }
 }

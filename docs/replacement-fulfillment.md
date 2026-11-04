@@ -2,7 +2,7 @@
 
 Alur grosir API/web tersedia dari awal sampai akhir: laporkan selisih penerimaan → owner/admin pusat mengusulkan **pengganti** → pimpinan mitra mengonfirmasi → petugas sumber mengalokasikan batch dan mengirim → penerima memeriksa fisik → stok aktual dibukukan → status **Penggantian selesai diterima baik**. Buka detail pesanan, kasus selisih, kemudian **Buka pengiriman dan penerimaan pengganti** pada rencana terkonfirmasi.
 
-Ini menuntaskan eksekusi pengganti pada API/web untuk SKU/isi kemasan asli, dari gudang sumber asli. Layar native Flutter kasus/pengganti belum tersedia; riwayat ledger Flutter tetap dapat menampilkan/filter pergerakannya. Eksekusi retur fisik dan kredit belum dibuat. Jangan menyamakan pengganti dengan refund atau pengembalian barang rusak.
+Ini menuntaskan eksekusi pengganti pada API/web untuk SKU/isi kemasan asli, dari gudang sumber asli. [Layar native Flutter kasus/pengganti](native-shipment-cases.md) kini tersedia; ledger Flutter juga menampilkan/filter pergerakannya. Eksekusi retur fisik dan kredit belum dibuat. Jangan menyamakan pengganti dengan refund atau pengembalian barang rusak.
 
 ## Jumlah dan izin
 
@@ -39,3 +39,6 @@ Web memakai HTTP ke API, CSRF, komponen atomic plan/shipment, link pagination lo
 API0.25.0 menambah GET/POST `/orders/{order}/shipments/{shipment}/discrepancy/replacements` dan POST `.../replacements/{replacement}/receive`, dengan private/no-store dan history50. Context memisahkan quota global, batch yang hanya terlihat bagi dispatcher berwenang, dan capability tiap shipment. CSV/reader ledger web dan Flutter mengenali dua sumber baru.
 
 Migrasi `2026_11_03_000009_create_replacement_shipments.php` menambah tabel tanpa reset; rollback history terpakai ditolak. PostgreSQL concurrency, perangkat/browser interaktif dan UAT masih perlu verifikasi. Lihat [bukti uji](verification.md) dan [daftar delivery tetap](product/delivery-status.md).
+
+
+Pembaruan4 November2026 (menggantikan keterangan backlog keuangan/retur/non-tunai pada irisan lama): [retur, tagihan dan penyesuaian POS](finance-and-pos-adjustments.md) kini diimplementasikan untuk DL-13/DL-15/DL-16 dengan input eksplisit, persetujuan dan verifikasi manual. D-01/D-03/D-08 belum menjadi kebijakan global; gateway, bagi hasil otomatis dan pendanaan promo lintas organisasi belum aktif. Laporan tunai tetap struk tunai sebelum pengurangan refund; histori refund/shift terpisah.

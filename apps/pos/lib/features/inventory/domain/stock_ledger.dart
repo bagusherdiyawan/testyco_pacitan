@@ -6,6 +6,9 @@ class LedgerFilterException implements Exception {
 }
 
 const stockSourceLabels = {
+  'return_dispatch': 'Kirim retur',
+  'sale_refund': 'Refund POS ke karantina',
+  'return_receipt': 'Terima retur',
   'warehouse_intake': 'Penerimaan awal gudang',
   'replacement_dispatch': 'Kirim pengganti',
   'replacement_receipt': 'Terima pengganti',

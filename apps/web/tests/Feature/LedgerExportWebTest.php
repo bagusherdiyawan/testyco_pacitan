@@ -175,6 +175,6 @@ class LedgerExportWebTest extends TestCase
         $r = $this->withSession([...$this->auth(), '_old_input' => ['q' => 'unrelated']])->get('/app/stores/S1/inventory/ledger?'.http_build_query($q))->assertOk();
         preg_match('/href="([^\"]*\/ledger\/export\?[^\"]*)"/', $r->getContent(), $matches);
         parse_str(parse_url(html_entity_decode($matches[1]), PHP_URL_QUERY), $filters);
-        $this->assertSame(['from_day' => '2026-10-30', 'to_day' => '2026-10-31', 'batch_id' => self::BATCH, 'q' => 'OLD8'],$filters);
+        $this->assertSame(['from_day' => '2026-10-30', 'to_day' => '2026-10-31', 'batch_id' => self::BATCH, 'q' => 'OLD8'], $filters);
     }
 }

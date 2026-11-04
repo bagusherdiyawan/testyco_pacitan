@@ -118,6 +118,102 @@ class OrderChangesController extends ChangeNotifier {
     );
   }
 
+  Future<PendingOrderChange> revise(
+    Map<String, String> quantities,
+    List<Map<String, dynamic>> additions,
+    String reason,
+  ) async {
+    _ready('propose');
+    final c = context!, note = _reason(reason);
+    if (!repository.advanced ||
+        quantities.length != c.original.lines.length ||
+        !c.original.lines.every((l) => quantities.containsKey(l.id))) {
+      throw const ApiException('Isi seluruh baris revisi.');
+    }
+    final existing = <Map<String, dynamic>>[];
+    for (final l in c.original.lines) {
+      final raw = quantities[l.id]!.trim();
+      final q = RegExp(r'^\d+$').hasMatch(raw) ? int.tryParse(raw) : null;
+      if (q == null || q < (c.sent[l.id] as int? ?? 0) || q > l.packs) {
+        throw const ApiException(
+          'Jumlah harus di antara yang sudah dikirim dan jumlah asli.',
+        );
+      }
+      existing.add({'order_line_id': l.id, 'quantity_packs': q});
+    }
+    final body = {
+      'version': c.version,
+      'reason': note,
+      'existing': existing,
+      'additions': additions.map((a) => Map<String, dynamic>.from(a)).toList(),
+    };
+    busy = true;
+    _notify();
+    try {
+      final quote = await repository.preview(id, body);
+      if (quote['order_id'] != id ||
+          quote['version'] != c.version ||
+          quote['review_hash'] is! String ||
+          quote['before'] is! Map ||
+          quote['after'] is! Map) {
+        throw const ApiException('Review revisi API tidak valid.');
+      }
+      final before = ChangeSnapshot.fromJson(
+            Map<String, dynamic>.from(quote['before']),
+          ),
+          after = ChangeSnapshot.fromJson(
+            Map<String, dynamic>.from(quote['after']),
+          );
+      if (before.total != c.original.total ||
+          before.lines.length != c.original.lines.length ||
+          !before.lines.every(
+            (l) => c.original.lines.any(
+              (v) =>
+                  v.id == l.id &&
+                  v.sku == l.sku &&
+                  v.localSku == l.localSku &&
+                  v.packs == l.packs &&
+                  v.size == l.size &&
+                  v.price == l.price,
+            ),
+          )) {
+        throw const ApiException(
+          'Snapshot pesanan pada review tidak sesuai versi yang dipilih.',
+        );
+      }
+      return _reviewed = PendingOrderChange(
+        repository.path(id),
+        'pending',
+        null,
+        {
+          'operation_id': const Uuid().v4(),
+          ...body,
+          'review_hash': quote['review_hash'],
+        },
+        {
+          ..._baseReview('Tinjau revisi SKU dan sisa pesanan', note),
+          'lines': [
+            for (final l in after.lines)
+              {
+                ..._line(l, l.packs),
+                'before':
+                    before.lines
+                        .where((v) => v.id == l.id)
+                        .firstOrNull
+                        ?.packs ??
+                    0,
+              },
+          ],
+          'before_total': before.total,
+          'after_total': after.total,
+        },
+      );
+    } finally {
+      busy = false;
+      _notify();
+    }
+  }
+
   PendingOrderChange decide(
     OrderChangeRecord row,
     String action,
@@ -154,8 +250,16 @@ class OrderChangesController extends ChangeNotifier {
         ..._baseReview(title, note),
         'proposal_reason': row.reason,
         'lines': [
-          for (final l in row.before.lines)
-            _line(l, row.after.lines.firstWhere((v) => v.id == l.id).packs),
+          for (final l in row.after.lines)
+            {
+              ..._line(l, l.packs),
+              'before':
+                  row.before.lines
+                      .where((v) => v.id == l.id)
+                      .firstOrNull
+                      ?.packs ??
+                  0,
+            },
         ],
         'before_total': row.before.total,
         'after_total': row.after.total,

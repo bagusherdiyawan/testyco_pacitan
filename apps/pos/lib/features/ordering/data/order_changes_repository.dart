@@ -2,14 +2,19 @@ import '../../../core/network/api_client.dart';
 import '../domain/order_change.dart';
 
 class OrderChangesRepository {
-  const OrderChangesRepository(this.api);
+  const OrderChangesRepository(this.api, {this.advanced = false});
+  final bool advanced;
   final ApiClient api;
-  String path(String id) => 'orders/${Uri.encodeComponent(id)}/changes';
+  String path(String id) =>
+      'orders/${Uri.encodeComponent(id)}/${advanced ? 'revisions' : 'changes'}';
   Future<OrderChangeContext> context(String id, {int page = 1}) async {
     final result = OrderChangeContext.fromJson(
       await api.request('GET', '${path(id)}?page=$page'),
     );
-    if (result.orderId != id ||
+    if (result.rows.any(
+          (r) => r.kind != (advanced ? 'revision' : 'reduction'),
+        ) ||
+        result.orderId != id ||
         result.rows.any((v) => v.orderId != id) ||
         result.page != page ||
         result.lastPage < 1 ||
@@ -21,6 +26,13 @@ class OrderChangesRepository {
     return result;
   }
 
+  Future<Map<String, dynamic>> preview(
+    String id,
+    Map<String, dynamic> body,
+  ) async =>
+      (await api.request('POST', '${path(id)}/preview', body))['data']
+          as Map<String, dynamic>;
+
   Future<void> submit(String id, PendingOrderChange operation) async {
     final result = (await api.request(
       'POST',
@@ -30,7 +42,8 @@ class OrderChangesRepository {
     if (result is! Map<String, dynamic>) {
       throw const ApiException('Respons pencatatan belum dapat dipastikan.');
     }
-    final order = result['order'], change = result['change'];
+    final order = result['order'],
+        change = result[advanced ? 'revision' : 'change'];
     if (order is! Map ||
         change is! Map ||
         order['id'] != id ||

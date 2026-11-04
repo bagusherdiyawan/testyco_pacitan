@@ -20,9 +20,13 @@ class StockLedgerHistoryTest extends TestCase
     use RefreshDatabase;
 
     private Organization $org;
+
     private Store $store;
+
     private Product $product;
+
     private User $lead;
+
     private string $url;
 
     protected function setUp(): void

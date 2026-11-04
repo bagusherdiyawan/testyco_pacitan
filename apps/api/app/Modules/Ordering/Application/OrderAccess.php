@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
+use App\Modules\Ordering\Infrastructure\OrderChange;
 use App\Modules\Ordering\Infrastructure\SupplyOrder;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -72,7 +73,7 @@ final class OrderAccess
 
     public function held(string $order): bool
     {
-        return \App\Modules\Ordering\Infrastructure\OrderChange::pending($order);
+        return OrderChange::pending($order);
     }
 
     public function inbox(User $user)

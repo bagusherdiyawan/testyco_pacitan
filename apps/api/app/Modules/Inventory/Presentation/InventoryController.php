@@ -3,6 +3,8 @@
 namespace App\Modules\Inventory\Presentation;
 
 use App\Modules\Identity\Application\Access;
+use App\Modules\Inventory\Application\BatchCatalogue;
+use App\Modules\Inventory\Application\LedgerHistory;
 use App\Modules\Inventory\Application\WarehouseIntake;
 use Illuminate\Http\Request;
 
@@ -10,7 +12,7 @@ final class InventoryController
 {
     public function __construct(private Access $access, private WarehouseIntake $intake) {}
 
-    public function batches(Request $r, string $store, \App\Modules\Inventory\Application\BatchCatalogue $catalogue): mixed
+    public function batches(Request $r, string $store, BatchCatalogue $catalogue): mixed
     {
         $v = $r->validate([
             'page' => 'sometimes|integer|min:1', 'q' => 'nullable|string|max:100',
@@ -21,7 +23,7 @@ final class InventoryController
         return response()->json($catalogue->read($r->user(), $store, $v))->header('Cache-Control', 'private, no-store');
     }
 
-    public function ledger(Request $r, string $store, \App\Modules\Inventory\Application\LedgerHistory $history): mixed
+    public function ledger(Request $r, string $store, LedgerHistory $history): mixed
     {
         $v = LedgerQuery::validate($r);
 

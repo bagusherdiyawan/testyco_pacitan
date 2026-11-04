@@ -7,6 +7,8 @@ use App\Modules\Catalog\Application\RetailPricing;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Inventory\Application\SaleStock;
 use App\Modules\Promotions\Application\VoucherBook;
+use App\Modules\Sales\Infrastructure\OfflinePermit;
+use App\Modules\Sales\Infrastructure\OfflineSale;
 use App\Modules\Sales\Infrastructure\Sale;
 use App\Modules\Sales\Infrastructure\SaleAllocation;
 use App\Modules\Sales\Infrastructure\SaleIntent;
@@ -14,7 +16,9 @@ use App\Modules\Sales\Infrastructure\SaleLine;
 use App\Modules\Sales\Infrastructure\SaleRefund;
 use App\Modules\Shifts\Application\PosAccess;
 use App\Modules\Shifts\Application\ShiftBook;
+use App\Modules\Shifts\Infrastructure\CashShift;
 use App\Shared\Application\Operations;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 final class CashCheckout
@@ -129,5 +133,31 @@ final class CashCheckout
 
             return $this->receipt($sale->id);
         });
+    }
+
+    /** Called only after a locked offline record has been validated or explicitly reviewed. */
+    public function postOffline(User $actor, OfflineSale $record, CashShift $shift, array $snapshot): array
+    {
+        abort_unless(DB::transactionLevel() > 0, 500);
+        $this->shifts->assertOpen($shift);
+        $permit = OfflinePermit::findOrFail($record->offline_permit_id);
+        $s = $permit->snapshot['store'];
+        $cash = (int) $record->payload['cash_received'];
+        abort_unless($cash >= $snapshot['total_amount'] && $shift->store_id === $record->store_id && (int) $shift->cashier_id === (int) $record->cashier_id, 409, 'Kas/shift penyelesaian tidak sesuai.');
+        $intent = SaleIntent::create(['organization_id' => $record->organization_id, 'store_id' => $record->store_id, 'cash_shift_id' => $shift->id, 'cashier_id' => $record->cashier_id, 'status' => 'paid', 'subtotal' => $snapshot['total_amount'], 'discount_amount' => 0, 'voucher_snapshot' => null, ...$snapshot]);
+        $sale = Sale::create(['organization_id' => $record->organization_id, 'store_id' => $record->store_id, 'cash_shift_id' => $shift->id, 'sale_intent_id' => $intent->id, 'cashier_id' => $record->cashier_id, 'number' => 'POS-'.Str::ulid(), 'store_name' => $s['name'], 'store_address' => $s['address'] ?? null, 'cashier_name' => $permit->snapshot['cashier_name'], 'status' => 'completed', 'currency' => 'IDR', 'version' => 1, 'payment_method' => 'cash', 'subtotal' => $snapshot['total_amount'], 'discount_amount' => 0, 'total_amount' => $snapshot['total_amount'], 'cash_received' => $cash, 'change_amount' => $cash - $snapshot['total_amount'], 'sold_at' => $record->captured_at, 'offline_sale_id' => $record->id, 'synced_at' => now()]);
+        $lines = [];
+        foreach ($snapshot['items'] as $index => $item) {
+            $lines[$index] = SaleLine::create(['sale_id' => $sale->id, 'discount_amount' => 0, ...array_intersect_key($item, array_flip(['product_id', 'sku', 'name', 'condition', 'unit', 'quantity', 'pieces_per_unit', 'unit_price', 'line_total', 'recipe_snapshot']))]);
+        }
+        foreach ($this->stock->inspect($record->store_id, $this->flatten($snapshot['items'], true), true, $actor->id) as $a) {
+            $allocation = new SaleAllocation(['sale_line_id' => $lines[$a['line_index']]->id, 'inventory_batch_id' => $a['batch_id'], 'bucket' => $a['bucket'], 'pieces' => $a['pieces'], 'batch_code' => $a['batch_code'], 'expires_on' => $a['expires_on'], 'batch_pack_size' => $a['batch_pack_size']]);
+            $allocation->id = $a['allocation_id'];
+            $allocation->save();
+        }
+        $this->shifts->recordSale($shift, $snapshot['total_amount']);
+        Audit::record($actor->id, $record->organization_id, 'sale.offline_completed', $sale->id, null, ['offline_record_id' => $record->id, 'number' => $sale->number, 'total_amount' => $sale->total_amount]);
+
+        return $this->receipt($sale->id);
     }
 }

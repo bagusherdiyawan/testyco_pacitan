@@ -1,6 +1,6 @@
 # Daftar delivery tetap
 
-Tanggal baseline:3 November2026. Ini daftar paket delivery untuk memantau perubahan yang nyata, bukan persentase kelengkapan seluruh BRD. ID tetap; pekerjaan baru ditambahkan, bukan mengganti arti/status item lama. **Selesai** berarti implementasi development dan tes dalam cakupan yang disebutkan; tidak berarti siap produksi. Detail kebutuhan tetap di [requirements](requirements.md), release gate di [roadmap](roadmap.md).
+Tanggal baseline:3 November2026; pembaruan DL-18–DL-20:4 November2026. Ini daftar paket delivery untuk memantau perubahan yang nyata, bukan persentase kelengkapan seluruh BRD. ID tetap; pekerjaan baru ditambahkan, bukan mengganti arti/status item lama. **Selesai** berarti implementasi development dan tes dalam cakupan yang disebutkan; tidak berarti siap produksi. Detail kebutuhan tetap di [requirements](requirements.md), release gate di [roadmap](roadmap.md).
 
 | ID | Paket dengan batas yang dapat diuji | Status sekarang |
 | --- | --- | --- |
@@ -21,9 +21,9 @@ Tanggal baseline:3 November2026. Ini daftar paket delivery untuk memantau peruba
 | DL-15 | Invoice/piutang/pembayaran grosir/pajak/konsinyasi | **Selesai API/web dengan ketentuan eksplisit per dokumen, persetujuan dan verifikasi manual; konsinyasi laporan disetujui** |
 | DL-16 | Refund POS, QRIS/non-tunai, promo/voucher | **Selesai API/web/Flutter: verifikasi non-tunai manual, refund ditinjau, voucher retail didanai penerbit** |
 | DL-17 | Gambar/resep/paket, harga efektif, kontrak/consent kemitraan | **Selesai API/web; Flutter gambar/harga/checkout paket** |
-| DL-18 | Push/email/inbox, recall/FEFO/blok jual dan SOP masa simpan hasil olahan | Belum; D-05 terkait |
-| DL-19 | Reset email/MFA, sesi perangkat aman dan antrean lintas restart/offline | Belum; D-06 terkait |
-| DL-20 | Aset/kontrak freezer/perangkat dan laporan B2B/piutang/margin | Belum |
+| DL-18 | Push/email/inbox, recall/FEFO/blok jual dan SOP masa simpan hasil olahan | **Selesai API/web: inbox/SMTP, recall/SOP/FEFO; Flutter inbox; push ditunda sesuai keputusan pengguna** |
+| DL-19 | Reset email/MFA, sesi perangkat aman dan antrean lintas restart/offline | **Selesai API/web/Flutter: reset SMTP, MFA, sesi terenkripsi dan offline tunai durable dengan review konflik** |
+| DL-20 | Aset/kontrak freezer/perangkat dan laporan B2B/piutang/margin | **Selesai API/web: aset/serah terima/perawatan/kembali, laporan B2B/saldo/margin berbukti** |
 
 Gate kesiapan produksi dilacak terpisah: PostgreSQL/concurrency, backup/restore, hardening/deployment, perangkat/printer, browser interaktif dan UAT. Tes otomatis tidak dianggap persetujuan pilot atau pengganti gate tersebut.
 
@@ -35,4 +35,4 @@ Gate kesiapan produksi dilacak terpisah: PostgreSQL/concurrency, backup/restore,
 
 Delivery3 November2026 berikutnya menutup DL-12, DL-14 dan DL-17; lihat [kasus native](../native-shipment-cases.md), [revisi](../order-revisions.md), [katalog/kontrak](../catalog-and-contracts.md). DL-13/DL-15/DL-16 dilanjutkan pada4 November2026 dengan [alur keuangan dan POS](../finance-and-pos-adjustments.md) yang mewajibkan pilihan eksplisit per dokumen, persetujuan dan verifikasi manual. Saran chat tidak dijadikan kebijakan global. D-01/D-03/D-08 masih terbuka untuk otomatisasi/default bisnis; gateway, bagi hasil otomatis, pelepasan mutu karantina dan promo lintas organisasi tidak termasuk cakupan selesai tersebut.
 
-Enam ID DL-12–DL-17 sudah diimplementasikan dalam cakupan development di atas. Gate produksi dan DL-18–DL-20 tetap terpisah; jumlah paket tidak ditambah untuk mengganti arti pekerjaan yang telah diselesaikan.
+DL-01–DL-20 kini diimplementasikan pada batas platform dan cakupan development tabel di atas. DL-18–DL-20 mengikuti keputusan pengguna: offline hanya tunai dengan review konflik, SOP oleh pimpinan organisasi masing-masing, SMTP dahulu dan push ditunda. Lihat [panduan lengkap](../reliability-and-offline.md). Gate produksi tetap terpisah; tidak menambah paket baru untuk mengganti arti item yang telah diselesaikan.

@@ -6,6 +6,7 @@ use App\Modules\Catalog\CatalogServiceProvider;
 use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Inventory\InventoryServiceProvider;
 use App\Modules\Sales\Application\PendingIntents;
+use App\Modules\Sales\Presentation\OfflineController;
 use App\Modules\Sales\Presentation\PosController;
 use App\Modules\Sales\Presentation\RefundController;
 use App\Modules\Shifts\Application\ShiftBlockers;
@@ -28,6 +29,13 @@ final class SalesServiceProvider extends ServiceProvider
             }
         }
         Route::prefix('api/v1')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
+            $offline = OfflineController::class;
+            Route::post('stores/{store}/sales/offline/permits', [$offline, 'permit']);
+            Route::post('sales/offline/permits/{permit}/end', [$offline, 'end']);
+            Route::get('stores/{store}/sales/offline', [$offline, 'context']);
+            Route::post('stores/{store}/sales/offline', [$offline, 'sync']);
+            Route::get('sales/offline/{offline}', [$offline, 'show']);
+            Route::post('sales/offline/{offline}/{action}', [$offline, 'resolve'])->where('action', 'accept|void');
             $c = PosController::class;
             Route::get('stores/{store}/pos/context', [$c, 'context']);
             Route::post('stores/{store}/sales/intents', [$c, 'create']);

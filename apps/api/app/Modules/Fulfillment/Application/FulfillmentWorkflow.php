@@ -8,6 +8,7 @@ use App\Modules\Fulfillment\Infrastructure\ShipmentLine;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
+use App\Modules\Inventory\Application\FoodSafety;
 use App\Modules\Inventory\Application\StockLedger;
 use App\Modules\Ordering\Application\OrderAccess;
 use App\Modules\Ordering\Application\OrderWorkflow;
@@ -55,6 +56,9 @@ final class FulfillmentWorkflow
                     $work[] = ['line' => $line, 'batch_id' => $allocation['batch_id'], 'packs' => (int) $allocation['quantity_packs']];
                 }
             }
+            $safety = app(FoodSafety::class);
+            $safety->lockCandidates($order->source_store_id, array_map(fn ($w) => $w['line']->supplier_product_id, $work));
+            $safety->allocations($order->source_store_id, array_map(fn ($w) => ['batch_id' => $w['batch_id'], 'product_id' => $w['line']->supplier_product_id, 'bucket' => 'usable', 'pack_size' => $w['line']->pack_size, 'condition' => $w['line']->condition, 'pieces' => $w['packs'] * $w['line']->pack_size], $work));
             usort($work, fn ($a, $b) => strcmp($a['batch_id'], $b['batch_id']));
             $shipment = Shipment::create(['supply_order_id' => $id, 'dispatched_by' => $user->id, 'handler' => $v['handler'], 'note' => $v['note'] ?? null, 'dispatched_at' => now()]);
             foreach ($work as $item) {

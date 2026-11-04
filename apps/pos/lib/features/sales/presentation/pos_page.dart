@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'receipt_history_page.dart';
 import 'refund_page.dart';
+import 'offline_page.dart';
+import '../data/offline_repository.dart';
 import '../application/pos_controller.dart';
 import '../data/pos_repository.dart';
 import '../domain/cart_entry.dart';
@@ -69,6 +71,29 @@ class _PosPageState extends State<PosPage> {
     ),
   );
   List<Widget> header() => [
+    if (widget.repository.deviceState != null &&
+        widget.repository.api.identity?['id'] is int)
+      OutlinedButton(
+        onPressed:
+            model.busy || model.paymentUncertain || model.creatingUncertain
+            ? null
+            : () async {
+                await Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => OfflinePage(
+                      repository: OfflineRepository(
+                        widget.repository.api,
+                        widget.repository.deviceState!,
+                      ),
+                      storeId: widget.storeId,
+                      shiftId: model.shift?['id'],
+                    ),
+                  ),
+                );
+                if (mounted) await model.load();
+              },
+        child: const Text('Offline tunai dan antrean terenkripsi'),
+      ),
     Row(
       children: [
         Expanded(

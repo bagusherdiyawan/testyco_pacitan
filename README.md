@@ -2,15 +2,15 @@
 
 Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jaringan mitra dan POS dimsum.
 
-**Sudah diimplementasikan:** identitas dan katalog awal, pengajuan/persetujuan pesanan, pengiriman parsial, penerimaan aktual, batch/ledger, pembukaan kemasan, pengukusan hasil aktual serta opname/susut dengan review terpisah. Web dan Flutter kini menyediakan POS tunai online, draft tersimpan di server, struk digital dan buka/tutup shift. Ini implementasi development; UAT, concurrency PostgreSQL dan perangkat nyata belum diverifikasi.
+**DL-01–DL-20 telah diimplementasikan dalam cakupan development**: operasional stok/pesanan, POS/shift, retur/tagihan/voucher, kontrak/aset, inbox/SMTP/SOP, MFA dan offline tunai dengan review konflik. Lihat [status tiap delivery/platform](docs/product/delivery-status.md) dan [panduan DL-18–DL-20](docs/reliability-and-offline.md). PostgreSQL/concurrency, perangkat nyata dan UAT tetap gate produksi.
 
 | Direktori | Isi |
 | --- | --- |
-| `apps/api` | Laravel 12 + Sanctum, modul Identity, Catalog, Ordering, Inventory, Fulfillment, Shifts, Sales dan Reporting, persistence SQLite untuk development |
+| `apps/api` | Laravel 12 + Sanctum, provider Identity, Catalog, Partnership, Ordering, Inventory, Fulfillment, Shifts, Promotions, Sales, Billing, Reporting, Assets dan Reliability, persistence SQLite untuk development |
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.27.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.28.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -58,7 +58,7 @@ Buka **Pengolahan, susut dan stok opname** pada toko untuk mencatat buka kemasan
 
 Riwayat pergerakan kini dapat dibaca pada [web](docs/web-stock-ledger.md) serta Flutter **Stok → Riwayat pergerakan stok**, termasuk filter periode WIB, sumber/bucket dan batch historis. Lihat [panduan ledger native](docs/native-stock-ledger.md).
 
-Penelusuran [kedaluwarsa batch](docs/batch-expiry.md) kini tersedia di web dan [Flutter](docs/native-batch-expiry.md), dengan batas tanggal pilihan pengguna dan filter batch bersaldo termasuk karantina. Pada Flutter buka **Stok → Telusuri kedaluwarsa batch**. Periode peringatan, recall dan blok penjualan otomatis belum ditetapkan.
+Penelusuran [kedaluwarsa batch](docs/batch-expiry.md) kini tersedia di web dan [Flutter](docs/native-batch-expiry.md), dengan batas tanggal pilihan pengguna dan filter batch bersaldo termasuk karantina. Pada Flutter buka **Stok → Telusuri kedaluwarsa batch**. Recall dan blok jual/masa simpan/FEFO mengikuti [SOP eksplisit organisasi](docs/reliability-and-offline.md), terpisah dari filter tanggal ini.
 
 Web juga menyediakan [CSV riwayat pergerakan stok](docs/ledger-export.md) berdasarkan filter aktif, maksimal10.000 catatan/8MiB. Perubahan dalam biji tetap terpisah dari saldo fisik.
 
@@ -98,7 +98,7 @@ flutter pub get --enforce-lockfile
 flutter run --dart-define=API_BASE_URL=https://api.example.com/api/v1/
 ```
 
-Alamat API wajib diakhiri `/`; build release menolak HTTP. Token disimpan di memori, tidak di localStorage/file, sehingga aplikasi meminta login kembali setelah ditutup. Secure storage dan sesi persisten belum dibuat. iOS memerlukan macOS/Xcode/signing; build perangkat dan printer belum diuji. Flutter web membutuhkan kebijakan CORS tersendiri bila digunakan lintas origin; target utama tahap ini adalah mobile/tablet native.
+Alamat API wajib diakhiri `/`; build release menolak HTTP. Sesi dan antrean offline tunai Flutter disimpan AES-256-GCM, kunci pada OS Keychain/Keystore, terikat akun/API dan expiry. Restore memeriksa server; gangguan jaringan hanya membuka izin offline tersimpan. [Panduan keamanan/offline](docs/reliability-and-offline.md) menjelaskan review konflik dan pemulihan data. iOS memerlukan macOS/Xcode/signing; build perangkat dan printer belum diuji. Flutter web membutuhkan kebijakan CORS tersendiri bila digunakan lintas origin; target utama tahap ini adalah mobile/tablet native.
 
 ## Validasi
 
@@ -123,11 +123,11 @@ Progres delivery dilacak dengan [ID dan status tetap](docs/product/delivery-stat
 
 ## Batas implementasi dan pekerjaan berikutnya
 
-Katalog lokal tetap milik organisasi; katalog B2B pusat kini tersedia untuk pemohon berwenang. SKU tujuan dipilih eksplisit per baris order dengan isi kemasan dan kondisi yang sama. Harga/konversi order sudah mempunyai snapshot. Gambar, resep paket POS, harga efektif/khusus mitra dan kontrak/PDF/consent tersedia; PostgreSQL belum diverifikasi. Akun dapat dinonaktifkan dan [direaktivasi melalui API/web](docs/account-reactivation.md); pemulihan password melalui email, MFA dan siklus pengelolaan anggota lintas organisasi belum tersedia.
+Katalog lokal tetap milik organisasi; katalog B2B pusat kini tersedia untuk pemohon berwenang. SKU tujuan dipilih eksplisit per baris order dengan isi kemasan dan kondisi yang sama. Harga/konversi order sudah mempunyai snapshot. Gambar, resep paket POS, harga efektif/khusus mitra dan kontrak/PDF/consent tersedia; PostgreSQL belum diverifikasi. Akun dapat dinonaktifkan dan [direaktivasi melalui API/web](docs/account-reactivation.md); reset sandi SMTP dan MFA/sesi tersedia; penggabungan identitas lintas organisasi tetap di luar cakupan.
 
-Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Revisi SKU/jumlah bagian belum dikirim tersedia dengan persetujuan ulang; eksekusi retur/kredit, refund, integrasi printer, voucher, invoice, pelaporan lanjutan, aset dan offline masih backlog. POS tunai, shift, struk digital dan ringkasan penjualan awal tersedia; QRIS/non-tunai belum tersedia. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
+Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Revisi SKU/jumlah bagian belum dikirim tersedia dengan persetujuan ulang; retur karantina/kredit, refund, voucher, invoice manual, aset, pelaporan komersial dan offline tunai kini tersedia. QRIS/transfer memerlukan verifikasi manual; gateway otomatis dan integrasi printer belum tersedia. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
 
-Kebijakan konsinyasi, stok minus, offline, QRIS dan cakupan data mitra tetap mengikuti keputusan bisnis yang belum ditutup. Pembukaan/pengukusan memakai batch beku yang sama, bukan resep lintas SKU. Masa simpan siap jual tidak dihitung otomatis. Susut proses dicatat langsung bersama hasil fisik; susut terpisah menunggu review. Rollback migrasi kontrol stok ditolak setelah digunakan agar data tidak hilang.
+Konsinyasi memerlukan kontrak/laporan disetujui; stok negatif ditolak. Offline hanya tunai dengan review konflik. SOP masa simpan/FEFO diaktifkan pimpinan organisasi dengan referensi dan menit eksplisit, tanpa umur simpan bawaan. QRIS/transfer masih diverifikasi manual, akses data mitra tetap scoped. Pembukaan/pengukusan memakai batch beku yang sama; resep paket memakai alokasi komponen eksplisit. Susut proses dicatat langsung bersama hasil fisik; susut terpisah menunggu review. Rollback migrasi kontrol stok ditolak setelah digunakan agar data tidak hilang.
 
 SQLite dipilih untuk development irisan ini; migrasi dan uji PostgreSQL serta concurrency wajib sebelum deployment pilot untuk stok/keuangan. Deployment production memerlukan HTTPS, cookie Secure, konfigurasi APP_DEBUG=false, backup/restore dan secrets yang dikelola dengan benar.
 

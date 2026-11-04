@@ -34,12 +34,21 @@ final class StockControl
         $s = $this->access->staff($user, $store, true);
 
         return $this->operations->run($s->organization_id, $user->id, $v['operation_id'], 'inventory.process:'.$store, $v, function () use ($user, $store, $s, $v) {
+            $hint = InventoryBatch::where('store_id', $store)->findOrFail($v['batch_id']);
+            $safety = app(FoodSafety::class);
+            $safety->lockCandidates($store, [$hint->product_id]);
             $batch = $this->batch($store, $v['batch_id'], (int) $v['expected_revision']);
             abort_unless($batch->condition === 'frozen', 422, 'Buka dan kukus tahap ini hanya untuk batch beku.');
             $plan = $v['kind'] === 'open' ? StockTransformation::open($batch->pack_size, (int) $v['quantity_packs']) : StockTransformation::cook((int) $v['input_pieces'], (int) $v['output_pieces']);
+            app(FoodSafety::class)->assertEligible($batch, $v['kind'] === 'open' ? 'usable' : 'opened');
+            $safety->allocations($store, [['batch_id' => $batch->id, 'product_id' => $batch->product_id, 'bucket' => $v['kind'] === 'open' ? 'usable' : 'opened', 'condition' => $batch->condition, 'pack_size' => $batch->pack_size, 'pieces' => $plan->input]]);
+            $previousReady = $batch->ready_pieces;
             $before = $this->balances($batch);
             $id = (string) Str::ulid();
             $after = $this->ledger->apply($batch, $user->id, $plan->changes, 'inventory_'.$v['kind'], $id, $v['reason']);
+            if ($v['kind'] === 'cook') {
+                app(FoodSafety::class)->cooked($after, $previousReady, $plan->output);
+            }
             $record = new InventoryProcess(['organization_id' => $s->organization_id, 'store_id' => $store, 'inventory_batch_id' => $batch->id, 'actor_id' => $user->id, 'kind' => $v['kind'], 'pack_size' => $batch->pack_size, 'input_pieces' => $plan->input, 'output_pieces' => $plan->output, 'waste_pieces' => $plan->waste, 'reason' => $v['reason'], 'before' => $before, 'after' => $this->balances($after), 'created_at' => now()]);
             $record->id = $id;
             $record->save();

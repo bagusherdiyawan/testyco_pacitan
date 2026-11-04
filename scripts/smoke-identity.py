@@ -736,6 +736,68 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST',f'shifts/{digital_shift["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':ds['version'],'counted_cash':0},cashier_token)
         ledger_before+=5
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
+        # DL18–20: real HTTP cash queue/review, SOP/recall/inbox, assets and commercial costs.
+        # Keep existing business limits and pace this isolated integration group explicitly.
+        print('Pacing DL18–20 live checks for the next rate-limit window.',flush=True)
+        time.sleep(60)
+        os_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Offline terminal','opening_cash':0},cashier_token,201)['data']
+        permit=api(base,'POST',f'stores/{store}/sales/offline/permits',{'operation_id':str(uuid.uuid4()),'shift_id':os_shift['id'],'duration_minutes':30},cashier_token,201)['data']
+        assert permit['snapshot']['payment_methods']==['cash'] and not permit['snapshot']['vouchers_allowed']
+        opened=next(b for b in permit['snapshot']['batches'] if b['product_id']==local_product_id and b['opened_pieces']>=2)
+        sync={'operation_id':str(uuid.uuid4()),'permit_id':permit['id'],'captured_at':datetime.now(timezone.utc).isoformat(),'client_total':3000,'cash_received':5000,'lines':[{'product_id':local_product_id,'unit':'piece','quantity':1,'allocations':[{'batch_id':opened['id'],'bucket':'opened','quantity':1}]}]}
+        offline=api(base,'POST',f'stores/{store}/sales/offline',sync,cashier_token,201)['data']
+        assert offline['status']=='accepted'
+        assert api(base,'POST',f'stores/{store}/sales/offline',sync,cashier_token,201)['data']['sale_id']==offline['sale_id']
+        # A second captured record sees a changed server price, so no financial posting until review.
+        api(base,'PUT',f'organizations/{org}/products/{local_product_id}',{**product,'retail_price':3500},lead_token)
+        conflict=api(base,'POST',f'stores/{store}/sales/offline',{**sync,'operation_id':str(uuid.uuid4()),'captured_at':datetime.now(timezone.utc).isoformat()},cashier_token,201)['data']
+        assert conflict['status']=='conflict' and not conflict['sale_id']
+        offline_path=f'/app/stores/{store}/pos/offline'
+        oh=opener.open(web+offline_path).read().decode()
+        assert 'review_required' in oh or 'Harga/konversi/resep berubah' in oh
+        settlement=api(base,'GET',f'shifts/{os_shift["id"]}',token=lead_token)['data']
+        accept_path=offline_path+'/'+conflict['id']+'/accept'
+        form=fields(oh,accept_path);form.update({'shift':os_shift['id']+':'+str(settlement['version']),'verified':'1','reason':'Cash and original frozen quote physically reconciled','reconciliation_reference':'OFFLINE-CASH-REVIEW-1'})
+        web_post(accept_path,form).read()
+        assert api(base,'GET',f'sales/offline/{conflict["id"]}',token=cashier_token)['data']['status']=='accepted'
+        api(base,'POST',f'sales/offline/permits/{permit["id"]}/end',{'operation_id':str(uuid.uuid4()),'queue_empty':True},cashier_token)
+        settled=api(base,'GET',f'shifts/{os_shift["id"]}',token=cashier_token)['data'];assert settled['expected_cash']==6000
+        api(base,'POST',f'shifts/{settled["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':settled['version'],'counted_cash':6000},cashier_token)
+        ledger_before+=2
+        fp_sop=f'organizations/{org}/food-safety'
+        api(base,'POST',fp_sop,{'operation_id':str(uuid.uuid4()),'version':0,'enabled':True,'block_expired':True,'fefo':'suggest','ready_life_minutes':None,'reference':'Actual approved organization SOP'},lead_token)
+        sh=opener.open(web+f'/app/organizations/{org}/food-safety').read().decode();assert 'Actual approved organization SOP' in sh
+        fq={'product_id':local_product_id,'bucket':'opened','condition':'frozen'}
+        assert api(base,'GET',f'stores/{store}/food-safety/fefo?'+urlencode(fq),token=cashier_token)['mode']=='suggest'
+        assert 'Saran batch FEFO' in cashier_browser.open(web+f'/app/stores/{store}/food-safety/fefo?'+urlencode(fq)).read().decode()
+        recalled=api(base,'POST',fp_sop+'/recalls',{'operation_id':str(uuid.uuid4()),'product_id':new_local['id'],'batch_code':new_batch['batch_code'],'reason':'Inspection recall','reference':'Actual recall notice'},lead_token,201)['data']
+        inbox=api(base,'GET','inbox',token=lead_token);assert any(e['event_type']=='food.recalled' for e in inbox['data'])
+        assert 'Recall batch aktif' in opener.open(web+'/app/inbox').read().decode()
+        api(base,'POST',fp_sop+'/recalls/'+recalled['id']+'/withdraw',{'operation_id':str(uuid.uuid4()),'version':1,'reason':'Disposition reviewed'},lead_token)
+        # Register via actual BFF form; owner proof is hidden on recipient detail.
+        assets_path=f'/app/organizations/{center}/assets'
+        ah=central_browser.open(web+assets_path).read().decode();af=fields(ah,assets_path)
+        af.update({'number':'FREEZER-SMOKE','kind':'freezer','brand':'Fixture brand','serial_number':'FS1','condition_note':'Actual working inspection','ownership_reference':'PRIVATE-OWNERSHIP-PROOF'})
+        ar=central_browser.open(Request(web+assets_path,data=urlencode(af).encode()));ar.read();asset_id=ar.url.rsplit('/',1)[1]
+        placement=api(base,'POST',f'assets/{asset_id}/placements',{'operation_id':str(uuid.uuid4()),'version':1,'store_id':store,'contract_id':cc['id'],'responsible_name':'Partner director','handed_over_on':today,'condition_note':'Working at handover','agreement_reference':'Accepted contract','evidence_reference':'Signed handover'},owner,201)['data']
+        ap=placement['placement']['id']
+        ah=opener.open(web+f'/app/assets/{asset_id}').read().decode();assert 'PRIVATE-OWNERSHIP-PROOF' not in ah
+        api(base,'POST',f'assets/{asset_id}/placements/{ap}/accept',{'operation_id':str(uuid.uuid4()),'version':2,'consent':True,'reason':'Physical asset accepted'},lead_token)
+        incident=api(base,'POST',f'assets/{asset_id}/incidents',{'operation_id':str(uuid.uuid4()),'version':3,'description':'Actual repair need','evidence_reference':'Inspection','reported_on':today},lead_token,201)['data']
+        api(base,'POST',f'assets/{asset_id}/incidents/{incident["incident"]["id"]}/resolve',{'operation_id':str(uuid.uuid4()),'version':4,'resolution':'Repair verified','cost_basis_reference':'Actual agreed receipt','owner_cost':10000,'recipient_cost':0,'completed_on':today},owner)
+        api(base,'POST',f'assets/{asset_id}/placements/{ap}/request_return',{'operation_id':str(uuid.uuid4()),'version':5,'reason':'End placement','returned_on':today,'return_condition':'Working','return_reference':'Signed return'},lead_token)
+        api(base,'POST',f'assets/{asset_id}/placements/{ap}/confirm_return',{'operation_id':str(uuid.uuid4()),'version':6,'reason':'Received at center','consent':True,'disposition':'available','inspection_note':'Actual inspection complete'},owner)
+        assert api(base,'GET',f'assets/{asset_id}',token=owner)['asset']['status']=='available'
+        api(base,'GET',f'assets/{asset_id}',token=lead_token,expected=403)
+        report_query=urlencode({'from':today+'T00:00:00+07:00','to':today+'T23:59:59+07:00'})
+        commercial=api(base,'GET',f'organizations/{org}/reports/commercial?'+report_query,token=lead_token)
+        assert any(r['id']==offline['sale_id'] for r in commercial['data'])
+        api(base,'POST',f'organizations/{org}/reports/commercial/costs',{'operation_id':str(uuid.uuid4()),'source_type':'pos_sale','source_id':offline['sale_id'],'version':0,'goods_cost':1000,'operating_cost':200,'evidence_reference':'Actual net cost evidence','reason':'Verified net costs'},lead_token,201)
+        qp='?'+urlencode({'from_day':today,'to_day':today})
+        assert 'Actual net cost evidence' in opener.open(web+f'/app/organizations/{org}/reports/commercial'+qp).read().decode()
+        with opener.open(web+f'/app/organizations/{org}/reports/commercial/export'+qp) as cr:
+            assert 'no-store' in cr.headers['Cache-Control'] and 'commercial-report.csv' in cr.headers['Content-Disposition']
+        assert 'Keamanan akun dan perangkat' in opener.open(web+'/app/account/security').read().decode()
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'
@@ -747,6 +809,20 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET','auth/me',token=changed_session)['data']['email']==cashier['email']
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==ledger_before
         api(base,'POST','auth/logout',{},changed_session,204)
+        enrollment=api(base,'POST','auth/mfa/enroll',{'current_password':PASSWORD},owner)['data']
+        import base64,hmac,hashlib,struct
+        counter=int(time.time())//30
+        digest=hmac.new(base64.b32decode(enrollment['secret']+'='*((8-len(enrollment['secret'])%8)%8)),struct.pack('>Q',counter),hashlib.sha1).digest();offset=digest[-1]&15
+        code=str((struct.unpack('>I',digest[offset:offset+4])[0]&0x7fffffff)%1000000).zfill(6)
+        api(base,'POST','auth/mfa/enable',{'version':enrollment['version'],'code':code},owner,204)
+        api(base,'GET','auth/me',token=owner,expected=401)
+        challenge=api(base,'POST','auth/login',{'email':'owner@smoke.test','password':PASSWORD,'device_name':'MFA smoke'})
+        assert challenge['requires_mfa'] and 'token' not in challenge
+        mfa_token=api(base,'POST','auth/login/mfa',{'challenge':challenge['challenge'],'code':enrollment['recovery_codes'][0]})['token']
+        assert api(base,'GET','auth/security',token=mfa_token)['data']['enabled']
+        api(base,'POST','auth/login/mfa',{'challenge':challenge['challenge'],'code':enrollment['recovery_codes'][0]},expected=422)
+        api(base,'POST','auth/logout',{},mfa_token,204)
+        print('PASS: DL18–20 offline once-only cash sync, manager conflict review, explicit permit end/shift cash, SOP/FEFO/recall/inbox BFF, asset owner-private proof and accepted-contract handover/repair/physical return, commercial net-cost report/private CSV, MFA challenge/recovery/revoked sessions',flush=True)
         api(base, 'POST', 'auth/logout', {}, lead_token, 204)
         api(base, 'GET', 'auth/me', token=lead_token, expected=401)
         print('PASS: live login/onboarding/catalog, web CSRF, proposal/approval, source dispatch, actual receipt 144 usable + 16 quarantine, operation replay, stock opening/cooking/loss, independent count review, stale snapshot denial, tenant isolation, cash POS/draft recovery, reprint, expense and shift closing, versioned minimums and live low-stock warnings, scoped native stock-control context, scoped audit CSV/onboarding isolation, stock ledger CSV/scoped signed pieces, cash reports and private CSV, native recipient capabilities, guarded order preview/create, versioned amendment preview/save, postapproval quantity proposal/hold/reject/accept, versioned account reactivation/replay and old-token denial, receipt discrepancy case and supplier-plan/partner-confirmation and physical replacement dispatch/actual receipt with once-only stock posting, revision preview/substitution after shipping, private product image and effective price, recipe component checkout, published contract/explicit consent, physical return quarantine, explicit invoice/tax/partial collection/confirmed credit, contract-backed sold-report consignment, scoped retail voucher/manual QRIS payment/reviewed original-method refund and restored quota, password rotation/revoked sessions, logout')

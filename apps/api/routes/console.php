@@ -5,6 +5,7 @@ use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schedule;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rules\Password;
 
@@ -36,3 +37,5 @@ Artisan::command('identity:bootstrap {--name=} {--email=}', function () {
 
     return 0;
 })->purpose('Membuat pemilik awal; tidak menyediakan password default');
+
+Schedule::command('reliability:deliver --limit=100')->everyMinute()->withoutOverlapping()->when(fn () => config('reliability.smtp_enabled') && config('mail.default') === 'smtp');

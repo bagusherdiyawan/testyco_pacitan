@@ -220,8 +220,8 @@ Skenario berikut adalah target uji ketika modul implementasi tersedia, bukan has
 | D-02 | Cakupan data produk mitra, persetujuan kontrak, retensi dan akses pusat | Pemilik + mitra + produk | Tolak akses tanpa izin; jangan menganggap seluruh data POS milik pusat |
 | D-03 | Harga, margin, diskon, biaya kirim dan pendanaan voucher | Pemilik + keuangan | Data contoh bukan harga produksi; promosi lintas pihak belum aktif |
 | D-04 | Produk non-dimsum, satuan dasar dan SOP tiap kategori | Pemilik + operasional | Katalog extensible; aturan 8/10 hanya data produk yang sesuai |
-| D-05 | Stok minus, FEFO/pemilihan batch, hasil kukus/susut, recall | Operasional | Usulan aman: tolak stok kurang saat online; keputusan belum final |
-| D-06 | Offline prioritas, fungsi offline, konflik stok/voucher, login dan enkripsi perangkat | Produk + operasional + arsitek | Tidak mengklaim offline siap; keputusan hasil uji koneksi menentukan gate pilot |
+| D-05 | Stok minus, FEFO/pemilihan batch, hasil kukus/susut, recall | Operasional | Stok kurang ditolak; SOP/FEFO/masa simpan eksplisit disahkan pimpinan organisasi, tanpa umur simpan bawaan |
+| D-06 | Offline prioritas, fungsi offline, konflik stok/voucher, login dan enkripsi perangkat | Produk + operasional + arsitek | Keputusan pengguna: tunai saja, durable lintas restart, konflik stok/harga masuk review sebelum posting; pilot tetap perlu uji perangkat/koneksi |
 | D-07 | Android/iOS/tablet, printer/barcode, koneksi dan banyak shift/perangkat | Produk + operasional | Uji perangkat nyata sebelum menjanjikan kompatibilitas |
 | D-08 | QRIS/payment gateway, refund metode non-tunai dan webhook | Keuangan + produk | Mulai pencatatan manual yang diverifikasi; tidak menyebut integrasi otomatis |
 | D-09 | Freezer/POS gratis, kepemilikan, biaya listrik/kerusakan dan kontrak | Pemilik + mitra | Aset dan kontrak dicatat; kewajiban tidak dibuat otomatis |
@@ -239,3 +239,6 @@ Mitra aktif, pembelian ulang, kesesuaian stok, ketersediaan produk, margin kontr
 
 
 Pembaruan4 November2026 (menggantikan keterangan backlog keuangan/retur/non-tunai pada irisan lama): [retur, tagihan dan penyesuaian POS](../finance-and-pos-adjustments.md) kini diimplementasikan untuk DL-13/DL-15/DL-16 dengan input eksplisit, persetujuan dan verifikasi manual. D-01/D-03/D-08 belum menjadi kebijakan global; gateway, bagi hasil otomatis dan pendanaan promo lintas organisasi belum aktif. Laporan tunai tetap struk tunai sebelum pengurangan refund; histori refund/shift terpisah.
+
+
+Keputusan chat4 November2026 untuk DL-18–DL-20: offline tunai saja dengan review konflik; SOP masa simpan/blok jual/FEFO disahkan pimpinan tiap organisasi; SMTP dahulu, push ditunda. Implementasi dan batas platform pada [panduan](../reliability-and-offline.md). Ini tidak menetapkan angka umur simpan makanan, default biaya/tanggung jawab aset, gateway atau izin membaca POS mitra.

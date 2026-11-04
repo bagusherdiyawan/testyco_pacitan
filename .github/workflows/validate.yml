@@ -12,5 +12,6 @@ jobs:
       - run: TESTYCO_UID=$(id -u) TESTYCO_GID=$(id -g) docker compose up -d --wait
       - run: python3 scripts/smoke.py
       - run: python3 scripts/smoke-identity.py
+      - run: python3 scripts/smoke-smtp.py
       - if: always()
         run: docker compose down

@@ -11,6 +11,7 @@ use App\Modules\Fulfillment\Infrastructure\ShipmentDiscrepancyResolution;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
+use App\Modules\Inventory\Application\FoodSafety;
 use App\Modules\Inventory\Application\StockLedger;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use App\Modules\Ordering\Application\OrderAccess;
@@ -141,6 +142,9 @@ final class ReplacementWorkflow
                     $work[] = ['quota' => $q, 'item' => $item, ...$a];
                 }
             }
+            $safety = app(FoodSafety::class);
+            $safety->lockCandidates($order->source_store_id, array_map(fn ($w) => $w['item']->supplier_product_id, $work));
+            $safety->allocations($order->source_store_id, array_map(fn ($w) => ['batch_id' => $w['batch_id'], 'product_id' => $w['item']->supplier_product_id, 'bucket' => 'usable', 'pack_size' => $w['quota']['pack_size'], 'condition' => $w['item']->condition, 'pieces' => $w['quantity_packs'] * $w['quota']['pack_size']], $work));
             usort($work, fn ($a, $b) => strcmp($a['batch_id'], $b['batch_id']));
             $shipment = ReplacementShipment::create(['case_id' => $case->id, 'resolution_id' => $plan->id, 'source_store_id' => $order->source_store_id, 'dispatched_by' => $user->id, 'handler' => $v['handler'], 'note' => $v['note'] ?? null, 'dispatched_at' => now()]);
             foreach ($work as $w) {

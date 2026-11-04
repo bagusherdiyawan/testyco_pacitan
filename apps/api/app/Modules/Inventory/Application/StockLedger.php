@@ -4,6 +4,8 @@ namespace App\Modules\Inventory\Application;
 
 use App\Modules\Inventory\Domain\StockBucket;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
+use App\Modules\Reliability\Application\Inbox;
+use App\Modules\Reliability\ReliabilityServiceProvider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
@@ -28,6 +30,7 @@ final class StockLedger
     public function dispatch(string $batchId, string $store, string $product, int $packSize, int $packs, int $actor, string $sourceId, string $sourceType = 'shipment_dispatch'): array
     {
         $batch = InventoryBatch::where('store_id', $store)->where('product_id', $product)->where('pack_size', $packSize)->lockForUpdate()->findOrFail($batchId);
+        app(FoodSafety::class)->assertEligible($batch, 'usable');
         $pieces = $packs * $packSize;
         abort_unless($batch->usable_pieces >= $pieces, 409, 'Stok batch tidak cukup; stok karantina tidak dapat dikirim.');
         $this->apply($batch, $actor, ['usable' => -$pieces], $sourceType, $sourceId);
@@ -56,8 +59,14 @@ final class StockLedger
             $deltas[$key] = $delta;
         }
         if ($deltas) {
+            if (isset($attributes['ready_pieces']) && $attributes['ready_pieces'] === 0) {
+                $attributes['ready_expires_at'] = null;
+            }
             $batch->fill([...$attributes, 'stock_revision' => $batch->stock_revision + 1]);
             $batch->save();
+            if (app()->getProvider(ReliabilityServiceProvider::class)) {
+                app(Inbox::class)->lowStock($batch->store_id, $batch->product_id);
+            }
             foreach ($deltas as $bucket => $delta) {
                 $this->entry($batch, $actor, $delta, $sourceType, $sourceId, $bucket, $note);
             }

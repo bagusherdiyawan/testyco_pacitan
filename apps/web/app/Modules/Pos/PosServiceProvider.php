@@ -5,6 +5,7 @@ namespace App\Modules\Pos;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ApiSession;
 use App\Modules\Pos\Presentation\BundleController;
+use App\Modules\Pos\Presentation\OfflineReviewController;
 use App\Modules\Pos\Presentation\PosController;
 use App\Modules\Pos\Presentation\ReceiptHistoryController;
 use App\Modules\Pos\Presentation\RefundController;
@@ -19,6 +20,10 @@ final class PosServiceProvider extends ServiceProvider
             throw new \LogicException('POS web requires Identity.');
         }
         Route::middleware(['web', ApiSession::class])->group(function () {
+            $offline = OfflineReviewController::class;
+            Route::get('/app/stores/{store}/pos/offline', [$offline, 'index']);
+            Route::post('/app/stores/{store}/pos/offline/retry', [$offline, 'retry']);
+            Route::post('/app/stores/{store}/pos/offline/{offline}/{action}', [$offline, 'submit'])->where('action', 'accept|void');
             $c = PosController::class;
             Route::get('/app/stores/{store}/pos/bundles/{product}', [BundleController::class, 'show']);
             Route::post('/app/stores/{store}/pos/bundles/{product}', [BundleController::class, 'create']);

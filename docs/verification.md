@@ -1,5 +1,19 @@
 # Bukti implementasi dan pengujian
 
+## Status terkini — DL-18–DL-20, 4 November 2026
+
+Bukti ini menggantikan angka/status backlog pada catatan historis di bawah. **612 tes lulus**: API250/2876 assertions, web140/1230, Flutter222. Full suites memakai ekuivalen scripts/check pada fallback SDK Flutter3.35.7/Dart3.9.2 terverifikasi; image Flutter Docker besar tidak dijalankan pada storage VFS lingkungan cloud ini. Analyzer bersih; Composer strict/lock, locked offline pub get, PHP Pint dan Blade cache diperiksa. Tiga dependensi Flutter ditambahkan secara sengaja untuk secure storage/path provider/AES-GCM dan pubspec.lock diperbarui, tanpa upgrade dependensi lain yang sudah ada.
+
+- API tests baru: AccountSecurity5, AssetLifecycle3, CommercialReport2, FoodReliability6, OfflineCash4. Meliputi RFC6238/recovery/challenge replay/attempts/reset/revoke, lintas tenant/role, serah terima/kontrak/retur/biaya aset, margin tanpa bukti dan saldo B2B, SOP/expiry/FEFO/recall, SMTP retry/opt-out, offline once-only dan review tanpa posting sebagian.
+- Web DeliveryControls8: MFA akun lama dibersihkan, reset confirmation/token handling, secret enrollment terenkripsi, unknown enable logout, inbox scope/escape, SOP/aset immutable retry through denial, review cash dan formula/cross-org CSV. Flutter OfflineSecurity9: AES-GCM reopen/corruption, outbox restart/lost committed response, actor/ACK/snapshot/expiry, cached SOP deadline/concurrent candidates, sesi/MFA serta offline/inbox390px dan1200px.
+- Compose API/web healthy; normal SQLite migrasi17–21 diterapkan tanpa reset/fixture. Manifest13 modul kini available. `scripts/smoke.py` lulus.
+- `scripts/smoke-identity.py` lulus pada database/container/private files sementara. Alur lama tetap lulus, ditambah offline cash sync UUID sekali, konflik harga tanpa sale→review BFF→shift6000, akhir izin/tutup shift, SOP/FEFO/recall/inbox, owner-private asset proof→kontrak→penerimaan/perawatan/kembali fisik, report biaya/CSV privat serta MFA/password/revoked sessions. Skrip mempertahankan limiter dan pacing; database development tidak diisi data uji.
+- `scripts/smoke-smtp.py` lulus: SMTP lokal menerima reset dari encrypted queued job dan pemberitahuan generik. Tidak mengirim email eksternal. CI ditambah langkah smoke SMTP; hasil CI remote belum dikonfirmasi.
+- OpenAPI0.28.0:175 operasi unik/213 schemas, referensi lokal dan parameter path valid; security protected operations mengikuti bearer. Kontrak mencatat basis kohor/current adjustments serta unknown margin.
+
+Keputusan pengguna dipakai eksplisit: offline tunai saja dengan review konflik; pimpinan tiap organisasi mengaktifkan SOP; SMTP dahulu, push ditunda. Batas implementasi dan cara konfigurasi ada pada [panduan DL-18–DL-20](reliability-and-offline.md). SMTP produksi belum dikonfigurasi; TLS/provider delivery, perangkat/OS Keystore/termination/release/printer, browser visual interaktif, PostgreSQL concurrency, backup/restore dan UAT tetap belum diverifikasi. Tes unit/widget/HTTP tidak dinyatakan sebagai bukti produksi.
+
+
 Validasi terbaru pada lingkungan onboarding, 2 November 2026; catatan irisan sebelumnya berasal dari 28–29 Oktober 2026. Hasil lokal, bukan UAT bisnis atau CI remote.
 
 | Pemeriksaan | Hasil |

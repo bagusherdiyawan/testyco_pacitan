@@ -25,8 +25,17 @@ final class AuthController
         if (! $response->successful()) {
             return back()->withInput($r->only('email'))->withErrors(['email' => $response->status() === 429 ? 'Terlalu banyak percobaan. Tunggu sebentar.' : 'Email atau kata sandi tidak valid, atau layanan sedang tidak tersedia.']);
         }
-        $r->session()->forget(['order_changes_pending', 'user_reactivation_pending', 'shipment_discrepancy_pending', 'pos_payment_pending', 'refund_pending', 'refund_review', 'voucher_pending', 'billing_pending', 'return_pending', 'replacement_pending', 'order_revisions_pending', 'order_revision_review', 'contract_pending', 'catalog_configuration_pending', 'bundle_pending']);
-        $r->session()->regenerate();
+        if ($response->json('requires_mfa') === true) {
+            abort_unless(is_string($response->json('challenge')) && strlen($response->json('challenge')) === 64, 503);
+            $r->session()->invalidate();
+            $r->session()->regenerateToken();
+            $r->session()->put(['mfa_challenge' => $response->json('challenge'), 'mfa_expires_at' => time() + 120]);
+
+            return redirect('/login/mfa');
+        }
+        abort_unless(is_string($response->json('token')) && is_array($response->json('user')), 503);
+        $r->session()->invalidate();
+        $r->session()->regenerateToken();
         $r->session()->put(['api_token' => $response->json('token'), 'api_user' => $response->json('user'), 'api_expires_at' => time() + (int) $response->json('expires_in')]);
 
         return redirect('/app');

@@ -1,0 +1,1 @@
+<x-templates.console><h1>Pulihkan kata sandi</h1><form method="post" action="/forgot-password">@csrf<x-molecules.field name="email" label="Email akun" type="email" :remember="false" required /><x-atoms.button>Kirim instruksi pemulihan</x-atoms.button></form><a href="/login">Kembali masuk</a></x-templates.console>

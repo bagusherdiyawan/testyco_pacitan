@@ -10,12 +10,80 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+class MfaRequired extends ApiException {
+  const MfaRequired()
+    : super('Masukkan kode authenticator atau recovery untuk melanjutkan.');
+}
+
 class ApiClient {
   ApiClient({required this.baseUrl, http.Client? client})
     : _client = client ?? http.Client();
   final Uri baseUrl;
   final http.Client _client;
-  String? _token;
+  String? _token, _mfaChallenge;
+  DateTime? _mfaUntil, expiresAt;
+  Map<String, dynamic>? identity;
+  bool get needsMfa =>
+      _mfaChallenge != null &&
+      _mfaUntil != null &&
+      _mfaUntil!.isAfter(DateTime.now().toUtc());
+  void resetMfaChallenge() {
+    _mfaChallenge = null;
+    _mfaUntil = null;
+  }
+
+  Map<String, dynamic>? get savedSession =>
+      _token == null || identity == null || expiresAt == null
+      ? null
+      : {
+          'base_url': baseUrl.toString(),
+          'token': _token,
+          'user': identity,
+          'expires_at': expiresAt!.toIso8601String(),
+        };
+  bool restoreSession(Map<String, dynamic> value) {
+    final until = DateTime.tryParse(value['expires_at'] as String? ?? '');
+    if (value['base_url'] != baseUrl.toString() ||
+        value['token'] is! String ||
+        value['user'] is! Map ||
+        value['user']['id'] is! int ||
+        until == null ||
+        !until.isAfter(DateTime.now().toUtc())) {
+      return false;
+    }
+    _token = value['token'];
+    identity = Map<String, dynamic>.from(value['user']);
+    expiresAt = until;
+    return true;
+  }
+
+  String acceptLogin(Map<String, dynamic> result) {
+    if (result['token'] is! String ||
+        result['user'] is! Map ||
+        result['user']['name'] is! String) {
+      throw const ApiException('Respons login tidak valid.');
+    }
+    _token = result['token'];
+    identity = Map<String, dynamic>.from(result['user']);
+    expiresAt = DateTime.now().toUtc().add(
+      Duration(seconds: result['expires_in'] as int? ?? 28800),
+    );
+    resetMfaChallenge();
+    return identity!['name'] as String;
+  }
+
+  Future<String> completeMfa(String code) async {
+    if (!needsMfa) {
+      throw const ApiException('Tantangan kedaluwarsa, masuk kembali.');
+    }
+    return acceptLogin(
+      await request('POST', 'auth/login/mfa', {
+        'challenge': _mfaChallenge,
+        'code': code,
+      }),
+    );
+  }
+
   void Function()? onUnauthorized;
   bool get authenticated => _token != null;
 
@@ -84,13 +152,21 @@ class ApiClient {
   }
 
   Future<String> login(String email, String password) async {
+    clearToken();
     final result = await request('POST', 'auth/login', {
       'email': email.trim(),
       'password': password,
       'device_name': 'flutter-pos',
     });
-    _token = result['token'] as String;
-    return (result['user'] as Map<String, dynamic>)['name'] as String;
+    if (result['requires_mfa'] == true) {
+      if (result['challenge'] is! String || result['challenge'].length != 64) {
+        throw const ApiException('Tantangan MFA tidak valid.');
+      }
+      _mfaChallenge = result['challenge'];
+      _mfaUntil = DateTime.now().toUtc().add(const Duration(minutes: 2));
+      throw const MfaRequired();
+    }
+    return acceptLogin(result);
   }
 
   Future<void> logout() async {
@@ -101,6 +177,12 @@ class ApiClient {
     }
   }
 
-  void clearToken() => _token = null;
+  void clearToken() {
+    _token = null;
+    identity = null;
+    expiresAt = null;
+    resetMfaChallenge();
+  }
+
   void close() => _client.close();
 }

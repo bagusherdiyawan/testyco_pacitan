@@ -3,6 +3,7 @@
 namespace App\Modules\Identity\Presentation;
 
 use App\Models\User;
+use App\Modules\Identity\Application\AccountSecurity;
 use App\Modules\Identity\Application\Audit;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -22,7 +23,20 @@ final class AuthController
             throw ValidationException::withMessages(['email' => 'Email atau kata sandi tidak valid.']);
         }
 
-        return response()->json(['token' => $user->createToken($v['device_name'], ['*'], now()->addHours(8))->plainTextToken, 'user' => $user, 'expires_in' => 28800]);
+        $result = DB::transaction(function () use ($user, $v) {
+            $user = User::lockForUpdate()->findOrFail($user->id);
+            if (! $user->active || ! Hash::check($v['password'], $user->password)) {
+                throw ValidationException::withMessages(['email' => 'Email atau kata sandi tidak valid.']);
+            }
+            $security = app(AccountSecurity::class);
+            if ($security->enabled($user->id)) {
+                return $security->challenge($user, $v['device_name']);
+            }
+
+            return ['token' => $user->createToken($v['device_name'], ['*'], now()->addHours(8))->plainTextToken, 'user' => $user, 'expires_in' => 28800];
+        });
+
+        return response()->json($result)->header('Cache-Control', 'private, no-store');
     }
 
     public function password(Request $r): mixed
@@ -32,9 +46,14 @@ final class AuthController
             throw ValidationException::withMessages(['current_password' => 'Kata sandi saat ini tidak sesuai.']);
         }
         DB::transaction(function () use ($r, $v) {
-            $r->user()->forceFill(['password' => $v['password']])->save();
-            $r->user()->tokens()->delete();
-            Audit::record($r->user()->id, null, 'user.password_changed', (string) $r->user()->id, null, null);
+            $user = User::lockForUpdate()->findOrFail($r->user()->id);
+            if (! Hash::check($v['current_password'], $user->password)) {
+                throw ValidationException::withMessages(['current_password' => 'Kata sandi saat ini berubah.']);
+            }
+            $user->forceFill(['password' => $v['password'], 'access_version' => $user->access_version + 1])->save();
+            $user->tokens()->delete();
+            DB::table('login_challenges')->where('user_id', $user->id)->delete();
+            Audit::record($user->id, null, 'user.password_changed', (string) $user->id, null, null);
         });
 
         return response()->noContent();

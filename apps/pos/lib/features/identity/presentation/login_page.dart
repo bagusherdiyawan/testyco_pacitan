@@ -13,6 +13,7 @@ class _LoginPageState extends State<LoginPage> {
   final _form = GlobalKey<FormState>();
   final _email = TextEditingController();
   final _password = TextEditingController();
+  final _code = TextEditingController();
   bool _busy = false;
   String? _error;
   Future<void> _submit() async {
@@ -22,8 +23,13 @@ class _LoginPageState extends State<LoginPage> {
       _error = null;
     });
     try {
-      await widget.session.login(_email.text, _password.text);
+      if (widget.session.api.needsMfa) {
+        await widget.session.completeMfa(_code.text);
+      } else {
+        await widget.session.login(_email.text, _password.text);
+      }
     } catch (error) {
+      if (widget.session.api.needsMfa) _password.clear();
       if (mounted) setState(() => _error = error.toString());
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -32,6 +38,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   void dispose() {
+    _code.dispose();
     _email.dispose();
     _password.dispose();
     super.dispose();
@@ -64,7 +71,7 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 24),
                   TextFormField(
                     controller: _email,
-                    enabled: !_busy,
+                    enabled: !_busy && !widget.session.api.needsMfa,
                     decoration: const InputDecoration(labelText: 'Email'),
                     keyboardType: TextInputType.emailAddress,
                     autofillHints: const [AutofillHints.username],
@@ -76,14 +83,26 @@ class _LoginPageState extends State<LoginPage> {
                   PasswordField(
                     label: 'Kata sandi',
                     controller: _password,
-                    enabled: !_busy,
+                    enabled: !_busy && !widget.session.api.needsMfa,
                     autofillHints: const [AutofillHints.password],
                     action: TextInputAction.done,
                     onSubmitted: (_) => _submit(),
-                    validator: (v) => v == null || v.isEmpty
+                    validator: (v) =>
+                        !widget.session.api.needsMfa && (v == null || v.isEmpty)
                         ? 'Kata sandi wajib diisi.'
                         : null,
                   ),
+                  if (widget.session.api.needsMfa)
+                    TextFormField(
+                      controller: _code,
+                      enabled: !_busy,
+                      decoration: const InputDecoration(
+                        labelText: 'Kode authenticator / recovery',
+                      ),
+                      autofillHints: const [AutofillHints.oneTimeCode],
+                      validator: (v) =>
+                          v == null || v.isEmpty ? 'Isi kode MFA.' : null,
+                    ),
                   if (_error != null)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 16),
@@ -95,11 +114,57 @@ class _LoginPageState extends State<LoginPage> {
                   const SizedBox(height: 24),
                   FilledButton(
                     onPressed: _busy ? null : _submit,
-                    child: Text(_busy ? 'Memproses…' : 'Masuk'),
+                    child: Text(
+                      _busy
+                          ? 'Memproses…'
+                          : widget.session.api.needsMfa
+                          ? 'Verifikasi MFA'
+                          : 'Masuk',
+                    ),
                   ),
                   const SizedBox(height: 16),
-                  const Text(
-                    'Sesi disimpan di memori dan berakhir setelah aplikasi ditutup. Koneksi internet diperlukan.',
+                  if (widget.session.api.needsMfa)
+                    TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => setState(() {
+                              widget.session.api.resetMfaChallenge();
+                              _code.clear();
+                              _error = null;
+                            }),
+                      child: const Text('Mulai login baru'),
+                    ),
+                  Text(
+                    widget.session.deviceState == null
+                        ? 'Sesi disimpan di memori. Koneksi internet diperlukan.'
+                        : 'Sesi dan antrean perangkat terenkripsi. Offline hanya tunai dalam izin tersimpan; sinkronisasi memerlukan login yang valid.',
+                  ),
+                  TextButton(
+                    onPressed: _busy
+                        ? null
+                        : () async {
+                            try {
+                              await widget.session.api.request(
+                                'POST',
+                                'auth/password/forgot',
+                                {'email': _email.text.trim()},
+                              );
+                              if (mounted) {
+                                setState(
+                                  () => _error =
+                                      'Jika akun memenuhi syarat, instruksi pemulihan dikirim.',
+                                );
+                              }
+                            } catch (e) {
+                              if (mounted) {
+                                setState(
+                                  () => _error =
+                                      'Layanan email pemulihan belum tersedia atau percobaan dibatasi.',
+                                );
+                              }
+                            }
+                          },
+                    child: const Text('Kirim email pemulihan kata sandi'),
                   ),
                 ],
               ),

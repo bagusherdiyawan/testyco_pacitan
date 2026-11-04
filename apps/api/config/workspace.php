@@ -12,6 +12,6 @@ return ['modules' => [
     ['id' => 'fulfillment', 'name' => 'Pengiriman dan penerimaan', 'prd' => '09', 'status' => 'available'],
     ['id' => 'billing', 'name' => 'Tagihan dan pembayaran', 'prd' => '10', 'status' => 'available'],
     ['id' => 'reporting', 'name' => 'Laporan kinerja', 'prd' => '11', 'status' => 'available'],
-    ['id' => 'assets', 'name' => 'Freezer dan fasilitas', 'prd' => '12', 'status' => 'planned'],
-    ['id' => 'reliability', 'name' => 'Keandalan dan notifikasi', 'prd' => '13', 'status' => 'planned'],
+    ['id' => 'assets', 'name' => 'Freezer dan fasilitas', 'prd' => '12', 'status' => 'available'],
+    ['id' => 'reliability', 'name' => 'Keandalan dan notifikasi', 'prd' => '13', 'status' => 'available'],
 ]];

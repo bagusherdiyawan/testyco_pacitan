@@ -10,6 +10,8 @@ final class SaleStock
 
     public function inspect(string $store, array $allocations, bool $debit = false, ?int $actor = null): array
     {
+        app(FoodSafety::class)->lockCandidates($store, array_unique(array_column($allocations, 'product_id')));
+        app(FoodSafety::class)->allocations($store, $allocations);
         $ids = array_unique(array_column($allocations, 'batch_id'));
         $batches = InventoryBatch::where('store_id', $store)->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
         $projected = [];
@@ -20,6 +22,7 @@ final class SaleStock
             abort_unless($batch && $batch->product_id === $allocation['product_id'], 404, 'Batch tidak termasuk SKU dan toko yang dipilih.');
             abort_unless($batch->condition === $allocation['condition'], 409, 'Kondisi batch tidak sesuai katalog.');
             $bucket = $allocation['bucket'];
+            app(FoodSafety::class)->assertEligible($batch, $bucket);
             abort_unless(in_array($bucket, ['usable', 'opened', 'ready'], true), 422, 'Karantina dan susut tidak dapat dijual.');
             if ($allocation['unit'] === 'pack') {
                 abort_unless($bucket === 'usable' && $batch->pack_size === $allocation['pieces_per_unit'], 422, 'Penjualan kemasan harus memakai stok utuh dengan isi historis yang sama.');

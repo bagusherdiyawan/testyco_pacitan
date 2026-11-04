@@ -7,6 +7,8 @@ use App\Modules\Catalog\Infrastructure\Product;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Store;
+use App\Modules\Reliability\Application\Inbox;
+use App\Modules\Reliability\ReliabilityServiceProvider;
 use App\Shared\Application\Operations;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -84,6 +86,10 @@ final class StockMinimums
             }
             $result = (array) DB::table('inventory_minimums')->where('id', $row['id'])->first();
             Audit::record($user->id, $s->organization_id, 'inventory.minimum_configured', $row['id'], $before ? (array) $before : null, $result);
+
+            if (app()->getProvider(ReliabilityServiceProvider::class)) {
+                app(Inbox::class)->lowStock($store, $product);
+            }
 
             return $result;
         });

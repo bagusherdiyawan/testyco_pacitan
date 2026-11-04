@@ -1,0 +1,1 @@
+<x-templates.console><h1>Verifikasi dua langkah</h1><form method="post" action="/login/mfa">@csrf<x-molecules.field name="code" label="Kode authenticator atau recovery sekali pakai" autocomplete="one-time-code" :remember="false" required /><x-atoms.button>Verifikasi dan masuk</x-atoms.button></form><a href="/login">Mulai login baru</a></x-templates.console>

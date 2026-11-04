@@ -6,6 +6,7 @@ use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Identity\Presentation\AuditExportController;
 use App\Modules\Identity\Presentation\AuthController;
 use App\Modules\Identity\Presentation\IdentityController;
+use App\Modules\Identity\Presentation\SecurityController;
 use App\Modules\Identity\Presentation\UserReactivationController;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -18,9 +19,19 @@ final class IdentityServiceProvider extends ServiceProvider
     public function boot(): void
     {
         RateLimiter::for('login', fn (Request $r) => [Limit::perMinute(5)->by(strtolower((string) $r->input('email')).'|'.$r->ip()), Limit::perMinute(30)->by($r->ip())]);
+        RateLimiter::for('sensitive', fn (Request $r) => Limit::perMinute(5)->by(($r->user()?->id ?? 'guest').'|'.$r->ip()));
         RateLimiter::for('business', fn (Request $r) => Limit::perMinute(180)->by($r->user()?->id ?? $r->ip()));
         Route::middleware(['api', 'throttle:login'])->post('/api/v1/auth/login', [AuthController::class, 'login']);
+        foreach (['login/mfa' => 'login', 'password/forgot' => 'forgot', 'password/reset' => 'reset'] as $path => $method) {
+            Route::middleware(['api', 'throttle:login'])->post('/api/v1/auth/'.$path, [SecurityController::class, $method]);
+        }
         Route::prefix('api/v1')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
+            Route::get('auth/sessions', [SecurityController::class, 'sessions']);
+            Route::post('auth/sessions/{token}/revoke', [SecurityController::class, 'revoke'])->whereNumber('token');
+            Route::get('auth/security', [SecurityController::class, 'context']);
+            Route::post('auth/mfa/enroll', [SecurityController::class, 'begin'])->middleware('throttle:sensitive');
+            Route::post('auth/mfa/enable', [SecurityController::class, 'enable'])->middleware('throttle:sensitive');
+            Route::post('auth/mfa/disable', [SecurityController::class, 'disable'])->middleware('throttle:sensitive');
             Route::post('auth/password', [AuthController::class, 'password']);
             Route::get('auth/me', [AuthController::class, 'me']);
             Route::post('auth/logout', [AuthController::class, 'logout']);

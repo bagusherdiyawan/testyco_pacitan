@@ -1,4 +1,9 @@
 import 'package:flutter/foundation.dart';
+import 'core/storage/device_state.dart';
+import 'features/reliability/presentation/inbox_page.dart';
+import 'features/identity/presentation/security_page.dart';
+import 'features/sales/presentation/offline_page.dart';
+import 'features/sales/data/offline_repository.dart';
 import 'package:flutter/material.dart';
 import 'features/identity/presentation/password_change_page.dart';
 import 'features/audit/audit_module.dart';
@@ -26,7 +31,8 @@ import 'features/ordering/data/orders_repository.dart';
 import 'design_system/templates/responsive_shell.dart';
 import 'design_system/tokens.dart';
 
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
   const url = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://10.0.2.2:8000/api/v1/',
@@ -40,7 +46,27 @@ void main() {
       'API_BASE_URL must be an absolute URL ending in /; HTTPS is required for release.',
     );
   }
-  runApp(TestycoApp(session: Session(ApiClient(baseUrl: uri))));
+  try {
+    final storage = await EncryptedDeviceState.open();
+    final session = Session(ApiClient(baseUrl: uri), deviceState: storage);
+    await session.restore();
+    runApp(TestycoApp(session: session));
+  } catch (_) {
+    runApp(
+      const MaterialApp(
+        home: Scaffold(
+          body: SafeArea(
+            child: Padding(
+              padding: EdgeInsets.all(24),
+              child: Text(
+                'Penyimpanan aman tidak dapat dibuka. Berkas lama dipertahankan. Jangan menghapus data atau memasang ulang aplikasi jika masih ada transaksi belum tersinkron. Hubungi penanggung jawab perangkat untuk pemulihan, lalu buka ulang aplikasi.',
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class TestycoApp extends StatefulWidget {
@@ -80,6 +106,15 @@ class _TestycoAppState extends State<TestycoApp> {
     ),
     home: !widget.session.authenticated
         ? LoginPage(session: widget.session)
+        : widget.session.offlineOnly && widget.session.deviceState != null
+        ? OfflinePage(
+            repository: OfflineRepository(
+              widget.session.api,
+              widget.session.deviceState!,
+            ),
+            onReconnect: widget.session.restore,
+            onLogout: widget.session.logout,
+          )
         : _store == null
         ? StorePickerPage(
             session: widget.session,
@@ -90,6 +125,28 @@ class _TestycoAppState extends State<TestycoApp> {
             title: _store!.name,
             actions: [
               PasswordChangeAction(session: widget.session),
+              Builder(
+                builder: (inner) => IconButton(
+                  tooltip: 'Inbox operasional',
+                  icon: const Icon(Icons.notifications_outlined),
+                  onPressed: () => Navigator.of(inner).push(
+                    MaterialPageRoute(
+                      builder: (_) => InboxPage(api: widget.session.api),
+                    ),
+                  ),
+                ),
+              ),
+              Builder(
+                builder: (inner) => IconButton(
+                  tooltip: 'Authenticator dan sesi perangkat',
+                  icon: const Icon(Icons.security),
+                  onPressed: () => Navigator.of(inner).push(
+                    MaterialPageRoute(
+                      builder: (_) => SecurityPage(session: widget.session),
+                    ),
+                  ),
+                ),
+              ),
               IconButton(
                 tooltip: 'Ganti toko',
                 icon: const Icon(Icons.store),
@@ -118,7 +175,10 @@ class _TestycoAppState extends State<TestycoApp> {
                     defaultValue: true,
                   ))
                 SalesModule(
-                  repository: PosRepository(widget.session.api),
+                  repository: PosRepository(
+                    widget.session.api,
+                    deviceState: widget.session.deviceState,
+                  ),
                   storeId: _store!.id,
                 ),
               if (_store!.canManageShifts &&

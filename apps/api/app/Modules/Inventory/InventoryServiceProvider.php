@@ -5,6 +5,7 @@ namespace App\Modules\Inventory;
 use App\Modules\Catalog\CatalogServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ActiveUser;
+use App\Modules\Inventory\Application\FoodSafety;
 use App\Modules\Inventory\Presentation\InventoryController;
 use App\Modules\Inventory\Presentation\LedgerExportController;
 use App\Modules\Inventory\Presentation\StockControlController;
@@ -14,6 +15,11 @@ use Illuminate\Support\ServiceProvider;
 
 final class InventoryServiceProvider extends ServiceProvider
 {
+    public function register(): void
+    {
+        $this->app->scoped(FoodSafety::class);
+    }
+
     public function boot(): void
     {
         if (! $this->app->getProvider(IdentityServiceProvider::class)) {

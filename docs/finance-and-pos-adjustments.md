@@ -45,3 +45,6 @@ Keputusan D-01/D-03/D-08 tentang kebijakan global belum dijawab; pilihan chat ya
 Laporan **penjualan tunai** tetap membaca struk tunai asli; tidak memasukkan B2B/non-tunai atau mengurangi refund dari metriknya. Gunakan histori refund dan rekonsiliasi shift untuk pengembalian. Laporan komersial piutang/non-tunai/margin kini tersedia pada [DL-20](reliability-and-offline.md), dengan kohor periode dan biaya berbukti terpisah.
 
 Uji `ReturnTest`, `BillingTest`, `PosAdjustmentsTest`, `ReturnWebTest`, `FinancialWebTest` dan `financial_native_test.dart` mencakup tenant/role, stale review, retry/replay, pembayaran parsial, liabilitas kredit, batas kiriman/laporan, promo tanpa reservasi, refund paket multi-batch, rollback semua posting saat ledger gagal, serta lebar390/1200px. Migrasi yang sudah memiliki histori menolak rollback destruktif. PostgreSQL multi-koneksi, perangkat/printer, browser interaktif dan UAT belum diverifikasi.
+
+
+[Addendum otomatis dan sponsor lintas organisasi](printing-commercial-and-recalls.md) kini menyediakan jalur terpisah dengan dua persetujuan. Larangan pendanaan asing berlaku pada pembuatan voucher biasa tanpa addendum; akses POS umum mitra tidak dibuka. Invoice/laporan manual ditolak pada pesanan yang telah ditautkan ke otomatisasi agar tidak terjadi tagihan ganda. Pembayaran aktual tetap diverifikasi, tanpa gateway/transfer otomatis.

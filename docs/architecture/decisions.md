@@ -340,3 +340,19 @@ Challenge password→MFA tunggal dua menit/lima percobaan, secret Crypt/APP_KEY,
 ## ADR-045: lifecycle aset dan laporan kohor biaya berbukti
 
 Assets provider bergantung Identity/Partnership. Kepemilikan privat, satu assignment aktif/pending, kontrak diterima untuk lintas organisasi, consent penerima dan physical return pemilik mempertahankan histori/lokasi snapshot. Insiden/biaya eksplisit tidak menjadi invoice otomatis. Reporting memisahkan POS sendiri, B2B seller dan purchase buyer, cohort sold_at/accepted_at dengan current cumulative adjustments; bukan cashflow ataupun saldo all-time. HPP/biaya net append-only ber-evidence, null margin tanpa bukti. BoundedExport dan CsvDownload mempertahankan scope/limits/formula safety. DL-01–20 selesai pada cakupan development tetap; gate produksi dan push yang ditunda tidak diubah menjadi paket baru.
+
+## ADR-046: pencetakan lokal tanpa replay penjualan
+
+ESC/POS encoder pure Dart, transport TCP terpisah dan UI printer memakai snapshot struk selesai. DeviceState menyimpan pekerjaan/frozen bytes/profil sebelum I/O; sending/unknown/sent_unconfirmed memerlukan pemeriksaan fisik, tidak auto-retry. Cetak ulang adalah salinan/pekerjaan baru, tidak POST sale lagi. Arsip terenkripsi mempertahankan bukti. Browser memakai dialog sistem dan CSS58/80mm, bukan koneksi server ke printer privat. Byte terkirim bukan kertas tercetak; drawer command tidak dikirim dan nama/referensi dibersihkan dari byte kontrol. Model/USB/Bluetooth native/perangkat fisik tetap perlu konfirmasi/uji.
+
+## ADR-047: persetujuan finansial tetap dan jurnal koreksi otomatis
+
+Commercial provider eksplisit setelah Billing/Promotions, HTTP BFF terpisah. Addendum kontrak accepted, proposer/counterparty roles, periode dan angka/evidence eksplisit mengaktifkan konsinyasi atau sponsor; tidak ada pembukaan POS mitra secara umum. Aktivasi konsinyasi memakai order→destination batch→agreement locks, checkout batch→agreement dan worker order→agreement; pending proposals tidak memblokir penjualan tetapi activation/fresh-sale guard tidak boleh melewati batch yang sudah terjual. Manual invoice/report dan automatic active_order_id saling eksklusif.
+
+Asal alokasi diverifikasi dari positive original/replacement receipt ledger as-of sale; kredit setelah struk tidak mengubah atribusi historis. Scope original receipt store, campuran owner tidak diklaim otomatis; perpindahan komersial lanjutan ditahan. Revenue/bundle/refund/HPP/loss/tax/rounding disepakati eksplisit. Worker memproyeksikan kumulatif dan immutable deltas, termasuk late offline/refund, dengan rotasi/batch limits/error status. Saldo ini settlement, bukan invoice/faktur pajak atau uang otomatis.
+
+Sponsor budget diperiksa di voucher quote dan re-lock saat redeem, dalam transaksi sale/stock/shift. Frozen funding splits, budget restoration policy dan cumulative historical discount reversals mencegah kuota/budget/reversal ganda. Pembayaran manual signed collection/payout hanya pemilik saldo source/sponsor, evidence/UUID/version/reference, tidak menulis POS drawer. Scheduler Compose aktif tiap menit; queue reset email tetap proses terpisah.
+
+## ADR-048: koordinasi recall berdasarkan ledger dan otoritas penerima
+
+RecallCoordinator menelusuri actual receipt edges asli/pengganti/retur dengan visited set,10000batch/100hop dan transaksi atomik. Root hold mengikuti recall sumber; descendants notified, menerima inbox dan linked late receipts. Penerima hanya meninjau target sendiri dan memutuskan hold/release dengan evidence/count/revision; FoodSafety menyatukan semua hold/recall/SOP. Source hanya mendapat trace metadata minimum. Close campaign menghentikan propagasi baru, tidak melepas hold. Tanpa keputusan pengguna yang memberi wewenang blok otomatis lintas tenant, implementasi mempertahankan keputusan pimpinan penerima. Tidak ada mutasi jumlah stok atau pelepasan mutu otomatis.

@@ -1,4 +1,4 @@
-<x-templates.console><h1>Laporan B2B, piutang dan margin</h1>
+<x-templates.console><p><a href="/app/organizations/{{ $organization }}/commercial-agreements">Saldo konsinyasi otomatis dan pendanaan sponsor (terpisah dari invoice manual)</a></p><h1>Laporan B2B, piutang dan margin</h1>
 @if($pending)<aside>Hasil pencatatan biaya belum pasti. Ulangi request yang sama.</aside><p>{{ $pending['body']['evidence_reference'] }} · HPP Rp{{ $pending['body']['goods_cost'] }} · Biaya Rp{{ $pending['body']['operating_cost'] }}</p><form method="post" action="/app/organizations/{{ $organization }}/reports/commercial/retry">@csrf<x-atoms.button>Ulangi request yang sama</x-atoms.button></form>
 @else
 <form method="get"><x-molecules.field name="from_day" label="Tanggal awal WIB" type="date" :value="$filters['from_day']" /><x-molecules.field name="to_day" label="Tanggal akhir WIB" type="date" :value="$filters['to_day']" /><x-atoms.button>Tampilkan</x-atoms.button></form>

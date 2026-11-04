@@ -6,6 +6,7 @@ use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Identity\Presentation\ActiveUser;
 use App\Modules\Inventory\InventoryServiceProvider;
 use App\Modules\Reliability\Application\Inbox;
+use App\Modules\Reliability\Presentation\RecallController;
 use App\Modules\Reliability\Presentation\ReliabilityController;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Route;
@@ -21,6 +22,13 @@ final class ReliabilityServiceProvider extends ServiceProvider
             }
         }Route::prefix('api/v1')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
             Route::get('stores/{store}/food-safety/fefo', [ReliabilityController::class, 'fefo']);
+            $recall = RecallController::class;
+            Route::get('organizations/{organization}/recalls', [$recall, 'index']);
+            Route::post('organizations/{organization}/recalls', [$recall, 'start']);
+            Route::get('organizations/{organization}/recalls/{campaign}', [$recall, 'show']);
+            Route::post('organizations/{organization}/recalls/{campaign}/refresh', [$recall, 'refresh']);
+            Route::post('organizations/{organization}/recalls/{campaign}/close', [$recall, 'close']);
+            Route::post('organizations/{organization}/recalls/{campaign}/targets/{target}', [$recall, 'decide']);
             Route::get('inbox', [ReliabilityController::class, 'inbox']);
             Route::post('inbox/preferences', [ReliabilityController::class, 'preferences']);
             Route::post('inbox/{entry}/read', [ReliabilityController::class, 'mark']);

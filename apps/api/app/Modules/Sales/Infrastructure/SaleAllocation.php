@@ -13,10 +13,12 @@ final class SaleAllocation extends Model
 
     protected $guarded = ['id'];
 
+    protected $hidden = ['commercial_origin_snapshot'];
+
     public $timestamps = false;
 
     protected function casts(): array
     {
-        return ['pieces' => 'integer', 'batch_pack_size' => 'integer', 'expires_on' => 'date:Y-m-d'];
+        return ['commercial_origin_snapshot' => 'array', 'pieces' => 'integer', 'batch_pack_size' => 'integer', 'expires_on' => 'date:Y-m-d'];
     }
 }

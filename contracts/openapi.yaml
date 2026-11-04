@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.28.0",
-    "description": "Authenticated, modular organization/store-scoped operations. Explicit per-document wholesale invoice basis, discounts/shipping/tax/rounding/due date and partner consent; verified manual partial collections, reversals, customer-credit liability, bounded two-party credits and signed-contract/manual consignment reports. Confirmed physical returns move damaged goods from partner quarantine to original center quarantine, never usable. Online POS supports cash and explicitly verified QRIS/transfer, own-issuer-funded store/product vouchers and reviewed manager refunds using historical discounted prices and actual component allocations. No payment-provider calls, automatic profit sharing, cross-organization promotional claims or automatic offline noncash settlement. Cash-sales reports retain original cash-sale scope and exclude noncash/B2B and refund deduction; refunds are separately recorded. Immutable UUID retries, parent/version locks, private files and scoped audit remain mandatory. Development SQLite only; PostgreSQL concurrency, production tax/legal acceptance, device/printer and UAT are not verified. DL18–20: SMTP/inbox (push deferred), explicit organization-leader SOP/recall/FEFO, encrypted MFA/reset and device sessions, durable encrypted cash-only offline queue with review conflicts, contract-backed asset lifecycle and bounded commercial cohort reports with evidenced net costs. External SMTP delivery and real device Keystore/release remain unverified."
+    "version": "0.29.0",
+    "description": "Authenticated, modular organization/store-scoped operations. Explicit per-document wholesale invoice basis, discounts/shipping/tax/rounding/due date and partner consent; verified manual partial collections, reversals, customer-credit liability, bounded two-party credits and signed-contract/manual consignment reports. Confirmed physical returns move damaged goods from partner quarantine to original center quarantine, never usable. Online POS supports cash and explicitly verified QRIS/transfer, own-issuer-funded store/product vouchers and reviewed manager refunds using historical discounted prices and actual component allocations. No payment-provider calls, automatic profit sharing, automatic offline noncash settlement. Cash-sales reports retain original cash-sale scope and exclude noncash/B2B and refund deduction; refunds are separately recorded. Immutable UUID retries, parent/version locks, private files and scoped audit remain mandatory. Development SQLite only; PostgreSQL concurrency, production tax/legal acceptance, device/printer and UAT are not verified. DL18–20: SMTP/inbox (push deferred), explicit organization-leader SOP/recall/FEFO, encrypted MFA/reset and device sessions, durable encrypted cash-only offline queue with review conflicts, contract-backed asset lifecycle and bounded commercial cohort reports with evidenced net costs. External SMTP delivery and real device Keystore/release remain unverified. Explicit bilateral standing consignment/profit-sharing and sponsored promotions now accrue immutable settlement deltas with historical refund reversals and hard sponsor budgets, separate from manual invoices. Coordinated recalls follow real receipt provenance and recipient-leader hold/release. Native ESC/POS TCP LAN58/80mm and browser/system printing are client integrations; transport send is not physical print acknowledgement. Push and payment gateways remain deferred."
   },
   "security": [
     {
@@ -19145,6 +19145,2002 @@
           }
         }
       }
+    },
+    "/api/v1/organizations/{organization}/recalls": {
+      "get": {
+        "operationId": "listRecallCampaigns",
+        "summary": "List source-owned or actually received coordinated recalls",
+        "description": "Scoped own-organization leader authority. Exact actor/path/body/UUID replay; immutable agreement/history and version checks. Historical replay requires fresh scoped GET. Private/no-store reads; no bank or payment-provider calls. Development SQLite verified; physical devices and PostgreSQL concurrency remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/RecallCampaign"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "per_page": {
+                      "const": 50
+                    },
+                    "last_page": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "organization_id": {
+                      "type": "string",
+                      "description": "ULID"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "current_page",
+                    "per_page",
+                    "last_page",
+                    "total",
+                    "organization_id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "startRecallCoordination",
+        "summary": "Coordinate an active own recall through actual positive receipt ledger provenance",
+        "description": "One campaign per recall. Follow original/replacement/return receipt edges, not lot-code coincidences. Bound10000 batches/100 hops; abort whole transaction on limits. Recipient targets start notified and require own leader hold/release; no cross-tenant stock writes. Source sees minimal organization/store/lot/status, not recipient prices or other stock. Late receipts link automatically.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RecallCampaign"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CoordinatedRecallInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/recalls/{campaign}": {
+      "get": {
+        "operationId": "readRecallCoordination",
+        "summary": "Read source minimal trace or recipient own batch action context",
+        "description": "Scoped own-organization leader authority. Exact actor/path/body/UUID replay; immutable agreement/history and version checks. Historical replay requires fresh scoped GET. Private/no-store reads; no bank or payment-provider calls. Development SQLite verified; physical devices and PostgreSQL concurrency remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "campaign",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecallCoordinationContext"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/recalls/{campaign}/refresh": {
+      "post": {
+        "operationId": "refreshRecallTrace",
+        "summary": "Source rechecks actual received descendants idempotently",
+        "description": "Scoped own-organization leader authority. Exact actor/path/body/UUID replay; immutable agreement/history and version checks. Historical replay requires fresh scoped GET. Private/no-store reads; no bank or payment-provider calls. Development SQLite verified; physical devices and PostgreSQL concurrency remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "campaign",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "ULID"
+                        },
+                        "organization_id": {
+                          "type": "string",
+                          "description": "ULID"
+                        },
+                        "status": {
+                          "const": "active"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organization_id",
+                        "status"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  }
+                },
+                "required": [
+                  "operation_id"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/recalls/{campaign}/close": {
+      "post": {
+        "operationId": "closeRecallCoordination",
+        "summary": "Close propagation; existing source/recipient holds remain",
+        "description": "Scoped own-organization leader authority. Exact actor/path/body/UUID replay; immutable agreement/history and version checks. Historical replay requires fresh scoped GET. Private/no-store reads; no bank or payment-provider calls. Development SQLite verified; physical devices and PostgreSQL concurrency remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "campaign",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "ULID"
+                        },
+                        "organization_id": {
+                          "type": "string",
+                          "description": "ULID"
+                        },
+                        "status": {
+                          "const": "closed"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "closed_at": {
+                          "type": "string",
+                          "format": "date-time"
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "organization_id",
+                        "status",
+                        "version",
+                        "closed_at"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "operation_id": {
+                    "type": "string",
+                    "format": "uuid"
+                  },
+                  "version": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "reason": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "operation_id",
+                  "version",
+                  "reason"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/recalls/{campaign}/targets/{target}": {
+      "post": {
+        "operationId": "decideRecipientRecallHold",
+        "summary": "Own organization leader reviews actual batch/revision and records hold/release",
+        "description": "Only own targets. Explicit physical observed count/evidence/reason and current stock/target revisions; no stock quantity change. Holding blocks sale/processing/dispatch via shared FoodSafety. Releasing this hold does not clear other active recalls/SOP blocks. Source closure does not release recipient holds.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "campaign",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/RecallDecisionResult"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecallDecisionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/commercial-agreements": {
+      "get": {
+        "operationId": "listCommercialAgreements",
+        "summary": "List own-party standing consignment and sponsor agreements",
+        "description": "Scoped own-organization leader authority. Exact actor/path/body/UUID replay; immutable agreement/history and version checks. Historical replay requires fresh scoped GET. Private/no-store reads; no bank or payment-provider calls. Development SQLite verified; physical devices and PostgreSQL concurrency remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CommercialAgreement"
+                      }
+                    },
+                    "current_page": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "per_page": {
+                      "const": 50
+                    },
+                    "last_page": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "total": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "organization_id": {
+                      "type": "string",
+                      "description": "ULID"
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "current_page",
+                    "per_page",
+                    "last_page",
+                    "total",
+                    "organization_id"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "proposeCommercialAgreement",
+        "summary": "Propose explicit two-party consignment share or issuer-requested sponsorship",
+        "description": "Accepted partnership contract, explicit covered non-backdated dates and immutable terms. Supplier proposes consignment for own approved wholesale order; partner issuer requests sponsorship. No prior invoice/manual sold report; one pending/live agreement per order. Percentage, tax, loss, bundle revenue basis, costs/evidence and movement policy are explicit. No automatic activation or general partner POS access.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommercialAgreement"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommercialAgreementInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/commercial-agreements/options": {
+      "get": {
+        "operationId": "commercialAgreementOptions",
+        "summary": "Own leader reads accepted contracts, own source order metadata and own catalog choices",
+        "description": "Scoped own-organization leader authority. Exact actor/path/body/UUID replay; immutable agreement/history and version checks. Historical replay requires fresh scoped GET. Private/no-store reads; no bank or payment-provider calls. Development SQLite verified; physical devices and PostgreSQL concurrency remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "order_id",
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "q",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommercialOptions"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/commercial-agreements/{agreement}": {
+      "get": {
+        "operationId": "readCommercialAgreement",
+        "summary": "Read own-party immutable journal deltas and manually verified settlement balances",
+        "description": "Positive supplier_receivable means partner owes supplier; negative means supplier/sponsor owes partner. own_receivable reverses sign for partner. Automated standing settlement ledger is separate from manual invoice balances and POS cash. Sales/refund corrections post current-time immutable differences; original receipt time retained. No full POS or unrelated product sharing.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agreement",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          {
+            "in": "query",
+            "name": "payments_page",
+            "schema": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CommercialAgreementContext"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/commercial-agreements/{agreement}/accept": {
+      "post": {
+        "operationId": "commercialAgreementAccept",
+        "summary": "Counterparty explicitly accepts financial automation and limited data sharing",
+        "description": "Accept requires consent=true and sharing_consented=true. Consignment activates before any original/replacement batch sale and prevents duplicate manual invoicing. Supplier/partner identity and exact version checked. Accepted terms immutable; no global percentage/food/loss defaults. Suspension disables funded voucher and blocks new consigned sales; historical refunds remain processed.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agreement",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommercialAgreement"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommercialDecisionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/commercial-agreements/{agreement}/reject": {
+      "post": {
+        "operationId": "commercialAgreementReject",
+        "summary": "Counterparty rejects pending agreement",
+        "description": "Accept requires consent=true and sharing_consented=true. Consignment activates before any original/replacement batch sale and prevents duplicate manual invoicing. Supplier/partner identity and exact version checked. Accepted terms immutable; no global percentage/food/loss defaults. Suspension disables funded voucher and blocks new consigned sales; historical refunds remain processed.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agreement",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommercialAgreement"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommercialDecisionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/commercial-agreements/{agreement}/withdraw": {
+      "post": {
+        "operationId": "commercialAgreementWithdraw",
+        "summary": "Proposer withdraws pending agreement",
+        "description": "Accept requires consent=true and sharing_consented=true. Consignment activates before any original/replacement batch sale and prevents duplicate manual invoicing. Supplier/partner identity and exact version checked. Accepted terms immutable; no global percentage/food/loss defaults. Suspension disables funded voucher and blocks new consigned sales; historical refunds remain processed.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agreement",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommercialAgreement"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommercialDecisionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/commercial-agreements/{agreement}/suspend": {
+      "post": {
+        "operationId": "commercialAgreementSuspend",
+        "summary": "Either party leader stops new transactions; historical obligations remain",
+        "description": "Accept requires consent=true and sharing_consented=true. Consignment activates before any original/replacement batch sale and prevents duplicate manual invoicing. Supplier/partner identity and exact version checked. Accepted terms immutable; no global percentage/food/loss defaults. Suspension disables funded voucher and blocks new consigned sales; historical refunds remain processed.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agreement",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/CommercialAgreement"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommercialDecisionInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/commercial-agreements/{agreement}/payments": {
+      "post": {
+        "operationId": "verifyCommercialSettlementPayment",
+        "summary": "Supplier/sponsor verifies actual partial collection or payout without POS cash mutation",
+        "description": "Only supplier/sponsor own-org leader. Require actual evidence/reference/date<=todayWIB, explicit direction, verified=true and current version. Signed amount cannot cross current balance; positive collection reduces receivable, negative payout reduces liability. UUID/reference prevents duplicates. No bank transfer initiation, automatic payout or POS drawer entry.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "agreement",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "organization_id": {
+                          "type": "string",
+                          "description": "ULID"
+                        },
+                        "agreement_id": {
+                          "type": "string",
+                          "description": "ULID"
+                        },
+                        "version": {
+                          "type": "integer",
+                          "minimum": 0
+                        },
+                        "payment": {
+                          "$ref": "#/components/schemas/CommercialPayment"
+                        }
+                      },
+                      "required": [
+                        "organization_id",
+                        "agreement_id",
+                        "version",
+                        "payment"
+                      ]
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization/action denied",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Object not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, budget, provenance, status, eligibility or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Explicit terms or limits invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Throttled; preserve exact request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Service unavailable; do not infer committed outcome",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommercialPaymentInput"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -28305,6 +30301,12 @@
           },
           "terms": {
             "type": "string"
+          },
+          "commercial_agreement_id": {
+            "type": [
+              "string",
+              "null"
+            ]
           }
         },
         "required": [
@@ -28395,6 +30397,22 @@
           },
           "terms": {
             "type": "string"
+          },
+          "commercial_agreement_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "sponsor_amount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "issuer_amount": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "sponsor_basis_points": {
+            "type": "integer",
+            "minimum": 0
           }
         },
         "required": [
@@ -31042,6 +33060,1152 @@
           "data",
           "metrics",
           "balances"
+        ]
+      },
+      "CoordinatedRecallInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "recall_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "instructions": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "recall_id",
+          "instructions"
+        ]
+      },
+      "RecallCampaign": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "batch_recall_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "status": {
+            "enum": [
+              "active",
+              "closed"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "instructions": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "created_at": {
+            "type": "string"
+          },
+          "closed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "batch_recall_id",
+          "organization_id",
+          "status",
+          "version",
+          "instructions",
+          "created_by",
+          "created_at"
+        ]
+      },
+      "RecallTarget": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "status": {
+            "enum": [
+              "notified",
+              "held",
+              "released"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evidence_reference": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "observed_pieces": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reviewed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "batch_code": {
+            "type": "string"
+          },
+          "store_name": {
+            "type": "string"
+          },
+          "organization_name": {
+            "type": "string"
+          },
+          "inventory_batch_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "product_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "stock_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "usable_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "opened_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "ready_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "quarantined_pieces": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "status",
+          "version",
+          "batch_code",
+          "store_name",
+          "organization_name"
+        ]
+      },
+      "RecallCoordinationContext": {
+        "type": "object",
+        "properties": {
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "campaign": {
+            "$ref": "#/components/schemas/RecallCampaign"
+          },
+          "is_source": {
+            "type": "boolean"
+          },
+          "targets": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/RecallTarget"
+                }
+              },
+              "current_page": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "per_page": {
+                "const": 50
+              },
+              "last_page": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "data",
+              "current_page",
+              "per_page",
+              "last_page",
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "organization_id",
+          "campaign",
+          "is_source",
+          "targets"
+        ]
+      },
+      "RecallDecisionInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "action": {
+            "enum": [
+              "hold",
+              "release"
+            ]
+          },
+          "observed_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evidence_reference": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "expected_revision",
+          "action",
+          "observed_pieces",
+          "evidence_reference",
+          "reason"
+        ]
+      },
+      "RecallDecisionResult": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "campaign_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "status": {
+            "enum": [
+              "held",
+              "released"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "observed_pieces": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "evidence_reference": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          },
+          "reviewed_by": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reviewed_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "campaign_id",
+          "organization_id",
+          "status",
+          "version",
+          "observed_pieces",
+          "evidence_reference",
+          "reason",
+          "reviewed_by",
+          "reviewed_at"
+        ]
+      },
+      "StandingConsignmentTerms": {
+        "type": "object",
+        "properties": {
+          "basis": {
+            "enum": [
+              "net_sales",
+              "margin"
+            ]
+          },
+          "supplier_basis_points": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "tax_basis_points": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000
+          },
+          "loss_policy": {
+            "enum": [
+              "zero_floor",
+              "share_loss"
+            ]
+          },
+          "bundle_basis": {
+            "enum": [
+              "reject",
+              "piece_proportional"
+            ]
+          },
+          "movement_policy": {
+            "const": "original_receipt_store_only"
+          },
+          "costs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "order_line_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "cost_per_piece": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "evidence_reference": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "order_line_id",
+                "cost_per_piece",
+                "evidence_reference"
+              ]
+            }
+          },
+          "rounding": {
+            "const": "floor_magnitude_per_line"
+          },
+          "refund_policy": {
+            "const": "reverse_proportionally"
+          },
+          "frequency": {
+            "const": "continuous"
+          },
+          "data_scope": {
+            "const": "allocated_receipt_totals"
+          },
+          "authorization": {
+            "type": "object",
+            "readOnly": true,
+            "properties": {
+              "proposed_by": {
+                "type": "integer"
+              },
+              "approved_by": {
+                "type": "integer"
+              },
+              "approved_in_organization": {
+                "type": "string"
+              },
+              "approved_role": {
+                "type": "string"
+              },
+              "approved_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "accepted_version": {
+                "type": "integer"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "basis",
+          "supplier_basis_points",
+          "tax_basis_points",
+          "loss_policy",
+          "bundle_basis",
+          "movement_policy",
+          "costs",
+          "rounding",
+          "refund_policy",
+          "frequency",
+          "data_scope"
+        ]
+      },
+      "SponsoredVoucherTerms": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "maxLength": 60,
+            "pattern": "^[A-Z0-9_-]+$"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "fixed",
+              "percent"
+            ]
+          },
+          "value": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000000
+          },
+          "maximum_discount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000000
+          },
+          "minimum_subtotal": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000000000
+          },
+          "usage_limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "store_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          "product_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          "restore_policy": {
+            "type": "string",
+            "enum": [
+              "never",
+              "on_full_refund"
+            ]
+          },
+          "terms": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "kind",
+          "value",
+          "maximum_discount",
+          "minimum_subtotal",
+          "usage_limit",
+          "store_ids",
+          "product_ids",
+          "restore_policy",
+          "terms"
+        ]
+      },
+      "SponsorshipTerms": {
+        "type": "object",
+        "properties": {
+          "sponsor_basis_points": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 10000
+          },
+          "budget_amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000000
+          },
+          "budget_restore": {
+            "enum": [
+              "never",
+              "proportional_refund"
+            ]
+          },
+          "data_scope": {
+            "const": "allocated_receipt_totals"
+          },
+          "voucher": {
+            "$ref": "#/components/schemas/SponsoredVoucherTerms"
+          },
+          "authorization": {
+            "type": "object",
+            "readOnly": true,
+            "properties": {
+              "proposed_by": {
+                "type": "integer"
+              },
+              "approved_by": {
+                "type": "integer"
+              },
+              "approved_in_organization": {
+                "type": "string"
+              },
+              "approved_role": {
+                "type": "string"
+              },
+              "approved_at": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "accepted_version": {
+                "type": "integer"
+              },
+              "reason": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "required": [
+          "sponsor_basis_points",
+          "budget_amount",
+          "budget_restore",
+          "data_scope",
+          "voucher"
+        ]
+      },
+      "CommercialAgreementInput": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "operation_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "contract_id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "starts_on": {
+                "type": "string",
+                "format": "date"
+              },
+              "ends_on": {
+                "type": "string",
+                "format": "date"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "consignment"
+              },
+              "order_id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "terms": {
+                "$ref": "#/components/schemas/StandingConsignmentTerms"
+              }
+            },
+            "required": [
+              "operation_id",
+              "contract_id",
+              "starts_on",
+              "ends_on",
+              "reference",
+              "kind",
+              "order_id",
+              "terms"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "operation_id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "contract_id": {
+                "type": "string",
+                "description": "ULID"
+              },
+              "starts_on": {
+                "type": "string",
+                "format": "date"
+              },
+              "ends_on": {
+                "type": "string",
+                "format": "date"
+              },
+              "reference": {
+                "type": "string"
+              },
+              "kind": {
+                "const": "sponsored_promo"
+              },
+              "terms": {
+                "$ref": "#/components/schemas/SponsorshipTerms"
+              }
+            },
+            "required": [
+              "operation_id",
+              "contract_id",
+              "starts_on",
+              "ends_on",
+              "reference",
+              "kind",
+              "terms"
+            ]
+          }
+        ]
+      },
+      "CommercialAgreement": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "contract_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "partner_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "proposer_organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "supply_order_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "active_order_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "consignment",
+              "sponsored_promo"
+            ]
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "accepted",
+              "rejected",
+              "withdrawn",
+              "suspended"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "starts_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "ends_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "terms": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/StandingConsignmentTerms"
+              },
+              {
+                "$ref": "#/components/schemas/SponsorshipTerms"
+              }
+            ]
+          },
+          "reference": {
+            "type": "string"
+          },
+          "created_by": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "decided_by": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "activated_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "stopped_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "budget_spent": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "last_error_code": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "last_processed_at": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "contract_id",
+          "organization_id",
+          "partner_id",
+          "proposer_organization_id",
+          "kind",
+          "status",
+          "version",
+          "starts_on",
+          "ends_on",
+          "terms",
+          "reference",
+          "created_by",
+          "budget_spent"
+        ]
+      },
+      "CommercialEntry": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "commercial_agreement_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "commercial_position_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "position_version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "amount": {
+            "type": "integer"
+          },
+          "basis_amount": {
+            "type": "integer"
+          },
+          "snapshot": {
+            "type": "string",
+            "description": "JSON encoded frozen agreement, limited attributed receipt data, original sold time and cumulative projection. Signed immutable delta; not a POS cash movement."
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "commercial_agreement_id",
+          "commercial_position_id",
+          "position_version",
+          "amount",
+          "basis_amount",
+          "snapshot",
+          "created_at"
+        ]
+      },
+      "CommercialPayment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "commercial_agreement_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "signed_amount": {
+            "type": "integer"
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "bank_transfer"
+            ]
+          },
+          "reference": {
+            "type": "string"
+          },
+          "evidence_reference": {
+            "type": "string"
+          },
+          "verified_by": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "paid_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "commercial_agreement_id",
+          "signed_amount",
+          "method",
+          "reference",
+          "evidence_reference",
+          "verified_by",
+          "paid_on",
+          "created_at"
+        ]
+      },
+      "CommercialAgreementContext": {
+        "type": "object",
+        "properties": {
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "agreement": {
+            "$ref": "#/components/schemas/CommercialAgreement"
+          },
+          "supplier_receivable": {
+            "type": "integer"
+          },
+          "own_receivable": {
+            "type": "integer"
+          },
+          "entries": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommercialEntry"
+                }
+              },
+              "current_page": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "per_page": {
+                "const": 50
+              },
+              "last_page": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "data",
+              "current_page",
+              "per_page",
+              "last_page",
+              "total"
+            ]
+          },
+          "payments": {
+            "type": "object",
+            "properties": {
+              "data": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/CommercialPayment"
+                }
+              },
+              "current_page": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "per_page": {
+                "const": 50
+              },
+              "last_page": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "total": {
+                "type": "integer",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "data",
+              "current_page",
+              "per_page",
+              "last_page",
+              "total"
+            ]
+          }
+        },
+        "required": [
+          "organization_id",
+          "agreement",
+          "supplier_receivable",
+          "own_receivable",
+          "entries",
+          "payments"
+        ]
+      },
+      "CommercialDecisionInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "reason": {
+            "type": "string"
+          },
+          "consent": {
+            "type": "boolean"
+          },
+          "sharing_consented": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "reason"
+        ]
+      },
+      "CommercialPaymentInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "direction": {
+            "enum": [
+              "collection",
+              "payout"
+            ]
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000000000
+          },
+          "method": {
+            "enum": [
+              "cash",
+              "bank_transfer"
+            ]
+          },
+          "reference": {
+            "type": "string"
+          },
+          "evidence_reference": {
+            "type": "string"
+          },
+          "paid_on": {
+            "type": "string",
+            "format": "date"
+          },
+          "verified": {
+            "const": true
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "direction",
+          "amount",
+          "method",
+          "reference",
+          "evidence_reference",
+          "paid_on",
+          "verified"
+        ]
+      },
+      "CommercialOptions": {
+        "type": "object",
+        "properties": {
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_type": {
+            "enum": [
+              "center",
+              "partner"
+            ]
+          },
+          "contracts": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "orders": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "has_more_contracts": {
+            "type": "boolean"
+          },
+          "has_more_orders": {
+            "type": "boolean"
+          },
+          "selected_order": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "stores": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "name"
+              ]
+            }
+          },
+          "products": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "sku": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "id",
+                "sku",
+                "name"
+              ]
+            }
+          }
+        },
+        "required": [
+          "organization_id",
+          "organization_type",
+          "contracts",
+          "orders",
+          "has_more_contracts",
+          "has_more_orders",
+          "selected_order",
+          "stores",
+          "products"
         ]
       }
     }

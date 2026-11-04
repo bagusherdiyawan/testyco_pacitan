@@ -4,6 +4,7 @@ namespace App\Modules\Promotions\Application;
 
 use App\Models\User;
 use App\Modules\Catalog\Infrastructure\Product;
+use App\Modules\Commercial\Application\SponsoredPromotions;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
@@ -106,7 +107,7 @@ final class VoucherBook
             $left -= $take;
         }
 
-        return ['id' => $v->id, 'code' => $v->code, 'version' => $v->version, 'discount_amount' => $discount, 'line_discounts' => $splits, 'funding_organization_id' => $v->funding_organization_id, 'restore_policy' => $v->restore_policy, 'terms' => $v->terms];
+        return ['id' => $v->id, 'code' => $v->code, 'version' => $v->version, 'discount_amount' => $discount, 'line_discounts' => $splits, 'funding_organization_id' => $v->funding_organization_id, 'restore_policy' => $v->restore_policy, 'terms' => $v->terms, ...($v->commercial_agreement_id ? app(SponsoredPromotions::class)->quote($v, $discount, $lock) : [])];
     }
 
     public function redeem(array $snapshot, string $sale): void
@@ -115,6 +116,7 @@ final class VoucherBook
         abort_unless($v->used_count < $v->usage_limit, 409);
         $v->increment('used_count');
         DB::table('voucher_redemptions')->insert(['id' => (string) Str::ulid(), 'voucher_id' => $v->id, 'sale_id' => $sale, 'discount_amount' => $snapshot['discount_amount'], 'redeemed_at' => now()]);
+        app(SponsoredPromotions::class)->redeemed($snapshot, $sale);
     }
 
     public function restore(?array $snapshot, string $sale, bool $fullyRefunded): void

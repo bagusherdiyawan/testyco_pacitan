@@ -2,9 +2,11 @@
 
 namespace App\Modules\Inventory\Application;
 
+use App\Modules\Commercial\Application\ConsignmentAutomation;
 use App\Modules\Inventory\Domain\StockBucket;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use App\Modules\Reliability\Application\Inbox;
+use App\Modules\Reliability\Application\RecallCoordinator;
 use App\Modules\Reliability\ReliabilityServiceProvider;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -24,6 +26,10 @@ final class StockLedger
             $this->apply($record, $actor, [$bucket => $pieces], $sourceType, $sourceId, $note);
         }
 
+        if (app()->getProvider(ReliabilityServiceProvider::class)) {
+            app(RecallCoordinator::class)->received($record, $sourceType, $sourceId);
+        }
+
         return $record->fresh()->toArray();
     }
 
@@ -31,6 +37,7 @@ final class StockLedger
     {
         $batch = InventoryBatch::where('store_id', $store)->where('product_id', $product)->where('pack_size', $packSize)->lockForUpdate()->findOrFail($batchId);
         app(FoodSafety::class)->assertEligible($batch, 'usable');
+        app(ConsignmentAutomation::class)->guardDispatch($batch->id);
         $pieces = $packs * $packSize;
         abort_unless($batch->usable_pieces >= $pieces, 409, 'Stok batch tidak cukup; stok karantina tidak dapat dikirim.');
         $this->apply($batch, $actor, ['usable' => -$pieces], $sourceType, $sourceId);

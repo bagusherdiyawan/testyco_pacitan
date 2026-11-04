@@ -33,7 +33,7 @@ final class Inbox
         if (! $org) {
             return;
         }$roles = ['owner', 'admin', 'partner_lead'];
-        $titles = ['order.created' => 'Pengajuan pesanan perlu ditinjau', 'order.approve' => 'Pesanan telah disetujui', 'order.reject' => 'Pesanan ditolak', 'shipment.dispatched' => 'Kiriman perlu diperiksa penerima', 'shipment.received' => 'Penerimaan kiriman dicatat', 'billing.invoice_proposed' => 'Usulan tagihan perlu ditinjau', 'billing.credit_proposed' => 'Usulan kredit perlu ditinjau', 'billing.payment_verified' => 'Pembayaran terverifikasi dicatat', 'stock_count.created' => 'Pengajuan hitung/susut perlu ditinjau', 'asset.placement_proposed' => 'Usulan serah terima aset perlu ditinjau', 'asset.incident_reported' => 'Insiden aset perlu ditindaklanjuti', 'food.recalled' => 'Recall batch aktif: periksa stok', 'food.sop_approved' => 'SOP stok diperbarui'];
+        $titles = ['commercial.proposed' => 'Usulan perjanjian otomatis perlu persetujuan', 'commercial.accept' => 'Perjanjian otomatis disetujui', 'commercial.payment_verified' => 'Pembayaran penyelesaian terverifikasi', 'order.created' => 'Pengajuan pesanan perlu ditinjau', 'order.approve' => 'Pesanan telah disetujui', 'order.reject' => 'Pesanan ditolak', 'shipment.dispatched' => 'Kiriman perlu diperiksa penerima', 'shipment.received' => 'Penerimaan kiriman dicatat', 'billing.invoice_proposed' => 'Usulan tagihan perlu ditinjau', 'billing.credit_proposed' => 'Usulan kredit perlu ditinjau', 'billing.payment_verified' => 'Pembayaran terverifikasi dicatat', 'stock_count.created' => 'Pengajuan hitung/susut perlu ditinjau', 'asset.placement_proposed' => 'Usulan serah terima aset perlu ditinjau', 'asset.incident_reported' => 'Insiden aset perlu ditindaklanjuti', 'food.recalled' => 'Recall batch aktif: periksa stok', 'food.sop_approved' => 'SOP stok diperbarui'];
         if (! isset($titles[$action])) {
             return;
         }$store = null;
@@ -64,6 +64,8 @@ final class Inbox
         } elseif ($action === 'stock_count.created') {
             $store = $after['store_id'] ?? null;
             $path = '/app/stores/'.$store.'/operations';
+        } elseif (str_starts_with($action, 'commercial.')) {
+            $path = '/app/organizations/'.$org.'/commercial-agreements/'.($after['commercial_agreement_id'] ?? $subject);
         } elseif (str_starts_with($action, 'food.')) {
             $path = '/app/organizations/'.$org.'/food-safety';
         }

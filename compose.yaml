@@ -27,3 +27,16 @@ services:
     depends_on:
       api:
         condition: service_healthy
+  scheduler:
+    <<: *runtime
+    working_dir: /app/apps/api
+    volumes: [".:/app"]
+    command: ["artisan", "schedule:work", "--no-interaction"]
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(str_contains(file_get_contents('/proc/1/cmdline'), 'schedule:work') ? 0 : 1);"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    depends_on:
+      api:
+        condition: service_healthy

@@ -86,6 +86,7 @@ final class BillingWorkflow
     public function invoice(User $u, string $order, array $v): array
     {
         return $this->run($u, $order, $v, 'invoice', 'source', function ($o) use ($u, $v) {
+            abort_if(DB::table('commercial_agreements')->where('active_order_id', $o->id)->exists(), 409, 'Pesanan memakai perjanjian otomatis; jangan tagih dua kali.');
             $lines = [];
             $shipmentIds = [];
             $report = null;
@@ -248,6 +249,7 @@ final class BillingWorkflow
     public function report(User $u, string $order, array $v): array
     {
         return $this->run($u, $order, $v, 'consignment', 'target', function ($o) use ($u, $v) {
+            abort_if(DB::table('commercial_agreements')->where('active_order_id', $o->id)->exists(), 409, 'Pesanan memakai perjanjian otomatis.');
             abort_if(Invoice::where('supply_order_id', $o->id)->where('mode', 'buyout')->whereIn('status', ['pending', 'accepted'])->exists(), 409, 'Pesanan sudah dalam putus beli.');
             $contract = PartnershipContract::where('organization_id', $o->supplier_organization_id)->where('partner_id', $o->organization_id)->where('status', 'accepted')->where('mode', 'consignment')->lockForUpdate()->findOrFail($v['contract_id']);
             abort_unless($v['period_start'] >= $contract->starts_on->format('Y-m-d') && $v['period_end'] <= $contract->ends_on->format('Y-m-d'), 422, 'Periode di luar kontrak.');

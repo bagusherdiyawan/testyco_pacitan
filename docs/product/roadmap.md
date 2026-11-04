@@ -82,3 +82,6 @@ Pembaruan4 November2026 (menggantikan keterangan backlog keuangan/retur/non-tuna
 
 
 Status terkini4 November2026: DL-01–DL-20 selesai pada batas development [delivery-status](delivery-status.md). [DL-18–DL-20](../reliability-and-offline.md) menutup inbox/SMTP dan SOP eksplisit, MFA/reset/sesi/antrean offline tunai, aset serta laporan komersial. Push ditunda pengguna. Gate produksi mencakup SMTP eksternal, PostgreSQL/concurrency, perangkat/Keystore/printer, backup/restore dan UAT; bukan fitur yang tetap berstatus belum pada paket delivery ini.
+
+
+Delivery tambahan4 November2026: printer ESC/POS LAN/browser, konsinyasi/bagi hasil otomatis melalui addendum dua pihak, sponsor voucher lintas organisasi dengan budget atomik, dan recall berdasarkan jejak kiriman serta keputusan penerima kini tersedia. Lihat [cakupan](../printing-commercial-and-recalls.md) dan [bukti](../verification.md). Push/gateway tetap dikesampingkan; perangkat fisik dan persetujuan blok recall lintas tenant otomatis belum dikonfirmasi.

@@ -1,3 +1,5 @@
+import '../../printing/application/receipt_printer.dart';
+import '../../printing/presentation/receipt_print_page.dart';
 import 'package:flutter/material.dart';
 import 'receipt_history_page.dart';
 import 'refund_page.dart';
@@ -391,7 +393,22 @@ class _PosPageState extends State<PosPage> {
           padding: const EdgeInsets.all(16),
           children: [
             ...header(),
-            SaleReceipt(sale: model.receipt!),
+            SaleReceipt(
+              sale: model.receipt!,
+              onPrint: widget.repository.deviceState == null
+                  ? null
+                  : () => Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => ReceiptPrintPage(
+                          printer: ReceiptPrinter(
+                            widget.repository.deviceState!,
+                            '${widget.repository.api.baseUrl}:${widget.repository.api.identity?["id"]}',
+                          ),
+                          sale: model.receipt!,
+                        ),
+                      ),
+                    ),
+            ),
             if (model.context?['can_manage'] == true)
               OutlinedButton(
                 onPressed: model.busy

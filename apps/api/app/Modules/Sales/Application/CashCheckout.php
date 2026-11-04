@@ -4,6 +4,7 @@ namespace App\Modules\Sales\Application;
 
 use App\Models\User;
 use App\Modules\Catalog\Application\RetailPricing;
+use App\Modules\Commercial\Application\ConsignmentAutomation;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Inventory\Application\SaleStock;
 use App\Modules\Promotions\Application\VoucherBook;
@@ -123,6 +124,7 @@ final class CashCheckout
                 $allocation->id = $a['allocation_id'];
                 $allocation->save();
             }
+            app(ConsignmentAutomation::class)->guardSale($sale);
             $this->shifts->recordSale($shift, $intent->total_amount, $method);
             if ($voucher) {
                 $this->vouchers->redeem($voucher, $sale->id);
@@ -155,6 +157,7 @@ final class CashCheckout
             $allocation->id = $a['allocation_id'];
             $allocation->save();
         }
+        app(ConsignmentAutomation::class)->guardSale($sale);
         $this->shifts->recordSale($shift, $snapshot['total_amount']);
         Audit::record($actor->id, $record->organization_id, 'sale.offline_completed', $sale->id, null, ['offline_record_id' => $record->id, 'number' => $sale->number, 'total_amount' => $sale->total_amount]);
 

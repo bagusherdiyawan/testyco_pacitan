@@ -2,7 +2,7 @@
 
 Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jaringan mitra dan POS dimsum.
 
-**DL-01–DL-20 telah diimplementasikan dalam cakupan development**: operasional stok/pesanan, POS/shift, retur/tagihan/voucher, kontrak/aset, inbox/SMTP/SOP, MFA dan offline tunai dengan review konflik. Lihat [status tiap delivery/platform](docs/product/delivery-status.md) dan [panduan DL-18–DL-20](docs/reliability-and-offline.md). PostgreSQL/concurrency, perangkat nyata dan UAT tetap gate produksi.
+**DL-01–DL-20 telah diimplementasikan dalam cakupan development**: operasional stok/pesanan, POS/shift, retur/tagihan/voucher, kontrak/aset, inbox/SMTP/SOP, MFA dan offline tunai dengan review konflik. Lihat [status tiap delivery/platform](docs/product/delivery-status.md) dan [panduan DL-18–DL-20](docs/reliability-and-offline.md). PostgreSQL/concurrency, perangkat nyata dan UAT tetap gate produksi. Delivery tambahan [printer, bagi hasil otomatis, sponsor promo dan recall terkoordinasi](docs/printing-commercial-and-recalls.md) kini tersedia pada cakupan yang dijelaskan di panduan tersebut.
 
 | Direktori | Isi |
 | --- | --- |
@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.28.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.29.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -125,7 +125,7 @@ Progres delivery dilacak dengan [ID dan status tetap](docs/product/delivery-stat
 
 Katalog lokal tetap milik organisasi; katalog B2B pusat kini tersedia untuk pemohon berwenang. SKU tujuan dipilih eksplisit per baris order dengan isi kemasan dan kondisi yang sama. Harga/konversi order sudah mempunyai snapshot. Gambar, resep paket POS, harga efektif/khusus mitra dan kontrak/PDF/consent tersedia; PostgreSQL belum diverifikasi. Akun dapat dinonaktifkan dan [direaktivasi melalui API/web](docs/account-reactivation.md); reset sandi SMTP dan MFA/sesi tersedia; penggabungan identitas lintas organisasi tetap di luar cakupan.
 
-Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Revisi SKU/jumlah bagian belum dikirim tersedia dengan persetujuan ulang; retur karantina/kredit, refund, voucher, invoice manual, aset, pelaporan komersial dan offline tunai kini tersedia. QRIS/transfer memerlukan verifikasi manual; gateway otomatis dan integrasi printer belum tersedia. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
+Ordering/approval serta ledger intake/dispatch/receipt sudah tersedia. Revisi SKU/jumlah bagian belum dikirim tersedia dengan persetujuan ulang; retur karantina/kredit, refund, voucher, invoice manual, aset, pelaporan komersial dan offline tunai kini tersedia. QRIS/transfer memerlukan verifikasi manual; gateway otomatis tetap dikesampingkan; integrasi ESC/POS LAN dan cetak browser kini tersedia, perangkat fisik belum diuji. Jangan memakai sistem ini untuk mencatat penjualan nyata sebelum alur stok, keuangan dan UAT selesai.
 
 Konsinyasi memerlukan kontrak/laporan disetujui; stok negatif ditolak. Offline hanya tunai dengan review konflik. SOP masa simpan/FEFO diaktifkan pimpinan organisasi dengan referensi dan menit eksplisit, tanpa umur simpan bawaan. QRIS/transfer masih diverifikasi manual, akses data mitra tetap scoped. Pembukaan/pengukusan memakai batch beku yang sama; resep paket memakai alokasi komponen eksplisit. Susut proses dicatat langsung bersama hasil fisik; susut terpisah menunggu review. Rollback migrasi kontrol stok ditolak setelah digunakan agar data tidak hilang.
 
@@ -140,3 +140,6 @@ Setup membutuhkan Docker registry, Packagist, codeload.github.com dan pub.dev. W
 - [Kebutuhan dan keputusan terbuka](docs/product/requirements.md)
 - [Roadmap](docs/product/roadmap.md)
 - [Bukti pengujian](docs/verification.md)
+
+
+Delivery tambahan: [printer, konsinyasi/bagi hasil otomatis, sponsor promo dan recall terkoordinasi](docs/printing-commercial-and-recalls.md). Perjanjian dua pihak mengaktifkan formula/budget eksplisit; pembukuan otomatis berupa jurnal penyelesaian terpisah dari invoice manual. Compose kini menjalankan scheduler tiap menit. Printer native mendukung ESC/POS LAN58/80mm dan browser memakai driver sistem; kompatibilitas model fisik belum dikonfirmasi. Recall penerima memerlukan hold/release pimpinan organisasi; penahanan lintas tenant otomatis menunggu keputusan pengguna. Push/gateway tetap dikesampingkan.

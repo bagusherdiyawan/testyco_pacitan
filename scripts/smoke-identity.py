@@ -798,6 +798,43 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         with opener.open(web+f'/app/organizations/{org}/reports/commercial/export'+qp) as cr:
             assert 'no-store' in cr.headers['Cache-Control'] and 'commercial-report.csv' in cr.headers['Content-Disposition']
         assert 'Keamanan akun dan perangkat' in opener.open(web+'/app/account/security').read().decode()
+        # Additional automation: dedicated consignment stock and explicit cross-party standing consent.
+        astock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':new_source['id'],'batch_code':'AUTO-CONSIGNMENT-LOT','expires_on':'2030-01-01','quantity_packs':2,'note':'Dedicated consignment lot'},owner,201)['data']
+        ao=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':new_source['id'],'local_product_id':new_local['id'],'quantity_packs':2}]},lead_token,201)['data']
+        ao=api(base,'POST',f'orders/{ao["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':ao['version']},lead_token)['data']
+        ao=api(base,'POST',f'orders/{ao["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':ao['version'],'source_store_id':source},owner)['data']
+        ad=api(base,'POST',f'orders/{ao["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':ao['version'],'handler':'Dedicated stock','lines':[{'order_line_id':ao['lines'][0]['id'],'allocations':[{'batch_id':astock['id'],'quantity_packs':2}]}]},owner,201)['data']
+        api(base,'POST',f'shipments/{ad["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':ad['order']['version'],'lines':[{'shipment_line_id':ad['shipment']['lines'][0]['id'],'good_packs':2,'damaged_packs':0}]},lead_token)
+        agp=f'/app/organizations/{center}/commercial-agreements'
+        ah=central_browser.open(web+agp+'?'+urlencode({'order_id':ao['id']})).read().decode();af=fields(ah,agp)
+        af.update({'contract_id':cc['id'],'order_id':ao['id'],'starts_on':today,'ends_on':'2030-12-31','reference':'Standing automatic share agreed','terms[basis]':'net_sales','terms[supplier_basis_points]':'3000','terms[tax_basis_points]':'0','terms[loss_policy]':'zero_floor','terms[bundle_basis]':'reject'})
+        central_browser.open(Request(web+agp,data=urlencode(af).encode())).read()
+        ag=next(g for g in api(base,'GET',f'organizations/{center}/commercial-agreements',token=owner)['data'] if g['kind']=='consignment')
+        partner_ag=f'/app/organizations/{org}/commercial-agreements/'+ag['id'];ah=opener.open(web+partner_ag).read().decode();af=fields(ah,partner_ag);af.update({'action':'accept','reason':'All formulas and data scope agreed','consent':'1','sharing_consented':'1'});web_post(partner_ag,af).read()
+        pp=f'/app/organizations/{org}/commercial-agreements';ph=opener.open(web+pp).read().decode();pf=fields(ph,pp)
+        pf.update({'contract_id':cc['id'],'starts_on':today,'ends_on':'2030-12-31','reference':'Agreed sponsor budget','terms[sponsor_basis_points]':'5000','terms[budget_amount]':'5000','terms[budget_restore]':'proportional_refund','terms[voucher][code]':'CROSSORG1000','terms[voucher][kind]':'fixed','terms[voucher][value]':'1000','terms[voucher][maximum_discount]':'1000','terms[voucher][minimum_subtotal]':'0','terms[voucher][usage_limit]':'5','terms[voucher][store_ids][0]':store,'terms[voucher][product_ids][0]':new_local['id'],'terms[voucher][restore_policy]':'on_full_refund','terms[voucher][terms]':'Sponsor50percent issuer50percent'})
+        web_post(pp,pf).read();pg=next(g for g in api(base,'GET',f'organizations/{org}/commercial-agreements',token=lead_token)['data'] if g['kind']=='sponsored_promo')
+        cp=agp+'/'+pg['id'];ph=central_browser.open(web+cp).read().decode();pf=fields(ph,cp);pf.update({'action':'accept','reason':'Sponsor confirms budget and refund rules','consent':'1','sharing_consented':'1'});central_browser.open(Request(web+cp,data=urlencode(pf).encode())).read()
+        ab=next(b for b in api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data'] if b['batch_code']=='AUTO-CONSIGNMENT-LOT')
+        api(base,'POST',f'stores/{store}/inventory/processes',{'operation_id':str(uuid.uuid4()),'batch_id':ab['id'],'expected_revision':ab['stock_revision'],'kind':'open','quantity_packs':1,'reason':'Actual consignment pack opened'},lead_token,201)
+        ash=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Automatic settlement fixture','opening_cash':0},cashier_token,201)['data']
+        ac={'operation_id':str(uuid.uuid4()),'shift_id':ash['id'],'voucher_code':'CROSSORG1000','lines':[{'product_id':new_local['id'],'unit':'piece','quantity':2,'allocations':[{'batch_id':ab['id'],'bucket':'opened','quantity':2}]}]}
+        ai=api(base,'POST',f'stores/{store}/sales/intents',ac,cashier_token,201)['data'];paid=api(base,'POST',f'sales/intents/{ai["id"]}/pay',{'operation_id':str(uuid.uuid4()),'payment_method':'cash','cash_received':20000},cashier_token)['data']
+        assert paid['voucher_snapshot']['sponsor_amount']==500 and paid['voucher_snapshot']['issuer_amount']==500
+        assert json.loads(docker('exec',api_name,'php','artisan','commercial:accrue','--limit=100'))=={'done':1,'failed':0}
+        assert api(base,'GET',f'organizations/{center}/commercial-agreements/{ag["id"]}',token=owner)['own_receivable']==paid['total_amount']*3000//10000
+        assert api(base,'GET',f'organizations/{center}/commercial-agreements/{pg["id"]}',token=owner)['own_receivable']==-500
+        assert 'Jurnal selisih immutable' in central_browser.open(web+agp+'/'+ag['id']).read().decode()
+        thermal=cashier_browser.open(web+f'/app/pos/sales/{paid["id"]}').read().decode();assert '58 mm' in thermal and '80 mm' in thermal
+        rr=api(base,'POST',f'organizations/{center}/food-safety/recalls',{'operation_id':str(uuid.uuid4()),'product_id':new_source['id'],'batch_code':'AUTO-CONSIGNMENT-LOT','reason':'Supplier inspection issue','reference':'Recall evidence'},owner,201)['data']
+        campaign=api(base,'POST',f'organizations/{center}/recalls',{'operation_id':str(uuid.uuid4()),'recall_id':rr['id'],'instructions':'Inspect traced lot and confirm physical action'},owner,201)['data']
+        rp=f'/app/organizations/{org}/recalls/{campaign["id"]}';rh=opener.open(web+rp).read().decode();rf=fields(rh,rp);rf.update({'action':'hold','observed_pieces':'14','evidence_reference':'Actual physical check','reason':'Goods held by recipient leader'});web_post(rp,rf).read()
+        assert api(base,'GET',f'organizations/{org}/recalls/{campaign["id"]}',token=lead_token)['targets']['data'][0]['status']=='held'
+        api(base,'POST',f'stores/{store}/sales/intents',{**ac,'operation_id':str(uuid.uuid4())},cashier_token,expected=409)
+        ash=api(base,'GET',f'shifts/{ash["id"]}',token=cashier_token)['data'];assert ash['expected_cash']==paid['total_amount']
+        api(base,'POST',f'shifts/{ash["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':ash['version'],'counted_cash':paid['total_amount']},cashier_token)
+        ledger_before+=4
+        print('PASS: standing consignment BFF consent/automatic share, sponsor consent/budget/claim, thermal controls, provenance recall/recipient hold',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

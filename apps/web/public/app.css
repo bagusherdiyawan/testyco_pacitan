@@ -4,7 +4,7 @@
 
 .stock-balances{display:grid;grid-template-columns:1fr auto;gap:8px}.stock-balances dt,.stock-balances dd{margin:0}.button:disabled{cursor:not-allowed;opacity:.55}
 
-@media print{.topnav,.no-print,.notice,.errors{display:none!important}body{background:white}main{max-width:80mm;padding:0}.receipt{border:0;padding:0}.receipt h1{font-size:1.4rem}}
+@media print{.topnav,.no-print,.notice,.errors{display:none!important}body{background:white}main{width:var(--receipt-width,80mm);max-width:100%;padding:0}.receipt{border:0;border-radius:0;padding:0;margin:0;font:11px monospace;overflow-wrap:anywhere}.receipt p{line-height:1.35}.receipt h2{font-size:14px}.receipt h1{font-size:1.4rem}}
 
 .audit-record,.audit-record section{min-width:0;overflow-wrap:anywhere}.audit-snapshot{white-space:pre-wrap;overflow-wrap:anywhere;max-width:100%;font: .9rem ui-monospace,monospace;line-height:1.6}
 

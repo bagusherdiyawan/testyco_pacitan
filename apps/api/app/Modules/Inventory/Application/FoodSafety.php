@@ -12,9 +12,11 @@ final class FoodSafety
 
     private array $recalls = [];
 
+    private array $coordinated = [];
+
     public function forget(string $org): void
     {
-        unset($this->policies[$org],$this->recalls[$org]);
+        unset($this->policies[$org],$this->recalls[$org],$this->coordinated[$org]);
     }
 
     public function policy(string $org): mixed
@@ -30,6 +32,12 @@ final class FoodSafety
     public function eligible(InventoryBatch $b, string $bucket): bool
     {
         $p = $this->policy($b->organization_id);
+        if (! array_key_exists($b->organization_id, $this->coordinated)) {
+            $this->coordinated[$b->organization_id] = DB::table('recall_targets')->where('organization_id', $b->organization_id)->where('status', 'held')->pluck('inventory_batch_id')->flip()->all();
+        }
+        if (isset($this->coordinated[$b->organization_id][$b->id])) {
+            return false;
+        }
         if (isset($this->recalls[$b->organization_id][$b->product_id.'|'.$b->batch_code])) {
             return false;
         }

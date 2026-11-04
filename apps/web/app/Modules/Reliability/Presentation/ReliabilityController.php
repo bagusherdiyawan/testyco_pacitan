@@ -14,7 +14,7 @@ final class ReliabilityController
 
     private function path(string $p): bool
     {
-        return (bool) preg_match('~^/app/(organizations/[A-Za-z0-9_-]+(?:/food-safety)?|orders/[A-Za-z0-9_-]+(?:/billing)?|stores/[A-Za-z0-9_-]+/operations|assets/[A-Za-z0-9_-]+)$~D', $p);
+        return (bool) preg_match('~^/app/(organizations/[A-Za-z0-9_-]+(?:/food-safety|/recalls/[A-Za-z0-9_-]+|/commercial-agreements/[A-Za-z0-9_-]+)?|orders/[A-Za-z0-9_-]+(?:/billing)?|stores/[A-Za-z0-9_-]+/operations|assets/[A-Za-z0-9_-]+)$~D', $p);
     }
 
     public function fefo(Request $r, string $store): mixed

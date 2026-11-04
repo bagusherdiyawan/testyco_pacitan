@@ -1,5 +1,19 @@
 # Bukti implementasi dan pengujian
 
+## Status terkini — printer dan otomatisasi lintas organisasi, 4 November 2026
+
+**634 tes lulus:** API260/3086 assertions, web146/1276, Flutter228. Ini mencakup22 tes tambahan di atas baseline612. Pemeriksaan ekuivalen scripts/check menggunakan Composer terkunci dan SDK Flutter3.35.7/Dart3.9.2 terverifikasi pada host karena batas VFS cloud; analyzer bersih. PHP Pint, Blade cache, Composer strict dan sintaks JS struk lulus. Tidak ada perubahan dependensi atau lockfile pada delivery tambahan ini.
+
+- Printer6 tes: layout/nominal/WIB/karakter kontrol/copy pada58/80mm, penolakan bukti OFF, I/O nyata ke socket TCP lokal, kegagalan/reopen/no-auto-retry, konfirmasi fisik/arsip serta halaman390/1200px. Tidak mengirim byte ke printer fisik. Device model, native USB/Bluetooth, firmware/codepage/cut dan hasil kertas belum diuji.
+- API CommercialAutomation8 dan CoordinatedRecall2: dua pihak/role/tenant/onboarding override, formula net-sales/margin/negative loss, missing cost, activated-before-first-sale, idempotent deltas/refund tanpa stock return, actual verified settlement, sponsor budget dua draft, refund budget correction, ledger provenance/late receipt, recipient hold/release dan source close yang tidak melepas hold. Snapshot asal penjualan tersembunyi dari struk dan tetap benar setelah kredit batch berikutnya; identitas persetujuan bertahan setelah suspend.
+- Web6 tes: pilihan term/budget, escape/scope, dua consent, retry UUID/body/version/evidence tidak berubah melalui denial/401, target recall asing ditolak, thermal controls dan hanya GET saat membuka struk. Pemeriksaan memakai Backend HTTP, bukan DB domain.
+- Full isolated `scripts/smoke-identity.py` lulus pada data/container sementara: seluruh alur lama, dedicated consignment receipt→BFF proposal/counterparty consent→funded voucher/sponsor consent→cash checkout→command accrual→signed balances, thermal controls dan coordinated recall→recipient BFF physical hold→checkout409 tanpa ledger tambahan. Alur perjanjian/budget menghasilkan saldo bagi hasil dan sponsor terpisah, kas shift hanya net sale. Data development tidak diisi fixture.
+- `scripts/smoke-smtp.py` tetap lulus: dua pesan lokal dan job reset terenkripsi, tanpa email eksternal. API/web/scheduler Compose healthy; daftar schedule dan proses accrual tiap menit diverifikasi. Queue reset-email tetap worker terpisah. Migrasi22–24 diterapkan tanpa reset.
+- OpenAPI0.29.0:190 operasi unik/230 schemas, referensi lokal dan parameter path valid.13 path baru/15 operasi tambahan; path lama tidak berubah secara semantik. Snapshot voucher mendapat field sponsor; metadata asal alokasi internal tidak dibuka dalam kontrak struk.
+
+[Cakupan dan batas implementasi](printing-commercial-and-recalls.md): perjanjian eksplisit dua pihak, otomatisasi berupa jurnal penyelesaian (bukan faktur pajak/payout bank otomatis), printer ESC/POS LAN/browser dan recall dengan keputusan hold penerima. Pertanyaan model printer dan izin blok lintas tenant belum mendapat jawaban; tidak dianggap persetujuan. Push/gateway tetap dikesampingkan. PostgreSQL multi-koneksi, backup/restore, perangkat/printer nyata, browser visual dan UAT tetap gate terpisah; hasil CI remote tidak diklaim.
+
+
 ## Status terkini — DL-18–DL-20, 4 November 2026
 
 Bukti ini menggantikan angka/status backlog pada catatan historis di bawah. **612 tes lulus**: API250/2876 assertions, web140/1230, Flutter222. Full suites memakai ekuivalen scripts/check pada fallback SDK Flutter3.35.7/Dart3.9.2 terverifikasi; image Flutter Docker besar tidak dijalankan pada storage VFS lingkungan cloud ini. Analyzer bersih; Composer strict/lock, locked offline pub get, PHP Pint dan Blade cache diperiksa. Tiga dependensi Flutter ditambahkan secara sengaja untuk secure storage/path provider/AES-GCM dan pubspec.lock diperbarui, tanpa upgrade dependensi lain yang sudah ada.

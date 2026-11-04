@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 
 class SaleReceipt extends StatelessWidget {
-  const SaleReceipt({required this.sale, super.key});
+  const SaleReceipt({required this.sale, this.onPrint, super.key});
   final Map<String, dynamic> sale;
+  final VoidCallback? onPrint;
   String wib(String value) {
     final date = DateTime.tryParse(value);
     if (date == null) {
@@ -52,7 +53,11 @@ class SaleReceipt extends StatelessWidget {
             Text(
               'Refund Rp ${r['amount']} · ${r['payment_method']} · ${r['reference']}',
             ),
-          const Text('Struk digital · pencetakan perangkat belum terintegrasi'),
+          if (onPrint != null)
+            OutlinedButton(
+              onPressed: onPrint,
+              child: const Text('Cetak struk'),
+            ),
         ],
       ),
     ),

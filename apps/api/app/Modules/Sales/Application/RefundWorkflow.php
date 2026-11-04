@@ -3,9 +3,11 @@
 namespace App\Modules\Sales\Application;
 
 use App\Models\User;
+use App\Modules\Commercial\Application\SponsoredPromotions;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Inventory\Application\SaleReturns;
 use App\Modules\Promotions\Application\VoucherBook;
+use App\Modules\Promotions\Infrastructure\Voucher;
 use App\Modules\Sales\Infrastructure\Sale;
 use App\Modules\Sales\Infrastructure\SaleRefund;
 use App\Modules\Shifts\Application\PosAccess;
@@ -124,9 +126,13 @@ final class RefundWorkflow
                 }
             }
             // Voucher lock precedes batch locks, matching checkout's lock ordering.
+            if ($s->voucher_snapshot) {
+                Voucher::whereKey($s->voucher_snapshot['id'])->lockForUpdate()->firstOrFail();
+            }
             $this->vouchers->restore($s->voucher_snapshot, $id, $review['fully_refunded']);
             $this->stock->quarantine($s->organization_id, $s->store_id, $u->id, $allocations, $v['reason']);
             $s->increment('version');
+            app(SponsoredPromotions::class)->refunded($s);
             Audit::record($u->id, $s->organization_id, 'sale.refunded', $refund->id, null, $refund->toArray());
 
             return ['sale_id' => $id, 'sale_version' => $s->version, 'refund' => $refund->toArray()];

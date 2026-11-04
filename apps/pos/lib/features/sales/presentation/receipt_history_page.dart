@@ -1,3 +1,5 @@
+import '../../printing/application/receipt_printer.dart';
+import '../../printing/presentation/receipt_print_page.dart';
 import 'package:flutter/material.dart';
 import '../../../core/domain/wib_date_range.dart';
 import '../../../design_system/formatters.dart';
@@ -109,7 +111,23 @@ class _ReceiptHistoryPageState extends State<ReceiptHistoryPage> {
             if (model.busy) const LinearProgressIndicator(),
             if (model.error != null)
               ErrorPanel(message: model.error!, onRetry: model.retry),
-            if (model.receipt != null) SaleReceipt(sale: model.receipt!),
+            if (model.receipt != null)
+              SaleReceipt(
+                sale: model.receipt!,
+                onPrint: widget.repository.deviceState == null
+                    ? null
+                    : () => Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => ReceiptPrintPage(
+                            printer: ReceiptPrinter(
+                              widget.repository.deviceState!,
+                              '${widget.repository.api.baseUrl}:${widget.repository.api.identity?["id"]}',
+                            ),
+                            sale: model.receipt!,
+                          ),
+                        ),
+                      ),
+              ),
             if (result != null) ...[
               Text(
                 'Toko ${result.storeName} · ${result.scope == 'own' ? 'Struk saya' : 'Seluruh kasir toko'}',

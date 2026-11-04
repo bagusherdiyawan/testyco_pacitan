@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\User;
+use App\Modules\Commercial\CommercialServiceProvider;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
 use Illuminate\Support\Facades\Artisan;
@@ -39,3 +40,5 @@ Artisan::command('identity:bootstrap {--name=} {--email=}', function () {
 })->purpose('Membuat pemilik awal; tidak menyediakan password default');
 
 Schedule::command('reliability:deliver --limit=100')->everyMinute()->withoutOverlapping()->when(fn () => config('reliability.smtp_enabled') && config('mail.default') === 'smtp');
+
+Schedule::command('commercial:accrue --limit=100')->everyMinute()->withoutOverlapping()->when(fn () => app()->getProvider(CommercialServiceProvider::class));

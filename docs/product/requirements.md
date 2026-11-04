@@ -242,3 +242,6 @@ Pembaruan4 November2026 (menggantikan keterangan backlog keuangan/retur/non-tuna
 
 
 Keputusan chat4 November2026 untuk DL-18–DL-20: offline tunai saja dengan review konflik; SOP masa simpan/blok jual/FEFO disahkan pimpinan tiap organisasi; SMTP dahulu, push ditunda. Implementasi dan batas platform pada [panduan](../reliability-and-offline.md). Ini tidak menetapkan angka umur simpan makanan, default biaya/tanggung jawab aset, gateway atau izin membaca POS mitra.
+
+
+Permintaan pengguna4 November2026 berikutnya mengesampingkan push dan gateway, serta meminta printer, konsinyasi/bagi hasil otomatis, promo pendanaan lintas organisasi dan recall terkoordinasi. Implementasi dibatasi [addendum eksplisit dua pihak dan provenance](../printing-commercial-and-recalls.md), bukan persentase/HPP/anggaran bawaan atau izin umum membaca POS mitra. Printer default teknis ESC/POS LAN/browser sambil menunggu model/koneksi; keputusan penahanan lintas tenant belum diterima, sehingga pimpinan penerima memutuskan hold/release.

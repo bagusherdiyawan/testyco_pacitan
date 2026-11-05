@@ -16,14 +16,14 @@ Tanggal baseline:3 November2026; pembaruan DL-18–DL-20:4 November2026. Ini daf
 | DL-10 | Kasus selisih, catatan bersama, rencana pusat→konfirmasi mitra | Selesai API/web |
 | DL-11 | Pengganti grosir SKU/pack/sumber asli: kirim parsial→terima aktual→stok→selesai baik | Selesai API/web |
 | DL-12 | Layar Flutter kasus, rencana dan eksekusi pengganti | **Selesai Flutter mobile/tablet** |
-| DL-13 | Retur fisik/disposisi karantina dan pembukuan kredit | **Selesai API/web/Flutter untuk retur karantina; kredit pusat→mitra di API/web; susut melalui review stok** |
+| DL-13 | Retur fisik/disposisi karantina dan pembukuan kredit | **Selesai API/web/Flutter untuk retur karantina; kredit pusat→mitra di API/web/Flutter; susut melalui review stok** |
 | DL-14 | Substitusi SKU, tambah/hapus baris dan revisi setelah pengiriman | **Selesai API/web/Flutter; bagian belum dikirim, histori fisik tetap** |
-| DL-15 | Invoice/piutang/pembayaran grosir/pajak/konsinyasi | **Selesai API/web dengan ketentuan eksplisit per dokumen, persetujuan dan verifikasi manual; konsinyasi laporan disetujui** |
+| DL-15 | Invoice/piutang/pembayaran grosir/pajak/konsinyasi | **Selesai API/web/Flutter dengan ketentuan eksplisit per dokumen, persetujuan dan verifikasi manual; konsinyasi laporan disetujui** |
 | DL-16 | Refund POS, QRIS/non-tunai, promo/voucher | **Selesai API/web/Flutter: verifikasi non-tunai manual, refund ditinjau, voucher retail didanai penerbit** |
-| DL-17 | Gambar/resep/paket, harga efektif, kontrak/consent kemitraan | **Selesai API/web; Flutter gambar/harga/checkout paket** |
+| DL-17 | Gambar/resep/paket, harga efektif, kontrak/consent kemitraan | **Selesai API/web; Flutter gambar/harga/checkout paket dan administrasi kontrak/consent** |
 | DL-18 | Push/email/inbox, recall/FEFO/blok jual dan SOP masa simpan hasil olahan | **Selesai API/web: inbox/SMTP, recall/SOP/FEFO; Flutter inbox; push ditunda sesuai keputusan pengguna** |
 | DL-19 | Reset email/MFA, sesi perangkat aman dan antrean lintas restart/offline | **Selesai API/web/Flutter: reset SMTP, MFA, sesi terenkripsi dan offline tunai durable dengan review konflik** |
-| DL-20 | Aset/kontrak freezer/perangkat dan laporan B2B/piutang/margin | **Selesai API/web: aset/serah terima/perawatan/kembali, laporan B2B/saldo/margin berbukti** |
+| DL-20 | Aset/kontrak freezer/perangkat dan laporan B2B/piutang/margin | **Selesai API/web/Flutter: aset/serah terima/perawatan/kembali, laporan B2B/saldo/margin berbukti** |
 
 Gate kesiapan produksi dilacak terpisah: PostgreSQL/concurrency, backup/restore, hardening/deployment, perangkat/printer, browser interaktif dan UAT. Tes otomatis tidak dianggap persetujuan pilot atau pengganti gate tersebut.
 
@@ -39,3 +39,5 @@ DL-01–DL-20 kini diimplementasikan pada batas platform dan cakupan development
 
 
 Permintaan tambahan4 November2026 sudah diimplementasikan pada batas [delivery printer dan otomatisasi](../printing-commercial-and-recalls.md): printer ESC/POS LAN/browser, standing konsinyasi/bagi hasil, sponsor promo lintas organisasi serta recall terkoordinasi. Pembayaran bank tetap manual; penahanan penerima recall memerlukan pimpinan penerima. Bluetooth/USB native dan kompatibilitas printer fisik menunggu detail perangkat; push/gateway tetap dikesampingkan pengguna. Ini memperluas cakupan selesai DL-18–DL-20, tanpa mengubah hasil delivery sebelumnya menjadi belum.
+
+Koreksi5 November2026: [Bluetooth Android dan administrasi native](../native-administration-and-bluetooth.md) menambahkan lima layar administrasi Flutter, PDF kontrak native, keputusan invoice/kredit/laporan, konfigurasi voucher, lifecycle aset dan laporan/biaya komersial. Bluetooth Classic/SPP Android menjadi pilihan awal; LAN kompatibel. Detail model, APK dan cetak fisik belum diverifikasi. Blok recall otomatis dan pembayaran bank otomatis dilewati, bukan backlog yang harus dikerjakan dalam permintaan ini. Pengelolaan standing addendum/sponsor dan CSV tetap web.

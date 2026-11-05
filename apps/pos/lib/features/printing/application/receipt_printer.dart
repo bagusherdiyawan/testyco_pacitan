@@ -3,6 +3,9 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'package:uuid/uuid.dart';
 import '../../../core/storage/device_state.dart';
+import 'bluetooth_printer.dart';
+import 'printer_transport.dart';
+export 'printer_transport.dart';
 
 class EscPosReceipt {
   static String text(Object? value) =>
@@ -93,10 +96,6 @@ class EscPosReceipt {
   }
 }
 
-abstract class PrinterTransport {
-  Future<void> send(String host, int port, Uint8List bytes);
-}
-
 class TcpEscPosTransport implements PrinterTransport {
   @override
   Future<void> send(String host, int port, Uint8List bytes) async {
@@ -117,15 +116,28 @@ class TcpEscPosTransport implements PrinterTransport {
 }
 
 class ReceiptPrinter {
-  ReceiptPrinter(this.storage, this.scope, {PrinterTransport? transport})
-    : transport = transport ?? TcpEscPosTransport();
+  ReceiptPrinter(this.storage, this.scope, {this.transport});
   final DeviceState storage;
   final String scope;
-  final PrinterTransport transport;
+  final PrinterTransport? transport;
   String get key => 'printer:$scope';
   Future<Map<String, dynamic>> load() async =>
       await storage.read(key) ?? {'profile': null, 'jobs': <String, dynamic>{}};
   static void validateProfile(Map p) {
+    if (p['transport'] == 'bluetooth') {
+      if (!BluetoothPrinterTransport.validAddress(p['host']) ||
+          p['port'] != 0 ||
+          ![58, 80].contains(p['paper']) ||
+          p['cut'] is! bool) {
+        throw const FormatException(
+          'Pilih printer Bluetooth dan kertas58/80 mm.',
+        );
+      }
+      return;
+    }
+    if (p['transport'] != null && p['transport'] != 'tcp') {
+      throw const FormatException('Jenis koneksi printer tidak didukung.');
+    }
     final ip = InternetAddress.tryParse(p['host'] ?? '');
     if (ip == null ||
         ip.type != InternetAddressType.IPv4 ||
@@ -192,7 +204,12 @@ class ReceiptPrinter {
       return s;
     });
     try {
-      await transport.send(profile['host'], profile['port'], bytes);
+      final connection =
+          transport ??
+          (profile['transport'] == 'bluetooth'
+              ? BluetoothPrinterTransport()
+              : TcpEscPosTransport());
+      await connection.send(profile['host'], profile['port'], bytes);
       await storage.update(key, (s) {
         s!['jobs'][id]['state'] = 'sent_unconfirmed';
         return s;

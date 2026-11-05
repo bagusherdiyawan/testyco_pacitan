@@ -151,6 +151,47 @@ class ApiClient {
     }
   }
 
+  /// Private bounded PDF; never follows redirects or passes credentials to a URL from API data.
+  Future<List<int>> pdf(String path) async {
+    if (!RegExp(
+      r'^organizations/[0-9A-Z]{26}/contracts/[0-9A-Z]{26}/attachment$',
+    ).hasMatch(path)) {
+      throw const ApiException('Rute PDF tidak valid.');
+    }
+    final request = http.Request('GET', baseUrl.resolve(path))
+      ..followRedirects = false
+      ..headers['Accept'] = 'application/pdf';
+    if (_token != null) request.headers['Authorization'] = 'Bearer $_token';
+    final response = await _client
+        .send(request)
+        .timeout(const Duration(seconds: 10));
+    if (response.statusCode == 401) {
+      clearToken();
+      onUnauthorized?.call();
+      throw const ApiException('Sesi berakhir.', status: 401);
+    }
+    if (response.statusCode != 200 ||
+        response.headers['content-type']?.split(';').first !=
+            'application/pdf' ||
+        (response.contentLength ?? 0) > 5 * 1024 * 1024) {
+      throw const ApiException('PDF tidak dapat dibaca.');
+    }
+    final bytes = <int>[];
+    await for (final chunk in response.stream.timeout(
+      const Duration(seconds: 10),
+    )) {
+      bytes.addAll(chunk);
+      if (bytes.length > 5 * 1024 * 1024) {
+        throw const ApiException('PDF melebihi batas.');
+      }
+    }
+    if (bytes.length < 5 ||
+        ascii.decode(bytes.sublist(0, 5), allowInvalid: true) != '%PDF-') {
+      throw const ApiException('Lampiran bukan PDF.');
+    }
+    return bytes;
+  }
+
   Future<String> login(String email, String password) async {
     clearToken();
     final result = await request('POST', 'auth/login', {

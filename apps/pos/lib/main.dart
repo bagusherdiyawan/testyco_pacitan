@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'features/administration/administration_module.dart';
 import 'core/storage/device_state.dart';
 import 'features/reliability/presentation/inbox_page.dart';
 import 'features/identity/presentation/security_page.dart';
@@ -165,6 +166,12 @@ class _TestycoAppState extends State<TestycoApp> {
               ),
             ],
             registry: ModuleRegistry([
+              if (_store!.canViewAudit &&
+                  const bool.fromEnvironment(
+                    'FEATURE_ADMINISTRATION',
+                    defaultValue: true,
+                  ))
+                AdministrationModule(widget.session.api),
               CatalogModule(
                 repository: CatalogRepository(widget.session.api),
                 storeId: _store!.id,

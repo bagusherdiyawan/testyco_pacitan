@@ -78,7 +78,7 @@ Pengelola berwenang mencatat kas masuk/keluar melalui web atau modul **Kas shift
 
 ## Tagihan, non-tunai, voucher dan refund
 
-[DL-12–DL-17](docs/product/delivery-status.md) kini diimplementasikan dalam cakupan development. [Tagihan dan penyesuaian POS](docs/finance-and-pos-adjustments.md) menyediakan invoice/piutang, ketentuan pajak eksplisit, pembayaran parsial terverifikasi, nota kredit pusat→mitra, konsinyasi dari laporan disetujui, voucher retail didanai penerbit serta refund historis yang ditinjau. POS web/Flutter mendukung QRIS/transfer dengan pemeriksaan bukti manual; tidak ada integrasi gateway. Refund memakai metode asal dan stok kembali hanya ke karantina. Administrasi invoice/kontrak/voucher ada pada web responsif; eksekusi retur, checkout/voucher dan refund juga tersedia pada Flutter mobile/tablet.
+[DL-12–DL-17](docs/product/delivery-status.md) kini diimplementasikan dalam cakupan development. [Tagihan dan penyesuaian POS](docs/finance-and-pos-adjustments.md) menyediakan invoice/piutang, ketentuan pajak eksplisit, pembayaran parsial terverifikasi, nota kredit pusat→mitra, konsinyasi dari laporan disetujui, voucher retail didanai penerbit serta refund historis yang ditinjau. POS web/Flutter mendukung QRIS/transfer dengan pemeriksaan bukti manual; tidak ada integrasi gateway. Refund memakai metode asal dan stok kembali hanya ke karantina. Administrasi invoice/kontrak/voucher/aset/laporan komersial kini tersedia di web dan [Flutter native](docs/native-administration-and-bluetooth.md); eksekusi retur, checkout/voucher dan refund juga tersedia pada Flutter mobile/tablet.
 
 ## Laporan penjualan tunai
 
@@ -143,3 +143,5 @@ Setup membutuhkan Docker registry, Packagist, codeload.github.com dan pub.dev. W
 
 
 Delivery tambahan: [printer, konsinyasi/bagi hasil otomatis, sponsor promo dan recall terkoordinasi](docs/printing-commercial-and-recalls.md). Perjanjian dua pihak mengaktifkan formula/budget eksplisit; pembukuan otomatis berupa jurnal penyelesaian terpisah dari invoice manual. Compose kini menjalankan scheduler tiap menit. Printer native mendukung ESC/POS LAN58/80mm dan browser memakai driver sistem; kompatibilitas model fisik belum dikonfirmasi. Recall penerima memerlukan hold/release pimpinan organisasi; penahanan lintas tenant otomatis menunggu keputusan pengguna. Push/gateway tetap dikesampingkan.
+
+Printer struk Flutter kini mengutamakan **Bluetooth Classic/SPP Android** dengan pemilihan perangkat terpasang, izin koneksi, kertas58/80mm dan konfirmasi fisik; LAN tetap kompatibel. Lihat [panduan administrasi native dan Bluetooth](docs/native-administration-and-bluetooth.md) untuk cakupan, retry dan batas pengujian perangkat. Blok recall otomatis lintas organisasi dan pembayaran otomatis ke rekening dilewati sesuai arahan pengguna.

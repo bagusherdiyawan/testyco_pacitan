@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../application/receipt_printer.dart';
+import '../application/bluetooth_printer.dart';
 
 class ReceiptPrintPage extends StatefulWidget {
   const ReceiptPrintPage({
@@ -16,7 +17,10 @@ class ReceiptPrintPage extends StatefulWidget {
 class _ReceiptPrintPageState extends State<ReceiptPrintPage> {
   final host = TextEditingController(), port = TextEditingController();
   int? paper;
-  bool cut = false, busy = false;
+  String connection = 'bluetooth';
+  String? deviceId;
+  List<Map<String, String>> devices = [];
+  bool cut = false, busy = false, profileLoaded = false;
   String? error;
   Map<String, dynamic>? data;
   @override
@@ -36,7 +40,15 @@ class _ReceiptPrintPageState extends State<ReceiptPrintPage> {
     try {
       data = await widget.printer.load();
       final p = data!['profile'];
-      if (p != null) {
+      if (p != null && !profileLoaded) {
+        profileLoaded = true;
+        connection = p['transport'] ?? 'tcp';
+        if (connection == 'bluetooth') {
+          deviceId = p['host'];
+          if (!devices.any((d) => d['id'] == deviceId)) {
+            devices.add({'id': deviceId!, 'name': p['name'] ?? deviceId!});
+          }
+        }
         host.text = p['host'];
         port.text = '${p['port']}';
         paper = p['paper'];
@@ -66,31 +78,80 @@ class _ReceiptPrintPageState extends State<ReceiptPrintPage> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Cetak struk ESC/POS LAN')),
+    appBar: AppBar(title: const Text('Cetak struk Bluetooth')),
     body: ListView(
       padding: const EdgeInsets.all(16),
       children: [
         const Text(
-          'Gunakan printer ESC/POS di jaringan kasir. Byte terkirim belum membuktikan kertas tercetak. Tidak mengulang otomatis; cetak berikutnya selalu bertanda SALINAN. Penjualan tidak dikirim ulang.',
+          'Pasangkan printer ESC/POS Bluetooth Classic melalui pengaturan Android, kemudian pilih perangkat di bawah. Byte terkirim belum membuktikan kertas tercetak. Tidak mengulang otomatis; cetak berikutnya selalu bertanda SALINAN. Penjualan tidak dikirim ulang.',
         ),
         if (error != null) Text(error!),
         if (busy) const LinearProgressIndicator(),
         Text('Struk ${widget.sale['number']}'),
-        TextField(
-          controller: host,
-          enabled: !busy,
-          decoration: const InputDecoration(
-            labelText: 'IPv4 printer sesuai perangkat',
-          ),
+        DropdownButtonFormField<String>(
+          initialValue: connection,
+          decoration: const InputDecoration(labelText: 'Koneksi printer'),
+          items: const [
+            DropdownMenuItem(
+              value: 'bluetooth',
+              child: Text('Bluetooth Android'),
+            ),
+            DropdownMenuItem(value: 'tcp', child: Text('LAN TCP')),
+          ],
+          onChanged: busy ? null : (v) => setState(() => connection = v!),
         ),
-        TextField(
-          controller: port,
-          enabled: !busy,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: 'Port RAW TCP sesuai printer (umumnya9100)',
+        if (connection == 'bluetooth') ...[
+          TextButton.icon(
+            icon: const Icon(Icons.bluetooth_searching),
+            label: const Text('Muat perangkat yang sudah dipasangkan'),
+            onPressed: busy
+                ? null
+                : () => run(() async {
+                    devices = await BluetoothPrinterTransport().pairedDevices();
+                    if (!devices.any((d) => d['id'] == deviceId)) {
+                      deviceId = null;
+                    }
+                  }),
           ),
-        ),
+          DropdownButtonFormField<String>(
+            key: ValueKey('${devices.length}:$deviceId'),
+            initialValue: deviceId,
+            isExpanded: true,
+            decoration: const InputDecoration(labelText: 'Printer Bluetooth'),
+            items: devices
+                .map(
+                  (d) => DropdownMenuItem(
+                    value: d['id'],
+                    child: Text(
+                      '${d['name']} (${d['id']})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                )
+                .toList(),
+            onChanged: busy ? null : (v) => setState(() => deviceId = v),
+          ),
+          const Text(
+            'Mendukung Android Bluetooth Classic/SPP. Untuk iOS atau BLE diperlukan driver sesuai model printer.',
+          ),
+        ],
+        if (connection == 'tcp')
+          TextField(
+            controller: host,
+            enabled: !busy,
+            decoration: const InputDecoration(
+              labelText: 'IPv4 printer sesuai perangkat',
+            ),
+          ),
+        if (connection == 'tcp')
+          TextField(
+            controller: port,
+            enabled: !busy,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Port RAW TCP sesuai printer (umumnya9100)',
+            ),
+          ),
         DropdownButtonFormField<int>(
           initialValue: paper,
           decoration: const InputDecoration(labelText: 'Lebar kertas'),
@@ -111,8 +172,16 @@ class _ReceiptPrintPageState extends State<ReceiptPrintPage> {
               ? null
               : () => run(() async {
                   await widget.printer.configure({
-                    'host': host.text.trim(),
-                    'port': int.tryParse(port.text),
+                    'transport': connection,
+                    'host': connection == 'bluetooth'
+                        ? deviceId
+                        : host.text.trim(),
+                    'name': connection == 'bluetooth' && deviceId != null
+                        ? devices.firstWhere((d) => d['id'] == deviceId)['name']
+                        : null,
+                    'port': connection == 'bluetooth'
+                        ? 0
+                        : int.tryParse(port.text),
                     'paper': paper,
                     'cut': cut,
                   });

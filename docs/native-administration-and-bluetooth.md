@@ -1,0 +1,34 @@
+# Administrasi Flutter dan printer Bluetooth
+
+Delivery 5 November 2026, mengikuti koreksi pengguna: printer menggunakan Bluetooth dan lima administrasi tersedia sebagai layar Flutter native. Blok recall otomatis lintas organisasi dan pembayaran bagi hasil otomatis ke rekening **dikesampingkan**, demikian pula push/payment gateway sesuai keputusan sebelumnya.
+
+## Menggunakan aplikasi
+
+Buka **Administrasi organisasi** dari ikon tas pada layar pemilihan toko, termasuk untuk pimpinan yang tidak memiliki toko terpilih. Setelah memilih toko, pengelola juga dapat membuka modul **Administrasi**. Pilih organisasi sendiri, lalu:
+
+- **Invoice dan konsinyasi:** pilih pesanan grosir disetujui dari inbox pemasok atau toko penerima; lihat rincian, saldo, pembayaran, kredit dan laporan konsinyasi manual. Pusat mengusulkan invoice dengan dasar kiriman/laporan, pajak, diskon, ongkir, tanggal dan pembulatan eksplisit; mitra menyetujui/menolak. Pembayaran parsial/refund kredit pelanggan memerlukan pemeriksaan bukti manusia, dengan pembalikan terpisah. Nota kredit berdasarkan kasus dan laporan konsinyasi berdasarkan kontrak diterima tetap memerlukan keputusan pihak lawan. Order berperjanjian otomatis tetap ditolak API pada jalur tagihan/laporan manual agar tidak ditagih dua kali.
+- **Kontrak kemitraan:** pusat membuat draft dengan mitra/periode/skema/ketentuan lengkap dan lampiran PDF opsional maksimal 5 MiB; terbitkan atau tarik usulan. Pimpinan mitra membaca dokumen/PDF di aplikasi lalu menyetujui dengan nama dan consent atau menolak. Isi kontrak diterima tetap immutable.
+- **Konfigurasi voucher:** pilih toko dan produk berlabel dari organisasi sendiri, pendanaan penerbit, nilai/batas/kuota/periode dan aturan pemulihan eksplisit. Lihat voucher reguler maupun bersponsor; aktif/nonaktif menggunakan versi dan alasan. Pembuatan perjanjian sponsor/standing addendum serta jurnal saldo otomatis tetap pada web; layar ini tidak mengubah ketentuan sponsor atau memberikan akses pendanaan asing lewat endpoint voucher reguler.
+- **Administrasi aset:** daftarkan aset; usulkan penempatan ke toko pilihan API dan kontrak diterima untuk lintas organisasi; penerima mengonfirmasi/menolak. Ajukan pengembalian fisik lalu pemilik mencatat inspeksi/disposisi. Insiden mempunyai bukti, tanggal, penyelesaian dan biaya kedua pihak eksplisit. Riwayat penempatan dan insiden memiliki pagination masing-masing.
+- **Laporan komersial:** tanggal WIB inklusif 1–31 hari, kelompok POS/penjualan grosir/pembelian dipisah, saldo untuk cohort invoice periode dan koreksi kumulatif saat dibaca. Laba tanpa bukti biaya ditampilkan belum diketahui. Nyatakan biaya barang/operasional, bukti dan alasan dari dokumen terpilih. Pembelian tidak dapat dinyatakan sebagai biaya penjualan. Pagination lokal 50 dokumen; API tetap dibatasi 10.000 dokumen/8 MiB. CSV tetap melalui web.
+
+Formulir, ringkasan dokumen, tinjauan dan pagination dipakai bersama antarlayar. Tidak ada WebView, pembukaan browser untuk administrasi atau input JSON/ID manual. Modul terdaftar melalui `AdministrationModule`, dapat dinonaktifkan dengan `--dart-define=FEATURE_ADMINISTRATION=false`; flag bukan izin backend.
+
+## Batas akses dan hasil belum pasti
+
+Pilihan organisasi memerlukan organisasi aktif dan membership nyata owner/admin/partner_lead. `can_manage` onboarding pusat tidak dianggap keanggotaan komersial. Tombol keputusan mengikuti `can_create`, `can_decide`, `can_confirm`, `is_owner`, pihak dan snapshot API; semua permintaan tetap memakai otorisasi API yang ada. Envelope/parent/organisasi/halaman diperiksa sebelum dokumen ditampilkan. Pagination membangun rute lokal dengan nomor halaman sendiri, tidak mengikuti URL server. Metadata pusat tentang mitra untuk kontrak tidak memberikan akses administrasi mitra.
+
+Sebelum POST, pengguna meninjau data. `AdminMutation` membekukan path, actor, UUID, versi dan JSON nested sebelum I/O; timeout/network/5xx/408/429 atau ACK tidak cocok dianggap belum pasti. Navigasi keluar, pengubahan data dan operasi baru diblokir pada layar pending; retry hanya manual dengan request yang sama, termasuk setelah penolakan 403 berikutnya. ACK diperiksa terhadap organisasi/parent/ID/versi/status, kemudian konteks dibaca ulang; ACK historis bukan state terbaru. 401 mengikuti reset sesi global; actor berubah menolak replay. Pending administrasi **hanya di memori halaman**, tidak dijanjikan pulih setelah proses aplikasi ditutup. Jika aplikasi terhenti, periksa riwayat server sebelum membuat usulan baru. Ini berbeda dari antrean offline POS dan pekerjaan cetak yang durable terenkripsi.
+
+PDF dipilih dengan file picker native, ukuran diperiksa sebelum stream dibaca dan jumlah byte dibatasi saat membaca. Unduhan memakai bearer hanya pada rute lampiran kontrak lokal yang ketat, tanpa redirect, maksimal 5 MiB, MIME dan signature PDF diperiksa. Preview berada di Flutter dan tidak membagikan token lewat URL, browser, nama file atau file konfigurasi; tombol berbagi/cetak PDF dimatikan. `file_picker` 10.3.7 dan `printing` 5.14.2 dikunci pada pubspec/lock; driver struk Bluetooth tidak memakai plugin PDF.
+
+## Printer Bluetooth Android
+
+1. Pasangkan printer thermal **ESC/POS Bluetooth Classic/SPP** melalui pengaturan Bluetooth Android.
+2. Pada struk server selesai, pilih **Cetak struk** → koneksi **Bluetooth Android** → **Muat perangkat yang sudah dipasangkan**.
+3. Izinkan koneksi Bluetooth bila Android meminta izin; pilih printer bernama dan alamat perangkatnya, pilih kertas 58/80 mm serta pemotong hanya jika didukung, lalu simpan.
+4. Cetak dan periksa kertas secara fisik. Konfirmasikan hasil sebelum mencetak lagi jika pengiriman belum pasti. Cetak ulang ditandai salinan.
+
+`testyco/receipt_bluetooth` menggunakan Android BluetoothManager, daftar bonded devices dan RFCOMM SPP UUID standar. Android 12+ meminta BLUETOOTH_CONNECT saat pemilihan perangkat; tidak melakukan discovery, tidak meminta lokasi. Android lama memakai izin Bluetooth legacy maxSdk30. Pengiriman berjalan pada worker terpisah dengan socket tertutup saat selesai/gagal/timeout/destroy. Timeout 15 detik dan satu worker membatasi koneksi; tidak otomatis mengulang byte atau menyambung ulang. Hanya perangkat yang sudah dipasangkan diterima native. Byte dikirim dari job/profil beku yang sudah tersimpan terenkripsi; `true` dari native hanya konfirmasi pengiriman, bukan bukti kertas tercetak. LAN lama tetap dapat dipilih dan profil TCP lama tetap kompatibel.
+
+Model printer belum diberikan; Android Classic/SPP adalah asumsi implementasi yang diberitahukan kepada pengguna. Bluetooth BLE, protokol vendor, iOS Bluetooth dan USB native tidak diklaim didukung. Android APK/release dan perangkat/printer fisik belum diverifikasi pada cloud ini; pengujian channel menggunakan mock, bukan radio Bluetooth. Uji model nyata wajib mencakup pairing/izin ditolak, Bluetooth mati, putus saat mencetak, ukuran/pemotong, restart pada unknown dan pemeriksaan salinan.

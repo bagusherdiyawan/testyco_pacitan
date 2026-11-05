@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../administration/administration_module.dart';
 import 'password_change_page.dart';
 import '../application/session.dart';
 import '../domain/store.dart';
@@ -49,6 +50,11 @@ class _StorePickerPageState extends State<StorePickerPage> {
     appBar: AppBar(
       title: const Text('Pilih toko'),
       actions: [
+        if (const bool.fromEnvironment(
+          'FEATURE_ADMINISTRATION',
+          defaultValue: true,
+        ))
+          AdministrationAction(api: widget.session.api),
         PasswordChangeAction(session: widget.session),
         TextButton(
           onPressed: () async {

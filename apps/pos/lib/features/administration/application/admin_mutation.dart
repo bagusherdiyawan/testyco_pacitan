@@ -26,7 +26,10 @@ class AdminMutation {
         path,
         Map<String, dynamic>.from(jsonDecode(frozen)),
       );
-      if (!accept(result) ||
+      if ((path.contains('/erp/') &&
+              result['data']?['operation_id'] !=
+                  jsonDecode(frozen)['operation_id']) ||
+          !accept(result) ||
           !adminAcknowledgement(
             path,
             Map<String, dynamic>.from(jsonDecode(frozen)),

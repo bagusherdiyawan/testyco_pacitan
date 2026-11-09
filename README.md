@@ -14,6 +14,8 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
+[ERP bahan baku dan produksi](docs/manufacturing-erp.md) kini menghubungkan penerimaan bahan/pembelian supplier, resep berversi termasuk adonan setengah jadi, pemakaian aktual, biaya/HPP, hasil karantina dan pemeriksaan owner/admin pusat sebelum masuk stok distribusi/POS. Web dan Flutter native tersedia melalui administrasi pusat. Lihat batas cakupan dan skenario uji pada panduan; status DL-01–DL-20 sebelumnya bukan klaim ERP manufaktur lengkap atau siap produksi.
+
 ## Setup dan akun pertama
 
 Prasyarat Linux x86_64, Docker Engine + Compose v2, Python 3. Runtime PHP 8.5.12/Composer dan Flutter memakai image dengan digest terkunci. Jika UID/GID host bukan 1000, ekspor `TESTYCO_UID=$(id -u)` dan `TESTYCO_GID=$(id -g)` sebelum menjalankan Compose; CI sudah melakukannya. Container Composer untuk development, bukan deployment production.

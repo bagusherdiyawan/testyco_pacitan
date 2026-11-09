@@ -835,6 +835,36 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST',f'shifts/{ash["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':ash['version'],'counted_cash':paid['total_amount']},cashier_token)
         ledger_before+=4
         print('PASS: standing consignment BFF consent/automatic share, sponsor consent/budget/claim, thermal controls, provenance recall/recipient hold',flush=True)
+        # ERP production is isolated too: raw receipt -> inspection -> actual consumption -> quarantined output -> owner release.
+        erp_path=f'organizations/{center}/erp';erp_web='/app/'+erp_path
+        material_html=central_browser.open(web+erp_web).read().decode()
+        material_fields=fields(material_html,erp_web+'/review')
+        material_fields.update({'values[code]':'ERP-FLOUR','values[name]':'Terigu ERP','values[unit]':'kg','values[minimum]':'0','values[expiry_required]':'1','values[fefo_required]':'1'})
+        erp_review=central_browser.open(Request(web+erp_web+'/review',data=urlencode(material_fields).encode())).read().decode()
+        assert 'Tinjauan sebelum dikirim' in erp_review and 'Terigu ERP' in erp_review
+        confirm_fields=fields(erp_review,erp_web+'/confirm')
+        erp_after=central_browser.open(Request(web+erp_web+'/confirm',data=urlencode(confirm_fields).encode())).read().decode()
+        assert 'Terigu ERP' in erp_after and 'Hasil belum pasti' not in erp_after
+        em=next(m for m in api(base,'GET',erp_path+'/context',token=owner)['data'] if m['code']=='ERP-FLOUR')
+        erp_today=datetime.now(timezone(timedelta(hours=7))).date();erp_expiry=(erp_today+timedelta(days=30)).isoformat();erp_day=erp_today.isoformat()
+        def erp_post(action,body):return api(base,'POST',erp_path+'/'+action,{'operation_id':str(uuid.uuid4()),**body},owner,201)['data']
+        el=erp_post('receive',{'source':'opening','store_id':source,'material_id':em['id'],'quantity':'2','opening_value':20000,'batch_code':'ERP-RAW-LOT','received_on':erp_day,'expires_on':erp_expiry,'evidence':'Physical opening count','note':'Measured receipt'})
+        el=erp_post('material_quality',{'id':el['id'],'version':1,'decision':'release','quantity':'2','note':'Owner inspected raw material'})
+        ep=api(base,'POST',f'organizations/{center}/products',{'sku':'ERP-DIMSUM','name':'Hasil produksi ERP','condition':'frozen','pack_size':10,'portion_size':1,'wholesale_price':20000,'retail_price':3000},owner,201)['data']
+        er=erp_post('recipe',{'product_id':ep['id'],'title':'Resep ERP eksplisit','output_packs':5,'ingredients':{em['id']:'1'},'instructions':'Measured recipe'})
+        production=erp_post('production',{'store_id':source,'recipe_id':er['id'],'recipe_versions':{er['id']:er['version']},'number':'ERP-HTTP-1','runs':1,'note':'Actual production plan'})
+        finished={'operation_id':str(uuid.uuid4()),'id':production['id'],'version':1,'allocations':{el['id']:'1'},'allocation_revisions':{el['id']:2},'batch_code':'ERP-OUTPUT-LOT','produced_on':erp_day,'expires_on':erp_expiry,'good_packs':5,'failed_pieces':0,'labor_cost':3000,'overhead_cost':2000,'cost_allocation':'all_to_good_output','cost_evidence':'Measured materials plus verified labor/overhead','note':'Physical output'}
+        output=api(base,'POST',erp_path+'/complete',finished,owner,201)['data']
+        assert output['costs']['total_amount']==15000 and output['status']=='awaiting_quality'
+        assert api(base,'POST',erp_path+'/complete',finished,owner,201)['data']['id']==production['id']
+        batches=api(base,'GET',f'stores/{source}/inventory/batches',token=owner)['data']
+        output_batch=next(b for b in batches if b['id']==output['output_batch_id']);assert output_batch['usable_pieces']==0 and output_batch['quarantined_pieces']==50
+        erp_post('production_quality',{'id':production['id'],'version':2,'stock_revision':1,'decision':'release','note':'Owner approved finished output'})
+        batches=api(base,'GET',f'stores/{source}/inventory/batches',token=owner)['data'];assert next(b for b in batches if b['id']==output_batch['id'])['usable_pieces']==50
+        assert api(base,'GET',erp_path+'/context?section=trace&lot_id='+el['id'],token=owner)['data'][0]['id']==production['id']
+        assert '15000' in central_browser.open(web+erp_web+'?section=productions').read().decode()
+        api(base,'GET',erp_path+'/context',token=lead_token,expected=403)
+        print('PASS: ERP real web CSRF/review/confirm and API raw receipt/quality, exact production consumption/cost, output quarantine/owner release, UUID replay, material-to-product trace and tenant denial',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

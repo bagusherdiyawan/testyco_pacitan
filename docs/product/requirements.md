@@ -245,3 +245,10 @@ Keputusan chat4 November2026 untuk DL-18–DL-20: offline tunai saja dengan revi
 
 
 Permintaan pengguna4 November2026 berikutnya mengesampingkan push dan gateway, serta meminta printer, konsinyasi/bagi hasil otomatis, promo pendanaan lintas organisasi dan recall terkoordinasi. Implementasi dibatasi [addendum eksplisit dua pihak dan provenance](../printing-commercial-and-recalls.md), bukan persentase/HPP/anggaran bawaan atau izin umum membaca POS mitra. Printer default teknis ESC/POS LAN/browser sambil menunggu model/koneksi; keputusan penahanan lintas tenant belum diterima, sehingga pimpinan penerima memutuskan hold/release.
+
+
+## ERP produksi — permintaan tambahan9 November2026
+
+Pengguna meminta bahan baku terigu/telur/daging dicatat saat datang, pemakaian aktual mengurangi stok, dan hasil dimsum menjadi batch produk jadi. Pengguna menyetujui perluasan ke pembelian/supplier, satuan, lot, resep bertahap, biaya/HPP, mutu, planning dan trace; hasil wajib diperiksa owner/admin pusat sebelum distribusi/penjualan. Implementasi development dan batas acceptance ada pada [ERP](../manufacturing-erp.md); sumber kebutuhan ini percakapan pengguna, bukan reinterpretasi resep paket POS pada BRD.
+
+Acceptance utama: receipt bahan2kg senilaiRp20.000, lolos pemeriksaan, produksi memakai1kg sehingga bahan tersisa1kg/Rp10.000; biaya tenaga kerja/overhead eksplisit ditambahkan, hasil masuk karantina dan baru menjadi usable setelah keputusan owner/admin. Adonan tahap antara membawa biaya dan jejak ke tahap berikutnya. Kekurangan/expired/held/foreign/stale membatalkan seluruh posting; replay UUID tidak menggandakan. Opname memerlukan peninjau lain. Utang/refund supplier berdasarkan receipt/kredit/pembayaran terverifikasi, bukan gateway/laci POS. Tidak menetapkan resep, masa simpan atau pajak global.

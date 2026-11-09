@@ -5,6 +5,8 @@ namespace App\Modules\Inventory\Application;
 use App\Modules\Commercial\Application\ConsignmentAutomation;
 use App\Modules\Inventory\Domain\StockBucket;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
+use App\Modules\Materials\Application\MaterialLedger;
+use App\Modules\Materials\Infrastructure\MaterialLot;
 use App\Modules\Reliability\Application\Inbox;
 use App\Modules\Reliability\Application\RecallCoordinator;
 use App\Modules\Reliability\ReliabilityServiceProvider;
@@ -45,9 +47,13 @@ final class StockLedger
         return $batch->fresh()->toArray();
     }
 
-    public function apply(InventoryBatch $batch, int $actor, array $changes, string $sourceType, string $sourceId, ?string $note = null): InventoryBatch
+    public function apply(InventoryBatch|MaterialLot $batch, int $actor, array $changes, string $sourceType, string $sourceId, ?string $note = null, int $valueDelta = 0): InventoryBatch|MaterialLot
     {
         abort_unless(DB::transactionLevel() > 0, 500, 'Pergerakan stok harus dalam transaksi.');
+        if ($batch instanceof MaterialLot) {
+            return app(MaterialLedger::class)->commit($batch, $actor, $changes, $valueDelta, $sourceType, $sourceId, $note ?? '');
+        }
+        abort_unless($valueDelta === 0, 422, 'Nilai bahan tidak boleh diposting pada ledger biji.');
         $batch = InventoryBatch::lockForUpdate()->findOrFail($batch->id);
         $attributes = [];
         $deltas = [];

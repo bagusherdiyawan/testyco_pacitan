@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import '../manufacturing/data/erp_repository.dart';
+import '../manufacturing/presentation/erp_page.dart';
 import '../../core/modules/feature_module.dart';
 import '../../core/network/api_client.dart';
 import 'data/admin_repository.dart';
@@ -85,6 +87,13 @@ class AdministrationHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final id = organization['id'] as String;
     final pages = <String, Widget>{
+      if (organization['type'] == 'center' &&
+          ['owner', 'admin'].contains(organization['role']) &&
+          const bool.fromEnvironment(
+            'FEATURE_MANUFACTURING',
+            defaultValue: true,
+          ))
+        'Bahan baku dan produksi': ErpPage(repository: ErpRepository(api, id)),
       'Invoice dan konsinyasi': BillingOrdersPage(
         api: api,
         organization: id,

@@ -2,7 +2,7 @@ import json
 from urllib.request import urlopen
 with urlopen('http://127.0.0.1:8000/api/v1/modules', timeout=5) as response:
     modules = json.load(response)['data']
-    assert len(modules) == 13
+    assert len(modules) == 14
     assert modules[0]['status'] == 'available'
     assert modules[1]['status'] == 'available'
     assert all(module['status'] == 'available' for module in modules)

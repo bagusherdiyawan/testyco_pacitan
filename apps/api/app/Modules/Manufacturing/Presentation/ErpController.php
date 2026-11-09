@@ -1,0 +1,75 @@
+<?php
+
+namespace App\Modules\Manufacturing\Presentation;
+
+use App\Modules\Manufacturing\Application\ErpReadModel;
+use App\Modules\Manufacturing\Application\ErpWorkflow;
+use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+
+final class ErpController
+{
+    public function context(Request $r, string $organization, ErpReadModel $read): mixed
+    {
+        $v = $r->validate(['section' => ['sometimes', Rule::in(ErpReadModel::SECTIONS)], 'page' => 'sometimes|integer|min:1', 'store_id' => 'nullable|ulid', 'material_id' => 'nullable|ulid', 'lot_id' => 'nullable|ulid', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d|after_or_equal:from']);
+
+        return response()->json($read->context($r->user(), $organization, $v))->header('Cache-Control', 'private, no-store');
+    }
+
+    public static function rules(string $action): array
+    {
+        $note = ['note' => 'required|string|max:2000'];
+        $key = ['id' => 'required|ulid', 'version' => 'required|integer|min:1'];
+        $quantities = ['quantities' => 'required|array|min:1|max:100', 'quantities.*' => 'nullable|string|max:20'];
+        $date = 'required|date_format:Y-m-d|before_or_equal:'.now('Asia/Jakarta')->format('Y-m-d');
+
+        return ['operation_id' => 'required|uuid', ...match ($action) {
+            'material' => ['code' => 'required|string|max:60', 'name' => 'required|string|max:120', 'unit' => 'required|in:g,kg,ml,l,pcs', 'minimum' => 'required|string|max:20', 'expiry_required' => 'required|boolean', 'fefo_required' => 'required|boolean'],
+            'material_configure' => [...$key, 'name' => 'required|string|max:120', 'minimum' => 'required|string|max:20', 'expiry_required' => 'required|boolean', 'fefo_required' => 'required|boolean', 'active' => 'required|boolean'],
+            'supplier' => ['name' => 'required|string|max:120', 'contact' => 'required|string|max:2000', 'address' => 'required|string|max:2000'],
+            'purchase' => ['store_id' => 'required|ulid', 'supplier_id' => 'required|ulid', 'number' => 'required|string|max:80', 'ordered_on' => $date, 'due_on' => 'required|date_format:Y-m-d', ...$quantities, 'amounts' => 'required|array|min:1|max:100', 'amounts.*' => 'nullable|integer|min:0|max:1000000000000', ...$note],
+            'purchase_decide' => [...$key, 'decision' => 'required|in:approve,cancel', ...$note],
+            'receive' => ['source' => 'required|in:opening,purchase', 'store_id' => 'required|ulid', 'material_id' => 'required|ulid', 'purchase_id' => 'required_if:source,purchase|nullable|ulid', 'version' => 'required_if:source,purchase|nullable|integer|min:1', 'quantity' => 'required|string|max:20', 'batch_code' => 'required|string|max:80', 'received_on' => $date, 'expires_on' => 'nullable|date_format:Y-m-d', 'opening_value' => 'required_if:source,opening|nullable|integer|min:0|max:1000000000000', 'evidence' => 'required|string|max:2000', ...$note],
+            'payment' => [...$key, 'kind' => 'sometimes|required|in:payment,supplier_refund', 'verified' => 'required|boolean', 'amount' => 'required|integer|min:1|max:1000000000000', 'method' => 'required|in:cash,bank_transfer', 'reference' => 'required|string|max:160', 'paid_on' => $date, ...$note],
+            'recipe' => ['product_id' => 'nullable|ulid', 'output_material_id' => 'nullable|ulid', 'output_quantity' => 'nullable|string|max:20', 'title' => 'required|string|max:160', 'output_packs' => 'required_without:output_material_id|nullable|integer|min:1|max:1000000', 'ingredients' => 'required|array|min:1|max:100', 'ingredients.*' => 'nullable|string|max:20', 'instructions' => 'required|string|max:10000'],
+            'production' => ['store_id' => 'required|ulid', 'recipe_id' => 'required|ulid', 'recipe_versions' => 'required|array|min:1|max:1000', 'recipe_versions.*' => 'required|integer|min:1', 'number' => 'required|string|max:80', 'runs' => 'required|integer|min:1|max:10000', ...$note],
+            'production_cancel' => [...$key, ...$note],
+            'complete' => [...$key, 'allocations' => 'required|array|min:1|max:100', 'allocations.*' => 'nullable|string|max:20', 'allocation_revisions' => 'required|array|min:1|max:1000', 'allocation_revisions.*' => 'required|integer|min:1', 'batch_code' => 'required|string|max:80', 'produced_on' => $date, 'expires_on' => 'required|date_format:Y-m-d', 'good_quantity' => 'nullable|string|max:20', 'failed_quantity' => 'nullable|string|max:20', 'good_packs' => 'nullable|integer|min:0|max:1000000', 'failed_pieces' => 'nullable|integer|min:0|max:10000000', 'labor_cost' => 'required|integer|min:0|max:1000000000000', 'overhead_cost' => 'required|integer|min:0|max:1000000000000', 'cost_allocation' => 'required|in:all_to_good_output', 'cost_evidence' => 'required|string|max:2000', ...$note],
+            'material_quality' => [...$key, 'decision' => 'required|in:release,reject,hold,unhold,return', 'quantity' => 'required_unless:decision,hold,unhold|nullable|string|max:20', 'bucket' => 'required_if:decision,return|nullable|in:usable,quarantined', 'supplier_credit' => 'required_if:decision,return|nullable|integer|min:0|max:1000000000000', 'verified' => 'required_if:decision,return|nullable|boolean', ...$note],
+            'production_quality' => [...$key, 'stock_revision' => 'required|integer|min:1', 'decision' => 'required|in:release,reject', ...$note],
+            'transfer' => [...$key, 'store_id' => 'required|ulid', 'quantity' => 'required|string|max:20', ...$note],
+            'count' => [...$key, 'bucket' => 'required|in:usable,quarantined', 'quantity' => 'required|string|max:20', 'adjustment_value' => 'required|integer|min:0|max:1000000000000', ...$note],
+            'count_decide' => [...$key, 'decision' => 'required|in:approve,reject', ...$note],
+        }];
+    }
+
+    public function mutate(Request $r, string $organization, string $action, ErpWorkflow $workflow): mixed
+    {
+        $v = $r->validate(self::rules($action));
+        foreach (['version', 'output_packs', 'runs', 'opening_value', 'amount', 'good_packs', 'failed_pieces', 'labor_cost', 'overhead_cost', 'stock_revision', 'adjustment_value', 'supplier_credit'] as $key) {
+            if (isset($v[$key])) {
+                $v[$key] = (int) $v[$key];
+            }
+        }
+        foreach (['amounts', 'recipe_versions', 'allocation_revisions'] as $key) {
+            if (isset($v[$key])) {
+                foreach ($v[$key] as &$value) {
+                    if ($value !== null) {
+                        $value = (int) $value;
+                    }
+                }
+            }
+        }
+        foreach (['expiry_required', 'fefo_required', 'active', 'verified'] as $key) {
+            if (isset($v[$key])) {
+                $v[$key] = (bool) $v[$key];
+            }
+        }
+        try {
+            return response()->json(['data' => $workflow->run($r->user(), $organization, $action, $v)], 201)->header('Cache-Control', 'private, no-store');
+        } catch (\DomainException $e) {
+            throw ValidationException::withMessages(['form' => $e->getMessage()]);
+        }
+    }
+}

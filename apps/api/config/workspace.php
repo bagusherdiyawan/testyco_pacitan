@@ -1,6 +1,7 @@
 <?php
 
 return ['modules' => [
+    ['id' => 'manufacturing', 'name' => 'Bahan baku, pembelian dan produksi', 'prd' => 'ERP', 'status' => 'available'],
     ['id' => 'identity', 'name' => 'Akses dan organisasi', 'prd' => '01', 'status' => 'available'],
     ['id' => 'catalog', 'name' => 'Katalog dan harga', 'prd' => '02', 'status' => 'available'],
     ['id' => 'partners', 'name' => 'Mitra, toko dan kontrak', 'prd' => '03', 'status' => 'available'],

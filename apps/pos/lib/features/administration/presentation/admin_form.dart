@@ -75,7 +75,9 @@ class _AdminFormState extends State<AdminForm> {
   void initState() {
     super.initState();
     for (final f in widget.fields) {
-      values[f.key] = f.kind == 'multi'
+      values[f.key] = {'quantity_map', 'money_map'}.contains(f.kind)
+          ? <String, String>{}
+          : f.kind == 'multi'
           ? <String>[]
           : f.kind == 'consent'
           ? false
@@ -89,7 +91,9 @@ class _AdminFormState extends State<AdminForm> {
       final payload = <String, dynamic>{...widget.fixed};
       for (final f in widget.fields) {
         final v = values[f.key];
-        payload[f.key] = f.kind == 'integer' ? int.parse(v) : v;
+        payload[f.key] = f.kind == 'integer' && v != null && '$v'.isNotEmpty
+            ? int.parse(v)
+            : v;
       }
       pending = AdminMutation(
         widget.api,
@@ -131,6 +135,43 @@ class _AdminFormState extends State<AdminForm> {
   }
 
   Widget input(AdminField f) {
+    if ({'quantity_map', 'money_map'}.contains(f.kind)) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(f.label),
+          for (final entry in f.options!.entries)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: TextFormField(
+                initialValue: (values[f.key] as Map)[entry.key],
+                decoration: InputDecoration(labelText: entry.value),
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                onChanged: (v) {
+                  final map = values[f.key] as Map<String, String>;
+                  if (v.trim().isEmpty) {
+                    map.remove(entry.key);
+                  } else {
+                    map[entry.key] = v.trim();
+                  }
+                },
+                validator: (v) {
+                  if (v == null || v.trim().isEmpty) return null;
+                  final valid = f.kind == 'money_map'
+                      ? RegExp(r'^\d+$')
+                      : RegExp(r'^\d+(\.\d{1,3})?$');
+                  return valid.hasMatch(v.trim())
+                      ? null
+                      : 'Isi angka tanpa pemisah ribuan.';
+                },
+              ),
+            ),
+        ],
+      );
+    }
+
     if (f.kind == 'pdf') {
       return TextButton.icon(
         icon: const Icon(Icons.attach_file),
@@ -223,6 +264,7 @@ class _AdminFormState extends State<AdminForm> {
     }
     if (f.options != null) {
       return DropdownButtonFormField<String>(
+        initialValue: values[f.key] as String?,
         isExpanded: true,
         decoration: InputDecoration(labelText: f.label),
         items: [
@@ -242,6 +284,7 @@ class _AdminFormState extends State<AdminForm> {
       );
     }
     return TextFormField(
+      initialValue: values[f.key] as String?,
       decoration: InputDecoration(labelText: f.label),
       maxLines: f.kind == 'text' ? 3 : 1,
       keyboardType: f.kind == 'integer'
@@ -346,6 +389,11 @@ class _AdminFormState extends State<AdminForm> {
   );
   String display(AdminField f) {
     final v = values[f.key];
+    if ({'quantity_map', 'money_map'}.contains(f.kind)) {
+      return (values[f.key] as Map).entries
+          .map((e) => '${f.options![e.key]}: ${e.value}')
+          .join('; ');
+    }
     if (f.kind == 'pdf') return v == null ? 'Tanpa lampiran' : 'PDF terlampir';
     if (f.kind == 'multi') {
       return (v as List).map((id) => f.options![id]).join(', ');

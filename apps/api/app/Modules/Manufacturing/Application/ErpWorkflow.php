@@ -54,6 +54,7 @@ final class ErpWorkflow
                 'purchase' => $this->purchases->create($u, $org, $v),
                 'purchase_decide' => $this->purchases->decide($org, $v),
                 'receive' => $this->purchases->receive($u, $org, $v),
+                'payment_reverse' => $this->purchases->reversePayment($u, $org, $v),
                 'payment' => $this->purchases->payment($u, $org, $v),
                 'recipe' => $this->production->recipe($org, $v),
                 'production' => $this->production->create($u, $org, $v),

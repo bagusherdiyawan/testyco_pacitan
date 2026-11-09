@@ -67,6 +67,13 @@ final class ErpForms
                 }
             }
         }
+        if ($section === 'purchases' && $row['status'] === 'approved') {
+            foreach ($row['payments'] as $payment) {
+                if (! isset($payment['reversed_at']) && isset($payment['actor_id']) && $payment['actor_id'] !== $actor) {
+                    $forms[] = self::form('payment_reverse', 'Balik pembayaran '.$payment['reference'], [$f('verified', 'Bukti kesalahan dan koreksi sudah diperiksa', 'consent'), $note], [...$fixed, 'payment_id' => $payment['id']], $row);
+                }
+            }
+        }
         if ($section === 'lots') {
             $unit = $row['unit'];
             if ($row['quarantined_quantity'] > 0) {

@@ -63,7 +63,7 @@ class ErpRepository {
     'purchase',
     'purchase_decide',
     'receive',
-    'payment',
+    'payment_reverse','payment',
     'recipe',
     'production',
     'production_cancel',

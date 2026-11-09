@@ -13,6 +13,7 @@ use App\Modules\Procurement\Infrastructure\Purchase;
 use App\Modules\Procurement\Infrastructure\Supplier;
 use App\Shared\Domain\Proportion;
 use App\Shared\Domain\Rupiah;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 final class Purchasing
@@ -94,7 +95,7 @@ final class Purchasing
         $payments = $p->payments;
         abort_if(collect($payments)->contains('reference', $v['reference']), 409, 'Referensi pembayaran sudah dipakai.');
         $paymentId = (string) Str::ulid();
-        $payments[] = ['id' => $paymentId, 'kind' => $v['kind'] ?? 'payment', 'amount' => $v['amount'], 'method' => $v['method'], 'reference' => $v['reference'], 'paid_on' => $v['paid_on'], 'note' => $v['note']];
+        $payments[] = ['id' => $paymentId, 'actor_id' => $u->id, 'kind' => $v['kind'] ?? 'payment', 'amount' => $v['amount'], 'method' => $v['method'], 'reference' => $v['reference'], 'paid_on' => $v['paid_on'], 'note' => $v['note']];
         $p->payments = $payments;
         if (($v['kind'] ?? 'payment') === 'supplier_refund') {
             $p->refunded_amount = Rupiah::add($p->refunded_amount, $v['amount']);
@@ -106,6 +107,36 @@ final class Purchasing
         $cash = $v['method'] === 'cash' ? 'cash' : 'bank';
         $terms = ($v['kind'] ?? 'payment') === 'supplier_refund' ? [[$cash, 'payable', $v['amount']]] : [['payable', $cash, $v['amount']]];
         app(AutomaticPosting::class)->record($org, $u->id, 'supplier_payment', $paymentId, $v['paid_on'], $terms, $v['reference']);
+
+        return $p->toArray();
+    }
+
+    public function reversePayment(User $u, string $org, array $v): array
+    {
+        $p = Purchase::where('organization_id', $org)->lockForUpdate()->findOrFail($v['id']);
+        abort_unless($p->version === $v['version'] && $p->status === 'approved' && $v['verified'] === true, 409);
+        $payments = $p->payments;
+        $index = array_search($v['payment_id'], array_column($payments, 'id'), true);
+        abort_if($index === false, 404);
+        $a = $payments[$index];
+        abort_if(isset($a['reversed_at']), 409, 'Pembayaran sudah dibalik.');
+        abort_unless(isset($a['actor_id']) && $a['actor_id'] !== $u->id, 403, 'Pembalikan wajib pengelola lain; data lama perlu rekonsiliasi manual.');
+        $refund = ($a['kind'] ?? 'payment') === 'supplier_refund';
+        abort_if(! $refund && $p->refunded_amount > 0, 409, 'Rekonsiliasi/pembalikan refund supplier dahulu.');
+        $column = $refund ? 'refunded_amount' : 'paid_amount';
+        abort_unless($a['amount'] <= $p->$column, 409);
+        $p->$column -= $a['amount'];
+        $payments[$index] = [...$a, 'reversed_at' => now()->toIso8601String(), 'reversed_by' => $u->id, 'reversal_note' => $v['note']];
+        $p->payments = $payments;
+        $p->version++;
+        $p->save();
+        $origin = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'supplier_payment')->where('source_id', $a['id'])->first();
+        $cash = $a['method'] === 'cash' ? 'cash' : 'bank';
+        $terms = $refund ? [['payable', $cash, $a['amount']]] : [[$cash, 'payable', $a['amount']]];
+        if ($origin) {
+            $terms = array_map(fn ($t) => [$t[1], $t[0], $t[2]], json_decode($origin->terms, true));
+        }
+        app(AutomaticPosting::class)->record($org, $u->id, 'supplier_payment_reverse', $a['id'], now('Asia/Jakarta')->format('Y-m-d'), $terms, $v['note'], (! $origin || $origin->status === 'reconciled') ? 'Pembayaran asal tidak tertangkap atau direkonsiliasi manual; periksa jurnal koreksi.' : null, $origin?->policy_id);
 
         return $p->toArray();
     }

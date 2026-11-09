@@ -21325,7 +21325,8 @@
                 "posting_reconcile",
                 "value_propose",
                 "value_decide",
-                "wholesale_policy"
+                "wholesale_policy",
+                "payment_reverse"
               ]
             }
           }
@@ -34538,7 +34539,8 @@
               "posting_reconcile",
               "value_propose",
               "value_decide",
-              "wholesale_policy"
+              "wholesale_policy",
+              "payment_reverse"
             ]
           },
           "label": {

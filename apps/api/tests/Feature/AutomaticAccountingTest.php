@@ -308,4 +308,17 @@ class AutomaticAccountingTest extends TestCase
         $this->assertDatabaseMissing('accounting_events', ['source_type' => 'pos_sale']);
         $this->assertSame(0, app(AutomaticPosting::class)->drain());
     }
+    public function test_supplier_reversal_requires_other_manager_and_replays_once(): void
+    {
+        $supplier=$this->cmd('supplier',['name'=>'Supplier','contact'=>'Contact','address'=>'Address']);
+        $payment=(string)Str::ulid();
+        $p=\App\Modules\Procurement\Infrastructure\Purchase::create(['organization_id'=>$this->org->id,'store_id'=>$this->store->id,'supplier_id'=>$supplier['id'],'number'=>'REV-PO','status'=>'approved','version'=>1,'ordered_on'=>'2026-11-09','due_on'=>'2026-11-30','lines'=>[],'total_amount'=>10,'received_amount'=>10,'credited_amount'=>0,'paid_amount'=>10,'refunded_amount'=>0,'created_by'=>$this->owner->id,'note'=>'Fixture','payments'=>[['id'=>$payment,'actor_id'=>$this->owner->id,'kind'=>'payment','amount'=>10,'method'=>'cash','reference'=>'PAY1','paid_on'=>'2026-11-09','note'=>'Verified']]]);
+        $v=['operation_id'=>(string)Str::uuid(),'id'=>$p->id,'version'=>1,'payment_id'=>$payment,'verified'=>true,'note'=>'Wrong matching verified'];
+        $this->postJson($this->url('payment_reverse'),$v)->assertForbidden();
+        Sanctum::actingAs($this->reviewer);
+        $this->postJson($this->url('payment_reverse'),$v)->assertCreated()->assertJsonPath('data.paid_amount',0);
+        $this->postJson($this->url('payment_reverse'),$v)->assertCreated()->assertJsonPath('data.version',2);
+        $this->postJson($this->url('payment_reverse'),[...$v,'operation_id'=>(string)Str::uuid(),'version'=>2])->assertConflict();
+    }
+
 }

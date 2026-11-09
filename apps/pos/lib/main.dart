@@ -1,4 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'features/manufacturing/manufacturing_module.dart';
+import 'features/manufacturing/data/erp_repository.dart';
 import 'features/administration/administration_module.dart';
 import 'core/storage/device_state.dart';
 import 'features/reliability/presentation/inbox_page.dart';
@@ -243,6 +245,16 @@ class _TestycoAppState extends State<TestycoApp> {
                 AuditModule(
                   repository: AuditRepository(widget.session.api),
                   organization: _store!.organizationId,
+                ),
+              if (_store!.organizationType == 'center' &&
+                  ['warehouse', 'store_manager'].contains(_store!.role) &&
+                  const bool.fromEnvironment(
+                    'FEATURE_MANUFACTURING',
+                    defaultValue: true,
+                  ))
+                ManufacturingModule(
+                  ErpRepository(widget.session.api, _store!.organizationId),
+                  _store!.id,
                 ),
             ]),
           ),

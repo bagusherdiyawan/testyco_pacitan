@@ -17,7 +17,7 @@ final class ManufacturingServiceProvider extends ServiceProvider
         }
         Route::prefix('api/v1/organizations/{organization}/erp')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
             Route::get('context', [ErpController::class, 'context']);
-            Route::post('{action}', [ErpController::class, 'mutate'])->where('action', 'material|material_configure|supplier|purchase|purchase_decide|receive|payment|recipe|production|production_cancel|complete|material_quality|production_quality|transfer|count|count_decide');
+            Route::post('{action}', [ErpController::class, 'mutate'])->where('action', 'account|accounting_period|journal|journal_decide|journal_reverse|period_status|operator_grant|material|material_configure|supplier|purchase|purchase_decide|receive|payment|recipe|production|production_cancel|complete|material_quality|production_quality|transfer|count|count_decide');
         });
     }
 }

@@ -865,6 +865,33 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert '15000' in central_browser.open(web+erp_web+'?section=productions').read().decode()
         api(base,'GET',erp_path+'/context',token=lead_token,expected=403)
         print('PASS: ERP real web CSRF/review/confirm and API raw receipt/quality, exact production consumption/cost, output quarantine/owner release, UUID replay, material-to-product trace and tenant denial',flush=True)
+        # Explicit operator permission does not grant QC/finance; manual accounting stays separate from ERP valuation.
+        reviewer_user=api(base,'POST',f'organizations/{center}/users',{'name':'Accounting Reviewer','email':'accounting-reviewer@smoke.test','password':PASSWORD,'role':'admin','store_ids':[]},owner,201)['data']
+        reviewer_token=api(base,'POST','auth/login',{'email':reviewer_user['email'],'password':PASSWORD,'device_name':'accounting-reviewer'})['token']
+        operator_user=api(base,'POST',f'organizations/{center}/users',{'name':'ERP Operator','email':'erp-operator@smoke.test','password':PASSWORD,'role':'warehouse','store_ids':[source]},owner,201)['data']
+        operator_token=api(base,'POST','auth/login',{'email':operator_user['email'],'password':PASSWORD,'device_name':'erp-operator'})['token']
+        assignment=str(operator_user['id'])+':'+source
+        permission=erp_post('operator_grant',{'assignment':assignment,'grant_versions':{},'enabled':True,'note':'Production and process cost at this assigned warehouse'})
+        operator_context=api(base,'GET',erp_path+'/context?section=productions&store_id='+source,token=operator_token)
+        assert operator_context['can_operate'] and not operator_context['can_manage']
+        assert all(f['operation'] in ['production','complete','production_cancel'] for row in operator_context['data'] for f in row['forms'])
+        api(base,'GET',erp_path+'/context?section=journals&store_id='+source,token=operator_token,expected=403)
+        erp_post('operator_grant',{'assignment':assignment,'grant_versions':{assignment:permission['version']},'enabled':False,'note':'Revoke permission after test'})
+        api(base,'GET',erp_path+'/context?section=productions&store_id='+source,token=operator_token,expected=403)
+        cash_account=erp_post('account',{'code':'ERP-CASH','name':'Kas pengujian','kind':'asset','normal_balance':'debit'})
+        capital_account=erp_post('account',{'code':'ERP-CAPITAL','name':'Modal pengujian','kind':'equity','normal_balance':'credit'})
+        period=erp_post('accounting_period',{'name':'Periode pengujian eksplisit','starts_on':erp_day,'ends_on':erp_day,'note':'No automatic calendar defaults'})
+        journal=erp_post('journal',{'period_id':period['id'],'number':'GL-HTTP-1','posted_on':erp_day,'debits':{cash_account['id']:12345},'credits':{capital_account['id']:12345},'evidence':'Verified opening entry fixture','note':'Manual opening; not duplicate ERP posting'})
+        decide={'operation_id':str(uuid.uuid4()),'id':journal['id'],'version':1,'decision':'post','note':'Independent review'}
+        api(base,'POST',erp_path+'/journal_decide',decide,owner,expected=403)
+        api(base,'POST',erp_path+'/journal_decide',decide,reviewer_token,201)
+        api(base,'POST',erp_path+'/journal_decide',decide,reviewer_token,201)
+        trial=api(base,'GET',erp_path+'/context?section=trial_balance&period_id='+period['id'],token=owner)
+        assert 'aset Rp12345' in trial['data'][-1]['summary']
+        assert 'aset Rp12345' in central_browser.open(web+erp_web+'?section=trial_balance&period_id='+period['id']).read().decode()
+        api(base,'POST',erp_path+'/journal_reverse',{'operation_id':str(uuid.uuid4()),'id':journal['id'],'version':2,'period_id':period['id'],'number':'GL-HTTP-REV','posted_on':erp_day,'evidence':'Verified correction fixture','note':'Reverse exact original'},reviewer_token,201)
+        assert 'aset Rp0' in api(base,'GET',erp_path+'/context?section=trial_balance&period_id='+period['id'],token=owner)['data'][-1]['summary']
+        print('PASS: ERP operator grant/revoke/scoped role and finance denial; explicit accounts/period/manual balanced journal, independent review/replay, web trial balance and linked reversal',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

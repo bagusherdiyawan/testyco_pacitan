@@ -4,8 +4,9 @@ import '../../administration/presentation/admin_widgets.dart';
 import '../data/erp_repository.dart';
 
 class ErpPage extends StatefulWidget {
-  const ErpPage({required this.repository, super.key});
+  const ErpPage({required this.repository, this.operatorStore, super.key});
   final ErpRepository repository;
+  final String? operatorStore;
   @override
   State<ErpPage> createState() => _ErpPageState();
 }
@@ -20,6 +21,11 @@ class _ErpPageState extends State<ErpPage> {
   @override
   void initState() {
     super.initState();
+    if (widget.operatorStore != null) {
+      section = "productions";
+      store = widget.operatorStore;
+      filters = {"store_id": store!};
+    }
     reload();
   }
 
@@ -87,6 +93,11 @@ class _ErpPageState extends State<ErpPage> {
               isExpanded: true,
               decoration: const InputDecoration(labelText: 'Bagian ERP'),
               items: ErpRepository.sections.entries
+                  .where(
+                    (e) =>
+                        widget.operatorStore == null ||
+                        {'productions', 'lots', 'recipes'}.contains(e.key),
+                  )
                   .map(
                     (e) => DropdownMenuItem(
                       value: e.key,
@@ -97,8 +108,10 @@ class _ErpPageState extends State<ErpPage> {
               onChanged: (v) {
                 section = v!;
                 page = 1;
-                filters = {};
-                store = null;
+                filters = widget.operatorStore == null
+                    ? {}
+                    : {'store_id': widget.operatorStore!};
+                store = widget.operatorStore;
                 reload();
               },
             ),
@@ -120,10 +133,11 @@ class _ErpPageState extends State<ErpPage> {
                       isExpanded: true,
                       decoration: const InputDecoration(labelText: 'Gudang'),
                       items: [
-                        const DropdownMenuItem(
-                          value: '',
-                          child: Text('Semua gudang'),
-                        ),
+                        if (widget.operatorStore == null)
+                          const DropdownMenuItem(
+                            value: '',
+                            child: Text('Semua gudang'),
+                          ),
                         ...stores.entries.map(
                           (e) => DropdownMenuItem(
                             value: e.key,
@@ -140,6 +154,27 @@ class _ErpPageState extends State<ErpPage> {
                         reload();
                       },
                     ),
+                    if ({'journals', 'trial_balance'}.contains(section))
+                      DropdownButtonFormField<String>(
+                        initialValue: filters['period_id'],
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Periode pembukuan',
+                        ),
+                        items: ErpRepository.object(c['filter_periods']).entries
+                            .map(
+                              (e) => DropdownMenuItem(
+                                value: e.key,
+                                child: Text('${e.value}'),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (v) {
+                          filters = {...filters, 'period_id': v!};
+                          page = 1;
+                          reload();
+                        },
+                      ),
                     if (section == 'report') ...[
                       TextField(
                         controller: from,
@@ -179,7 +214,8 @@ class _ErpPageState extends State<ErpPage> {
                       DocumentSummary(
                         text: row['summary'],
                         actions: [
-                          if (section == 'lots') ...[
+                          if (section == 'lots' &&
+                              widget.operatorStore == null) ...[
                             TextButton(
                               onPressed: () {
                                 section = 'trace';

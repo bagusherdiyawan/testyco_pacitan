@@ -12,7 +12,7 @@ final class ErpController
 {
     public function context(Request $r, string $organization, ErpReadModel $read): mixed
     {
-        $v = $r->validate(['section' => ['sometimes', Rule::in(ErpReadModel::SECTIONS)], 'page' => 'sometimes|integer|min:1', 'store_id' => 'nullable|ulid', 'material_id' => 'nullable|ulid', 'lot_id' => 'nullable|ulid', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d|after_or_equal:from']);
+        $v = $r->validate(['section' => ['sometimes', Rule::in(ErpReadModel::SECTIONS)], 'page' => 'sometimes|integer|min:1', 'store_id' => 'nullable|ulid', 'material_id' => 'nullable|ulid', 'lot_id' => 'nullable|ulid', 'period_id' => 'nullable|ulid', 'from' => 'nullable|date_format:Y-m-d', 'to' => 'nullable|date_format:Y-m-d|after_or_equal:from']);
 
         return response()->json($read->context($r->user(), $organization, $v))->header('Cache-Control', 'private, no-store');
     }
@@ -27,6 +27,13 @@ final class ErpController
         return ['operation_id' => 'required|uuid', ...match ($action) {
             'material' => ['code' => 'required|string|max:60', 'name' => 'required|string|max:120', 'unit' => 'required|in:g,kg,ml,l,pcs', 'minimum' => 'required|string|max:20', 'expiry_required' => 'required|boolean', 'fefo_required' => 'required|boolean'],
             'material_configure' => [...$key, 'name' => 'required|string|max:120', 'minimum' => 'required|string|max:20', 'expiry_required' => 'required|boolean', 'fefo_required' => 'required|boolean', 'active' => 'required|boolean'],
+            'operator_grant' => ['assignment' => 'required|string|regex:/^[1-9][0-9]*:[0-9A-Z]{26}$/i', 'grant_versions' => 'present|array|max:1000', 'grant_versions.*' => 'required|integer|min:1', 'enabled' => 'required|boolean', ...$note],
+            'account' => ['code' => 'required|string|max:40', 'name' => 'required|string|max:160', 'kind' => 'required|in:asset,liability,equity,revenue,expense', 'normal_balance' => 'required|in:debit,credit'],
+            'accounting_period' => ['name' => 'required|string|max:120', 'starts_on' => 'required|date_format:Y-m-d', 'ends_on' => 'required|date_format:Y-m-d|after_or_equal:starts_on', ...$note],
+            'journal' => ['period_id' => 'required|ulid', 'number' => 'required|string|max:80', 'posted_on' => $date, 'debits' => 'present|array|max:100', 'debits.*' => 'nullable|integer|min:0|max:1000000000000', 'credits' => 'present|array|max:100', 'credits.*' => 'nullable|integer|min:0|max:1000000000000', 'evidence' => 'required|string|max:2000', ...$note],
+            'journal_decide' => [...$key, 'decision' => 'required|in:post,reject', ...$note],
+            'journal_reverse' => [...$key, 'period_id' => 'required|ulid', 'number' => 'required|string|max:80', 'posted_on' => $date, 'evidence' => 'required|string|max:2000', ...$note],
+            'period_status' => [...$key, 'decision' => 'required|in:close,reopen', ...$note],
             'supplier' => ['name' => 'required|string|max:120', 'contact' => 'required|string|max:2000', 'address' => 'required|string|max:2000'],
             'purchase' => ['store_id' => 'required|ulid', 'supplier_id' => 'required|ulid', 'number' => 'required|string|max:80', 'ordered_on' => $date, 'due_on' => 'required|date_format:Y-m-d', ...$quantities, 'amounts' => 'required|array|min:1|max:100', 'amounts.*' => 'nullable|integer|min:0|max:1000000000000', ...$note],
             'purchase_decide' => [...$key, 'decision' => 'required|in:approve,cancel', ...$note],
@@ -52,7 +59,7 @@ final class ErpController
                 $v[$key] = (int) $v[$key];
             }
         }
-        foreach (['amounts', 'recipe_versions', 'allocation_revisions'] as $key) {
+        foreach (['amounts', 'recipe_versions', 'allocation_revisions', 'debits', 'credits', 'grant_versions'] as $key) {
             if (isset($v[$key])) {
                 foreach ($v[$key] as &$value) {
                     if ($value !== null) {
@@ -61,7 +68,7 @@ final class ErpController
                 }
             }
         }
-        foreach (['expiry_required', 'fefo_required', 'active', 'verified'] as $key) {
+        foreach (['expiry_required', 'fefo_required', 'active', 'verified', 'enabled'] as $key) {
             if (isset($v[$key])) {
                 $v[$key] = (bool) $v[$key];
             }

@@ -3,6 +3,7 @@
 namespace App\Modules\Manufacturing\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\GeneralLedger;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Materials\Application\MaterialConfiguration;
@@ -20,17 +21,24 @@ final class ErpWorkflow
 
     public function run(User $u, string $org, string $action, array $v): array
     {
-        $this->access->manage($u, $org);
+        $this->access->command($u, $org, $action, $v);
 
         return $this->ops->run($org, $u->id, $v['operation_id'], 'erp.'.$action.':'.$org, $v, function () use ($u, $org, $action, $v) {
             Organization::whereKey($org)->lockForUpdate()->firstOrFail();
-            $this->access->manage($u, $org);
+            $this->access->command($u, $org, $action, $v);
             if ($action === 'material') {
                 abort_if(Material::where('organization_id', $org)->where('code', $v['code'])->exists(), 409, 'Kode bahan sudah digunakan.');
             }
             $result = match ($action) {
                 'material' => Material::create(['organization_id' => $org, 'code' => $v['code'], 'name' => $v['name'], 'unit' => $v['unit'], 'minimum_quantity' => Quantity::parse($v['minimum'], $v['unit'], true), 'expiry_required' => $v['expiry_required'], 'fefo_required' => $v['fefo_required'], 'active' => true, 'version' => 1])->toArray(),
                 'material_configure' => app(MaterialConfiguration::class)->update($org, $v),
+                'operator_grant' => app(OperatorPermissions::class)->set($u, $org, $v),
+                'account' => app(GeneralLedger::class)->account($org, $v),
+                'accounting_period' => app(GeneralLedger::class)->period($org, $v),
+                'journal' => app(GeneralLedger::class)->journal($u, $org, $v),
+                'journal_decide' => app(GeneralLedger::class)->decide($u, $org, $v),
+                'journal_reverse' => app(GeneralLedger::class)->reverse($u, $org, $v),
+                'period_status' => app(GeneralLedger::class)->periodStatus($org, $v),
                 'supplier' => Supplier::create(['organization_id' => $org, 'name' => $v['name'], 'contact' => $v['contact'], 'address' => $v['address'], 'version' => 1])->toArray(),
                 'purchase' => $this->purchases->create($u, $org, $v),
                 'purchase_decide' => $this->purchases->decide($org, $v),

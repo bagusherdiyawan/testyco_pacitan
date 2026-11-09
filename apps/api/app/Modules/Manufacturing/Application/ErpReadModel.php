@@ -3,6 +3,7 @@
 namespace App\Modules\Manufacturing\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\AccountingReadModel;
 use App\Modules\Catalog\Infrastructure\Product;
 use App\Modules\Identity\Infrastructure\Store;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\DB;
 
 final class ErpReadModel
 {
-    public const SECTIONS = ['materials', 'suppliers', 'purchases', 'lots', 'recipes', 'productions', 'counts', 'ledger', 'planning', 'report', 'trace'];
+    public const SECTIONS = ['materials', 'suppliers', 'purchases', 'lots', 'recipes', 'productions', 'counts', 'ledger', 'planning', 'report', 'trace', 'operators', 'accounts', 'periods', 'journals', 'trial_balance'];
 
     public function __construct(private ErpAccess $access) {}
 
@@ -45,18 +46,33 @@ final class ErpReadModel
 
     public function context(User $u, string $org, array $v): array
     {
-        $this->access->manage($u, $org);
         $section = $v['section'] ?? 'materials';
         $store = $v['store_id'] ?? null;
+        $manager = $this->access->manager($u, $org);
+        if (! $manager) {
+            abort_unless(in_array($section, ['productions', 'lots', 'recipes'], true) && is_string($store), 403);
+            $this->access->operator($u, $org, $store);
+        }
         if ($store) {
             abort_unless(Store::where('organization_id', $org)->whereKey($store)->exists(), 403);
         }
         if (isset($v['material_id'])) {
             abort_unless(Material::where('organization_id', $org)->whereKey($v['material_id'])->exists(), 403);
         }
+        if (in_array($section, AccountingReadModel::SECTIONS, true)) {
+            $this->access->manage($u, $org);
+
+            return ['organization_id' => $org, 'section' => $section, 'can_manage' => true, 'observed_at' => now()->toIso8601String(), ...app(AccountingReadModel::class)->context($org, $section, $v, $u->id)];
+        }
         $options = $this->options($org, $store, $section);
+        if (! $manager) {
+            $options['stores'] = array_intersect_key($options['stores'], [$store => true]);
+        }
+        if ($section === 'operators') {
+            return $this->operators($org, $v, $options);
+        }
         $page = (int) ($v['page'] ?? 1);
-        $base = ['organization_id' => $org, 'section' => $section, 'observed_at' => now()->toIso8601String(), 'can_manage' => true, 'filter_stores' => $options['stores'], 'filter_materials' => $options['materials'], 'forms' => ErpForms::create($section, $options)];
+        $base = ['organization_id' => $org, 'section' => $section, 'observed_at' => now()->toIso8601String(), 'can_manage' => $manager, 'can_operate' => ! $manager, 'allowed_sections' => $manager ? self::SECTIONS : ['productions', 'lots', 'recipes'], 'filter_stores' => $options['stores'], 'filter_materials' => $options['materials'], 'forms' => ($manager || $section === 'productions') ? ErpForms::create($section, $options) : []];
         if (in_array($section, ['planning', 'report', 'trace'], true)) {
             return [...$base, ...$this->projection($org, $section, $v, $options), 'current_page' => 1, 'next_page_url' => null];
         }
@@ -91,10 +107,38 @@ final class ErpReadModel
             if ($section === 'productions' && $row['output_batch_id']) {
                 $row['output_stock_revision'] = InventoryBatch::where('organization_id', $org)->whereKey($row['output_batch_id'])->value('stock_revision');
             }
-            $rows[] = [...$row, 'summary' => $this->summary($section, $row), 'forms' => ErpForms::row($section, $row, $options, $u->id)];
+            $rows[] = [...$row, 'summary' => $this->summary($section, $row), 'forms' => $manager ? ErpForms::row($section, $row, $options, $u->id) : array_values(array_filter(ErpForms::row($section, $row, $options, $u->id), fn ($f) => in_array($f['operation'], ['complete', 'production_cancel'], true)))];
         }
 
         return [...$p->toArray(), ...$base, 'data' => $rows];
+    }
+
+    private function operators(string $org, array $v, array $options): array
+    {
+        $users = DB::table('store_user')->join('users', 'users.id', '=', 'store_user.user_id')->join('stores', 'stores.id', '=', 'store_user.store_id')->join('organization_user', function ($j) {
+            $j->on('organization_user.user_id', '=', 'users.id')->on('organization_user.organization_id', '=', 'stores.organization_id');
+        })->leftJoin('erp_operator_grants as grants', function ($j) {
+            $j->on('grants.user_id', '=', 'users.id')->on('grants.store_id', '=', 'stores.id')->on('grants.organization_id', '=', 'stores.organization_id');
+        })->where('stores.organization_id', $org)->where('stores.active', true)->where('users.active', true)->whereIn('organization_user.role', ['warehouse', 'store_manager'])->limit(1001)->get(['users.id', 'users.name', 'stores.id as store_id', 'stores.name as store_name', 'grants.version as grant_version']);
+        abort_if($users->count() > 1000, 422);
+        $assignments = [];
+        $versions = [];
+        foreach ($users as $u) {
+            $assignments[$u->id.':'.$u->store_id] = $u->name.' · '.$u->store_name;
+            if ($u->grant_version !== null) {
+                $versions[$u->id.':'.$u->store_id] = $u->grant_version;
+            }
+        }
+        $page = DB::table('erp_operator_grants')->where('organization_id', $org)->orderByDesc('id')->paginate(30);
+        $rows = [];
+        foreach ($page->items() as $g) {
+            $key = $g->user_id.':'.$g->store_id;
+            $revoke = ['key' => 'operator_grant-'.$g->id, 'operation' => 'operator_grant', 'label' => 'Cabut izin operator', 'fields' => [ErpForms::field('note', 'Alasan pencabutan')], 'fixed' => ['assignment' => $key, 'enabled' => false, 'grant_versions' => [$key => $g->version]], 'subject_id' => $g->id, 'expected_id' => $g->id, 'expected_version' => $g->version + 1];
+            $rows[] = ['id' => $g->id, 'organization_id' => $org, 'summary' => ($assignments[$g->user_id.':'.$g->store_id] ?? 'Penugasan lama').' · produksi '.($g->enabled ? 'diizinkan' : 'dicabut').' · versi'.$g->version.' · '.$g->reason, 'forms' => $g->enabled ? [$revoke] : []];
+        }
+        $form = ['key' => 'operator_grant-', 'operation' => 'operator_grant', 'label' => 'Atur izin operator per gudang', 'fields' => [ErpForms::field('assignment', 'Pengguna dan gudang yang sudah ditugaskan', 'choice', $assignments), ErpForms::field('enabled', 'Izin produksi termasuk resep, pemakaian bahan dan biaya proses gudang ini', 'choice', ['1' => 'Berikan', '0' => 'Cabut']), ErpForms::field('note', 'Alasan pemberian/pencabutan')], 'fixed' => ['grant_versions' => $versions], 'subject_id' => null, 'expected_id' => null, 'expected_version' => null];
+
+        return [...$page->toArray(), 'organization_id' => $org, 'section' => 'operators', 'can_manage' => true, 'filter_stores' => [], 'filter_materials' => [], 'forms' => [$form], 'data' => $rows];
     }
 
     private function summary(string $section, array $r): string

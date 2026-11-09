@@ -1,4 +1,4 @@
-<x-templates.console><h1>{{ $store['name'] }}</h1><p>{{ $store['active'] ? 'Toko aktif' : 'Toko nonaktif' }}</p>
+<x-templates.console>@if(isset($store['organization_id']) && in_array($store['role']??'', ['owner','admin','warehouse','store_manager']))<p><a href="/app/organizations/{{ $store['organization_id'] }}/erp?section=productions&amp;store_id={{ $store['id'] }}">Produksi ERP gudang (memerlukan izin pengelola)</a></p>@endif<h1>{{ $store['name'] }}</h1><p>{{ $store['active'] ? 'Toko aktif' : 'Toko nonaktif' }}</p>
 @if($store['can_pos'] ?? false)<p><a href="/app/stores/{{ $store['id'] }}/pos">Buka POS dan shift kas →</a></p>@endif
 @if($store['can_order'])<h2>Pesanan toko</h2>@if($store['active'])<p><a href="/app/stores/{{ $store['id'] }}/orders/new">Buat pengajuan →</a></p>@endif<x-organisms.order-list :orders="$orders" />@endif
 @if($store['can_manage_stock'] ?? false)<p><a href="/app/stores/{{ $store['id'] }}/stock-control">Pengolahan, susut dan stok opname →</a></p>@endif

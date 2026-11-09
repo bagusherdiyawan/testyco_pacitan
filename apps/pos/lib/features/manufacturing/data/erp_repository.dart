@@ -6,6 +6,11 @@ class ErpRepository {
   final ApiClient api;
   final String organization;
   static const sections = {
+    'operators': 'Izin operator ERP',
+    'accounts': 'Akun buku besar',
+    'periods': 'Periode pembukuan',
+    'journals': 'Jurnal debit/kredit',
+    'trial_balance': 'Neraca saldo dan ringkasan akun',
     'materials': 'Bahan baku / kemasan',
     'suppliers': 'Pemasok',
     'purchases': 'Pembelian dan pembayaran',
@@ -19,6 +24,13 @@ class ErpRepository {
     'trace': 'Jejak bahan ke produksi',
   };
   static const actions = {
+    'operator_grant',
+    'account',
+    'accounting_period',
+    'journal',
+    'journal_decide',
+    'journal_reverse',
+    'period_status',
     'material',
     'material_configure',
     'supplier',
@@ -59,13 +71,23 @@ class ErpRepository {
     );
     if (c['organization_id'] != organization ||
         c['section'] != section ||
-        c['can_manage'] != true ||
+        (c['can_manage'] != true && c['can_operate'] != true) ||
         c['current_page'] != page ||
         c['data'] is! List ||
         c['forms'] is! List) {
       throw const FormatException('Lingkup ERP tidak cocok.');
     }
     for (final row in c['data']) {
+      if (filters.containsKey('store_id') &&
+          {'productions', 'lots'}.contains(section) &&
+          row['store_id'] != filters['store_id']) {
+        throw const FormatException('Gudang ERP tidak cocok.');
+      }
+      if (filters.containsKey('period_id') &&
+          section == 'journals' &&
+          row['period_id'] != filters['period_id']) {
+        throw const FormatException('Periode jurnal tidak cocok.');
+      }
       if (row is! Map ||
           row['organization_id'] != organization ||
           row['id'] is! String ||
@@ -79,6 +101,20 @@ class ErpRepository {
     }
     for (final f in c['forms']) {
       fields(object(f));
+    }
+    if (c['can_manage'] != true) {
+      for (final f in [
+        ...c['forms'],
+        for (final row in c['data']) ...row['forms'],
+      ]) {
+        if (!{
+          'production',
+          'complete',
+          'production_cancel',
+        }.contains(f['operation'])) {
+          throw const FormatException('Tindakan operator ERP tidak cocok.');
+        }
+      }
     }
     return c;
   }

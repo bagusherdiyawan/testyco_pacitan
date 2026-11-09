@@ -436,4 +436,16 @@ class WholesaleAccountingTest extends TestCase
         $this->assertSame(0, app(AutomaticPosting::class)->drain());
         $this->assertDatabaseCount('accounting_journals', 0);
     }
+
+    public function test_distribution_cost_reader_is_own_finance_only_and_preserves_unknown_cost(): void
+    {
+        $this->received();
+        $before = DB::table('inventory_cost_entries')->count();
+        $url = '/api/v1/organizations/'.$this->center->id.'/erp/context?section=distribution_costs';
+        $this->act($this->owner)->getJson($url)->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.value_delta', null)->assertSee('belum diketahui');
+        $this->act($this->lead)->getJson($url)->assertForbidden();
+        $this->act($this->warehouse)->getJson($url)->assertForbidden();
+        $this->assertDatabaseCount('inventory_cost_entries', $before);
+        $this->assertDatabaseCount('accounting_events', 0);
+    }
 }

@@ -6,6 +6,7 @@ class ErpRepository {
   final ApiClient api;
   final String organization;
   static const financeSections = {
+    'distribution_costs',
     'accounts',
     'periods',
     'journals',
@@ -17,6 +18,7 @@ class ErpRepository {
     'cost_ledger',
   };
   static const sections = {
+    'distribution_costs': 'Biaya historis distribusi',
     'cost_ledger': 'Jejak nilai / HPP batch',
     'posting': 'Pemetaan jurnal otomatis',
     'posting_events': 'Antrean jurnal sumber',

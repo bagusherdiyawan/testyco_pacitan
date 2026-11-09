@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 final class AccountingReadModel
 {
-    public const SECTIONS = ['accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger'];
+    public const SECTIONS = ['accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs'];
 
     private function options(string $table, string $org): array
     {
@@ -33,7 +33,7 @@ final class AccountingReadModel
         if (isset($v['period_id'])) {
             abort_unless(DB::table('accounting_periods')->where('organization_id', $org)->where('id', $v['period_id'])->exists(), 404);
         }
-        if (in_array($section, ['posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger'], true)) {
+        if (in_array($section, ['posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs'], true)) {
             return app(PostingReadModel::class)->context($org, $section, $actor);
         }
         $accounts = $this->options('accounting_accounts', $org);

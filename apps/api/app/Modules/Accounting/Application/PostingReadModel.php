@@ -10,6 +10,16 @@ final class PostingReadModel
 {
     public function context(string $org, string $section, int $actor): array
     {
+        if ($section === 'distribution_costs') {
+            $page = DB::table('inventory_cost_entries')->where('organization_id', $org)->whereIn('source_type', ['shipment_dispatch', 'replacement_dispatch', 'return_dispatch'])->orderByDesc('id')->paginate(30);
+            $rows = [];
+            foreach ($page->items() as $entry) {
+                $r = (array) $entry;
+                $rows[] = [...$r, 'summary' => 'Sumber: '.$r['source_type'].' · '.$r['source_id']."\nBatch: ".$r['inventory_batch_id'].' · revisi '.$r['stock_revision']."\nKeluar: ".(-$r['quantity_delta']).' biji · biaya historis Rp'.($r['value_delta'] === null ? 'belum diketahui' : -$r['value_delta'])."\nBiaya fisik kiriman; pengakuan HPP dan kepemilikan masih perlu rekonsiliasi.", 'forms' => []];
+            }
+
+            return [...$page->toArray(), 'data' => $rows, 'forms' => [], 'filter_stores' => [], 'filter_materials' => [], 'filter_periods' => [], 'notice' => 'Biaya berasal pergerakan batch aktual, bukan harga invoice. Unknown tidak dianggap nol. Laporan ini tidak membuat jurnal atau menilai ulang stok pembeli.'];
+        }
         $field = F::field(...);
         $note = $field('note', 'Bukti dan alasan pemeriksaan');
         $make = fn ($op, $label, $fields, $fixed = [], $id = null, $version = null) => ['key' => $op.'-'.($id ?? '').'-'.($fixed['decision'] ?? ''), 'operation' => $op, 'label' => $label, 'fields' => $fields, 'fixed' => $fixed, 'subject_id' => $id, 'expected_id' => $id, 'expected_version' => $version];

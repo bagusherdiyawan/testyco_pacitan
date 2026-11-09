@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.33.0",
+    "version": "0.33.1",
     "description": "Authenticated, modular organization/store-scoped operations. Explicit per-document wholesale invoice basis, discounts/shipping/tax/rounding/due date and partner consent; verified manual partial collections, reversals, customer-credit liability, bounded two-party credits and signed-contract/manual consignment reports. Confirmed physical returns move damaged goods from partner quarantine to original center quarantine, never usable. Online POS supports cash and explicitly verified QRIS/transfer, own-issuer-funded store/product vouchers and reviewed manager refunds using historical discounted prices and actual component allocations. No payment-provider calls, automatic profit sharing, automatic offline noncash settlement. Cash-sales reports retain original cash-sale scope and exclude noncash/B2B and refund deduction; refunds are separately recorded. Immutable UUID retries, parent/version locks, private files and scoped audit remain mandatory. Development SQLite only; PostgreSQL concurrency, production tax/legal acceptance, device/printer and UAT are not verified. DL18–20: SMTP/inbox (push deferred), explicit organization-leader SOP/recall/FEFO, encrypted MFA/reset and device sessions, durable encrypted cash-only offline queue with review conflicts, contract-backed asset lifecycle and bounded commercial cohort reports with evidenced net costs. External SMTP delivery and real device Keystore/release remain unverified. Explicit bilateral standing consignment/profit-sharing and sponsored promotions now accrue immutable settlement deltas with historical refund reversals and hard sponsor budgets, separate from manual invoices. Coordinated recalls follow real receipt provenance and recipient-leader hold/release. Native ESC/POS TCP LAN58/80mm and browser/system printing are client integrations; transport send is not physical print acknowledgement. Push and payment gateways remain deferred. ERP manufacturing: own active center owner/admin only. Exact kg/g/l/ml/whole-pcs material ledgers dispatch through StockLedger.apply; explicit opening values, approved supplier purchases/partial receipts/verified payments and supplier refunds. Immutable recipe versions may output a finished product or an intermediate material. Production consumes actual eligible reviewed lot revisions atomically with quarantined output and lot-derived costs; owner/admin must inspect before release. Explicit FEFO and minimum settings, independent material counts, internal transfers, bounded planning/HPP and transitive material trace. No invented recipe, yield, lifetime, tax, cost or auto bank/recall policy. Web and native Flutter use scoped declarative forms and immutable UUID retry. Explicit per-user/per-assigned-store production grants now allow warehouse/store managers to plan and record production including process cost; supplier finance and mandatory QC remain owner/admin only. Manual double-entry accounting includes explicit chart/normal balances, independent draft review, exact linked reversals, activity-versioned open/closed periods and bounded opening/movement/closing trial balance with period account net movements and as-of categories. No automatic ERP/POS historical posting or chart/tax mapping is implied."
   },
   "security": [
@@ -21182,7 +21182,8 @@
                 "posting_events",
                 "valuations",
                 "valuation_stock",
-                "cost_ledger"
+                "cost_ledger",
+                "distribution_costs"
               ]
             }
           },
@@ -34647,7 +34648,8 @@
               "posting_events",
               "valuations",
               "valuation_stock",
-              "cost_ledger"
+              "cost_ledger",
+              "distribution_costs"
             ]
           },
           "can_manage": {
@@ -34705,7 +34707,8 @@
                 "posting_events",
                 "valuations",
                 "valuation_stock",
-                "cost_ledger"
+                "cost_ledger",
+                "distribution_costs"
               ]
             }
           }

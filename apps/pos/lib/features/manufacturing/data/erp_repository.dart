@@ -5,6 +5,17 @@ class ErpRepository {
   ErpRepository(this.api, this.organization);
   final ApiClient api;
   final String organization;
+  static const financeSections = {
+    'accounts',
+    'periods',
+    'journals',
+    'trial_balance',
+    'posting',
+    'posting_events',
+    'valuations',
+    'valuation_stock',
+    'cost_ledger',
+  };
   static const sections = {
     'cost_ledger': 'Jejak nilai / HPP batch',
     'posting': 'Pemetaan jurnal otomatis',
@@ -29,6 +40,7 @@ class ErpRepository {
     'trace': 'Jejak bahan ke produksi',
   };
   static const actions = {
+    'wholesale_policy',
     'posting_policy',
     'posting_decide',
     'posting_suspend',

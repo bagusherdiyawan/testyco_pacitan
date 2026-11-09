@@ -25,6 +25,7 @@ final class AutomaticPosting
 
     public function policy(User $u, string $org, array $v): array
     {
+        app(WholesalePolicy::class)->baseGuard($org);
         $mapping = [];
         foreach (self::ROLES as $role => [$label,$kind,$normal]) {
             $a = DB::table('accounting_accounts')->where('organization_id', $org)->where('id', $v[$role.'_account'])->where('active', true)->firstOrFail();
@@ -45,6 +46,7 @@ final class AutomaticPosting
         abort_if($p['created_by'] === $u->id, 403, 'Persetujuan pemetaan wajib pengelola lain.');
         $status = $v['decision'] === 'approve' ? 'active' : 'rejected';
         if ($status === 'active') {
+            app(WholesalePolicy::class)->approvalGuard($org, $p['id']);
             DB::table('accounting_policies')->where('organization_id', $org)->where('status', 'active')->update(['status' => 'superseded', 'updated_at' => now(), 'version' => DB::raw('version + 1')]);
         }
         $new = ['status' => $status, 'version' => $p['version'] + 1, 'approved_by' => $u->id, 'activated_at' => $status === 'active' ? now() : null, 'updated_at' => now()];
@@ -64,10 +66,11 @@ final class AutomaticPosting
     }
 
     /** Terms are server-built pairs [debit role, credit role, exact IDR or null]. */
-    public function record(string $org, int $actor, string $type, string $source, string $day, array $terms, string $evidence, ?string $reason = null): void
+    public function record(string $org, int $actor, string $type, string $source, string $day, array $terms, string $evidence, ?string $reason = null, ?string $policyId = null): void
     {
         abort_unless(DB::transactionLevel() > 0, 500);
-        $p = DB::table('accounting_policies')->where('organization_id', $org)->where('status', 'active')->first();
+        $policy = DB::table('accounting_policies')->where('organization_id', $org);
+        $p = ($policyId ? $policy->where('id', $policyId)->whereNotNull('activated_at') : $policy->where('status', 'active'))->first();
         if (! $p) {
             return;
         } // Explicit prospective activation, never import old sources.

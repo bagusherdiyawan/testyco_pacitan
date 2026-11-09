@@ -256,3 +256,5 @@ Acceptance utama: receipt bahan2kg senilaiRp20.000, lolos pemeriksaan, produksi 
 ### Paket1 — posting ERP/POS (ADR052)
 
 Permintaan pengguna mengaktifkan pengembangan integrasi buku besar: explicit approved mapping/standing authority, source outbox atomik/exactly-once, nilai produk dari biaya produksi, HPP berdasarkan alokasi batch aktual termasuk bundle, refund historis, review nilai opening, periode/antrean/rekonsiliasi dan layar native/web. Otoritas finance partner own-org tidak memperluas ERP pusat. Cakupan posting dan pengecualian komersial/cutover wajib mengikuti [ADR052](../automatic-accounting.md). Tidak menghidupkan push/gateway/auto recall/bank payout yang sudah ditunda pengguna.
+
+Lanjutan paket1 (ADR053): financial invoice wholesale/credit/payment/reversal terhubung ke GL penjual/pembeli melalui extension policy eksplisit, pilihan tax/freight, independent approval dan original-policy adjustments. Buyer purchase clearing dipisahkan dari valuation fisik. Batas HPP distribusi/komersial dan aktivasi ada di [panduan](../wholesale-accounting.md).

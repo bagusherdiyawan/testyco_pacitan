@@ -925,6 +925,61 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert 'HPP penjualan' in central_browser.open(web+erp_web+'?section=posting_events').read().decode()
         assert 'ERP-OUTPUT-LOT' in central_browser.open(web+erp_web+'?section=valuation_stock').read().decode()
         print('PASS: approved prospective account mapping, ERP source events, exact batch POS COGS, worker exactly-once posting, native-compatible queue/cost metadata and live BFF',flush=True)
+        print('Pacing wholesale accounting HTTP checks for the next rate-limit window.',flush=True)
+        time.sleep(60)
+        # Dedicated buyout shipment: do not mix commercial consignment ownership into this scenario.
+        wholesale_product={'sku':'GL-BUYOUT','name':'Wholesale accounting fixture','condition':'frozen','pack_size':8,'portion_size':1,'wholesale_price':10000,'retail_price':2000}
+        ws=api(base,'POST',f'organizations/{center}/products',wholesale_product,owner,201)['data']
+        wl=api(base,'POST',f'organizations/{org}/products',wholesale_product,lead_token,201)['data']
+        wb=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':'GL-BUYOUT-LOT','expires_on':'2030-01-01','quantity_packs':2,'note':'Measured shipment fixture'},owner,201)['data']
+        wo=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':ws['id'],'local_product_id':wl['id'],'quantity_packs':2}]},lead_token,201)['data']
+        wo=api(base,'POST',f'orders/{wo["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':wo['version']},lead_token)['data']
+        wo=api(base,'POST',f'orders/{wo["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':wo['version'],'source_store_id':source},owner)['data']
+        wd=api(base,'POST',f'orders/{wo["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':wo['version'],'handler':'Actual shipment','lines':[{'order_line_id':wo['lines'][0]['id'],'allocations':[{'batch_id':wb['id'],'quantity_packs':2}]}]},owner,201)['data']
+        wr=api(base,'POST',f'shipments/{wd["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':wd['order']['version'],'lines':[{'shipment_line_id':wd['shipment']['lines'][0]['id'],'good_packs':1,'damaged_packs':1,'condition_note':'One damaged pack verified'}]},lead_token)['data']
+        ledger_before+=2
+        wcpath=f'orders/{wo["id"]}/shipments/{wd["shipment"]["id"]}/discrepancy'
+        case=api(base,'POST',wcpath,{'operation_id':str(uuid.uuid4()),'order_version':wr['order']['version'],'reason':'One damaged pack','reference':'Physical check'},lead_token,201)['data']
+        plan=api(base,'POST',wcpath+'/resolutions',{'operation_id':str(uuid.uuid4()),'version':1,'type':'credit','proposal':'Agreed damaged pack credit','reference':'Explicit agreement'},owner,201)['data']
+        api(base,'POST',wcpath+'/resolutions/'+plan['resolution']['id']+'/confirm',{'operation_id':str(uuid.uuid4()),'version':2},lead_token)
+        partner_reviewer=api(base,'POST',f'organizations/{org}/users',{'name':'Partner Accounting Reviewer','email':'partner-accounting-reviewer@smoke.test','password':PASSWORD,'role':'partner_lead','store_ids':[]},lead_token,201)['data']
+        partner_review_token=api(base,'POST','auth/login',{'email':partner_reviewer['email'],'password':PASSWORD,'device_name':'partner-accounting-review'})['token']
+        partner_erp=f'organizations/{org}/erp'
+        def finance_post(path,action,body,actor):return api(base,'POST',path+'/'+action,{'operation_id':str(uuid.uuid4()),**body},actor,201)['data']
+        finance_post(partner_erp,'accounting_period',{'name':'Explicit buyer period','starts_on':erp_day,'ends_on':erp_day,'note':'Reviewed period'},lead_token)
+        buyer_mapping={'note':'Buyer base accounts reviewed'}
+        for role,(kind,normal) in roles.items():
+            a=finance_post(partner_erp,'account',{'code':'BUY-'+role,'name':'Buyer '+role,'kind':kind,'normal_balance':normal},lead_token);buyer_mapping[role+'_account']=a['id']
+        buyer_base=finance_post(partner_erp,'posting_policy',buyer_mapping,lead_token)
+        finance_post(partner_erp,'posting_decide',{'id':buyer_base['id'],'version':1,'decision':'approve','note':'Other leader reviewed'},partner_review_token)
+        wholesale_roles={'trade_receivable':('asset','debit'),'wholesale_sales':('revenue','credit'),'wholesale_discount':('expense','debit'),'wholesale_returns':('expense','debit'),'shipping_revenue':('revenue','credit'),'output_tax':('liability','credit'),'trade_payable':('liability','credit'),'purchase_clearing':('asset','debit'),'input_tax':('asset','debit'),'freight_expense':('expense','debit')}
+        for path,actor,reviewer,base_policy,tax,freight in [(erp_path,owner,reviewer_token,policy,'recoverable','expense'),(partner_erp,lead_token,partner_review_token,buyer_base,'clearing','clearing')]:
+            config={'base_policy_id':base_policy['id'],'base_policy_version':2,'tax_treatment':tax,'freight_treatment':freight,'note':'Explicit own-organization wholesale accounts'}
+            for role,(kind,normal) in wholesale_roles.items():
+                a=finance_post(path,'account',{'code':'B2B-'+role,'name':'Wholesale '+role,'kind':kind,'normal_balance':normal},actor);config[role+'_account']=a['id']
+            wp=finance_post(path,'wholesale_policy',config,actor)
+            finance_post(path,'posting_decide',{'id':wp['id'],'version':1,'decision':'approve','note':'Independent approval of tax/freight/account mapping'},reviewer)
+        assert 'Ajukan integrasi jurnal wholesale' in central_browser.open(web+erp_web+'?section=posting').read().decode()
+        assert 'Pembukuan dan jurnal' in opener.open(web+'/app/'+partner_erp+'?section=posting').read().decode()
+        wbpath=f'orders/{wo["id"]}/billing/invoices'
+        wi=api(base,'POST',wbpath,{'operation_id':str(uuid.uuid4()),'mode':'buyout','basis':'dispatched','shipment_ids':[wd['shipment']['id']],'due_on':'2030-12-31','discount_amount':100,'shipping_amount':1000,'tax_basis_points':1000,'rounding':'half_up','note':'Explicit wholesale terms'},owner,201)['data']
+        invoice_accept={'operation_id':str(uuid.uuid4()),'version':1,'consent':True,'reason':'Buyer accepts exact terms'}
+        wi=api(base,'POST',wbpath+'/'+wi['id']+'/accept',invoice_accept,lead_token)['data'];api(base,'POST',wbpath+'/'+wi['id']+'/accept',invoice_accept,lead_token)
+        assert wi['total_amount']==22990
+        wp=api(base,'POST',wbpath+'/'+wi['id']+'/payments',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'kind':'collection','method':'bank_transfer','amount':4000,'reference':'WHOLESALE-PAY-1','paid_on':erp_day,'verified':True,'note':'Verified manual collection'},owner,201)['data']
+        reverse={'operation_id':str(uuid.uuid4()),'version':wp['version'],'reason':'Incorrect matching reversed'}
+        wi=api(base,'POST',wbpath+'/'+wi['id']+'/payments/'+wp['payments'][0]['id']+'/reverse',reverse,owner)['data'];api(base,'POST',wbpath+'/'+wi['id']+'/payments/'+wp['payments'][0]['id']+'/reverse',reverse,owner)
+        credit=api(base,'POST',wbpath+'/'+wi['id']+'/credits',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'case_id':case['case']['id'],'base_amount':10000,'tax_amount':1000,'reason':'Agreed one damaged pack credit'},owner,201)['data']
+        credit_id=credit['credits'][0]['id']
+        wi=api(base,'POST',wbpath+'/'+wi['id']+'/credits/'+credit_id+'/accept',{'operation_id':str(uuid.uuid4()),'version':credit['version'],'consent':True,'reason':'Buyer confirms historical credit'},lead_token)['data']
+        assert wi['outstanding_amount']==11990
+        api(base,'POST',wbpath+'/'+wi['id']+'/payments',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'kind':'collection','method':'cash','amount':11990,'reference':'WHOLESALE-PAY-2','paid_on':erp_day,'verified':True,'note':'Actual external cash verified; no POS drawer write'},owner,201)
+        assert 'Jurnal dibukukan: 10' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        buyer_events=api(base,'GET',partner_erp+'/context?section=posting_events',token=lead_token)['data']
+        assert len(buyer_events)==5 and all(e['status']=='posted' for e in buyer_events)
+        api(base,'GET',partner_erp+'/context?section=posting_events',token=owner,expected=403)
+        print('PASS: real independently approved seller/buyer wholesale policies, explicit tax/freight, accepted invoice, collection/reversal, agreed credit, exact-once worker and private finance BFF',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

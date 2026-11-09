@@ -50,4 +50,35 @@ class AutomaticAccountingWebTest extends TestCase
         Http::fake(['*' => Http::response($c)]);
         $this->get('/app/organizations/ORG/erp?section=posting_events')->assertStatus(503);
     }
+
+    public function test_wholesale_tax_freight_and_reviewed_base_version_stay_frozen_on_unknown_retry(): void
+    {
+        $fixed = ['base_policy_id' => 'BASE', 'base_policy_version' => 2];
+        $form = ['key' => 'wholesale_policy-', 'operation' => 'wholesale_policy', 'label' => 'Ajukan integrasi jurnal wholesale', 'fields' => [
+            ['key' => 'tax_treatment', 'label' => 'Pajak pembelian', 'kind' => 'choice', 'options' => ['recoverable' => 'Dapat dikreditkan', 'clearing' => 'Penampung biaya'], 'optional' => false],
+            ['key' => 'freight_treatment', 'label' => 'Ongkir', 'kind' => 'choice', 'options' => ['expense' => 'Beban periode', 'clearing' => 'Penampung biaya'], 'optional' => false],
+            ['key' => 'note', 'label' => 'Bukti', 'kind' => 'text', 'options' => [], 'optional' => false]], 'fixed' => $fixed, 'subject_id' => null, 'expected_id' => null, 'expected_version' => null];
+        $c = ['organization_id' => 'ORG', 'section' => 'posting', 'can_manage' => true, 'allowed_sections' => ['posting'], 'current_page' => 1, 'next_page_url' => null, 'data' => [], 'forms' => [$form], 'filter_stores' => [], 'filter_materials' => []];
+        $sent = [];
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(function ($r) use ($c, &$sent) {
+            if ($r->method() === 'GET') {
+                return Http::response($c);
+            }
+            $sent[] = $r->data();
+
+            return count($sent) === 1 ? Http::response(['message' => 'Unknown'], 503) : Http::response(['data' => ['id' => 'W', 'organization_id' => 'ORG', 'version' => 1, 'operation_id' => $r['operation_id']]], 201);
+        });
+        $this->withSession(['api_token' => 'private', 'api_user' => ['id' => 1], 'api_expires_at' => time() + 1000])->get('/app/organizations/ORG/erp?section=posting')->assertOk()->assertSee('Pembukuan dan jurnal')->assertSee('Dapat dikreditkan');
+        $v = ['section' => 'posting', 'form_key' => $form['key'], 'fixed_json' => json_encode($fixed), 'values' => ['tax_treatment' => 'recoverable', 'freight_treatment' => 'expense', 'note' => 'Bukti sendiri']];
+        $this->post('/app/organizations/ORG/erp/review', $v)->assertRedirect();
+        $this->assertCount(0, $sent);
+        $this->post('/app/organizations/ORG/erp/confirm')->assertRedirect();
+        $this->post('/app/organizations/ORG/erp/retry')->assertRedirect();
+        $this->assertSame($sent[0], $sent[1]);
+        $this->assertSame(2, $sent[0]['base_policy_version']);
+        $this->assertSame('recoverable', $sent[0]['tax_treatment']);
+        $this->assertSame('expense', $sent[0]['freight_treatment']);
+    }
 }

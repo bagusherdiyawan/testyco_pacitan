@@ -79,7 +79,11 @@ class _ErpPageState extends State<ErpPage> {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
-      title: const Text('Bahan baku dan produksi'),
+      title: Text(
+        ErpRepository.financeSections.contains(section)
+            ? 'Pembukuan dan jurnal'
+            : 'Bahan baku dan produksi',
+      ),
       actions: [
         IconButton(
           onPressed: reload,
@@ -94,8 +98,10 @@ class _ErpPageState extends State<ErpPage> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text(
-              'Hasil produksi masuk karantina sampai diperiksa owner/admin pusat. Jumlah sesuai satuan bahan; biaya rupiah diisi eksplisit.',
+            Text(
+              ErpRepository.financeSections.contains(section)
+                  ? 'Pemetaan akun disetujui pengelola lain. Periksa antrean dan tanggal sumber sebelum menutup periode. Pembelian wholesale ditampung sebelum rekonsiliasi persediaan.'
+                  : 'Hasil produksi masuk karantina sampai diperiksa owner/admin pusat. Jumlah sesuai satuan bahan; biaya rupiah diisi eksplisit.',
             ),
             DropdownButtonFormField<String>(
               initialValue: section,
@@ -111,17 +117,7 @@ class _ErpPageState extends State<ErpPage> {
                               'recipes',
                             }.contains(e.key)) &&
                         (!widget.financeOnly ||
-                            {
-                              'accounts',
-                              'periods',
-                              'journals',
-                              'trial_balance',
-                              'posting',
-                              'posting_events',
-                              'valuations',
-                              'valuation_stock',
-                              'cost_ledger',
-                            }.contains(e.key)),
+                            ErpRepository.financeSections.contains(e.key)),
                   )
                   .map(
                     (e) => DropdownMenuItem(

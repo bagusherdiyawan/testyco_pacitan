@@ -28,6 +28,20 @@ final class PostingReadModel
                 $fields[] = $field($role.'_account', $label, 'choice', $choices);
             }
             $forms[] = $make('posting_policy', 'Ajukan pemetaan jurnal otomatis', [...$fields, $note]);
+            $active = DB::table('accounting_policies')->where('organization_id', $org)->where('status', 'active')->first();
+            if ($active) {
+                if (DB::table('accounting_wholesale_policies')->where('organization_id', $org)->where('policy_id', $active->id)->exists()) {
+                    $forms = [];
+                }
+                $wholesaleFields = [];
+                foreach (WholesalePolicy::ROLES as $role => [$label,$kind,$normal]) {
+                    $choices = $accounts->filter(fn ($a) => $a->kind === $kind && $a->normal_balance === $normal)->mapWithKeys(fn ($a) => [$a->id => $a->code.' · '.$a->name])->all();
+                    $wholesaleFields[] = $field($role.'_account', $label, 'choice', $choices);
+                }
+                $wholesaleFields[] = $field('tax_treatment', 'Pajak pembelian sesuai kewenangan organisasi', 'choice', ['recoverable' => 'Pajak masukan dapat dikreditkan', 'clearing' => 'Termasuk penampung biaya pembelian']);
+                $wholesaleFields[] = $field('freight_treatment', 'Ongkir pembelian', 'choice', ['expense' => 'Beban periode', 'clearing' => 'Termasuk penampung biaya pembelian']);
+                $forms[] = $make('wholesale_policy', 'Ajukan integrasi jurnal wholesale', [...$wholesaleFields, $note], ['base_policy_id' => $active->id, 'base_policy_version' => $active->version]);
+            }
         }
         $table = match ($section) {
             'posting' => 'accounting_policies','posting_events' => 'accounting_events','cost_ledger' => 'inventory_cost_entries',default => 'accounting_value_proposals'
@@ -44,14 +58,19 @@ final class PostingReadModel
                 }
             }
             if ($section === 'posting') {
+                $settings = DB::table('accounting_wholesale_policies')->where('policy_id', $r['id'])->where('organization_id', $org)->first();
+                if ($settings) {
+                    $text[] = 'Aturan: pembayaran yang diverifikasi penjual mencatat kas/bank sesuai metode pada kedua buku. Cocokkan bukti dengan rekening organisasi sendiri. Pembelian memakai penampung biaya sebelum rekonsiliasi persediaan.';
+                    $text[] = 'Cakupan wholesale · pajak pembelian: '.($settings->tax_treatment === 'recoverable' ? 'dapat dikreditkan' : 'masuk penampung biaya').' · ongkir: '.($settings->freight_treatment === 'expense' ? 'beban periode' : 'masuk penampung biaya').' · dasar: '.$settings->base_policy_id.' versi'.$settings->base_policy_version;
+                }
                 foreach (json_decode($r['mapping'], true) as $role => $a) {
-                    $text[] = AutomaticPosting::ROLES[$role][0].': '.$a['code'].' '.$a['name'];
+                    $text[] = WholesalePolicy::labels()[$role][0].': '.$a['code'].' '.$a['name'];
                 }
             }
             if ($section === 'posting_events') {
                 $text[] = 'Pemetaan: '.$r['policy_id'];
                 foreach (json_decode($r['terms'], true) as [$d,$c,$amount]) {
-                    $text[] = 'Debit '.AutomaticPosting::ROLES[$d][0].' / kredit '.AutomaticPosting::ROLES[$c][0].' · Rp'.($amount ?? 'belum diketahui');
+                    $text[] = 'Debit '.WholesalePolicy::labels()[$d][0].' / kredit '.WholesalePolicy::labels()[$c][0].' · Rp'.($amount ?? 'belum diketahui');
                 }
             }
             if ($section === 'cost_ledger' && $r['value_delta'] === null) {
@@ -64,7 +83,7 @@ final class PostingReadModel
                 }
             }
             if ($section === 'posting' && $r['status'] === 'active') {
-                $actions[] = $make('posting_suspend', 'Hentikan tangkapan transaksi baru', [$note], $fixed, $r['id'], $r['version'] + 1);
+                $actions[] = $make('posting_suspend', 'Hentikan sumber baru; koreksi invoice lama tetap tercatat', [$note], $fixed, $r['id'], $r['version'] + 1);
             }
             if ($section === 'posting_events' && $r['status'] === 'review_required' && str_starts_with($r['reason'] ?? '', 'Tanggal sumber')) {
                 $actions[] = $make('posting_retry', 'Antrekan ulang sesudah periode diperbaiki', [$note], $fixed, $r['id'], $r['version'] + 1);
@@ -94,6 +113,6 @@ final class PostingReadModel
         $pending = DB::table('accounting_events')->where('organization_id', $org)->whereNotIn('status', ['posted', 'reconciled'])->count();
 
         return [...$page->toArray(), 'data' => $rows, 'forms' => $forms, 'filter_stores' => [], 'filter_materials' => [], 'filter_periods' => [],
-            'notice' => 'Otomatisasi berlaku untuk transaksi baru setelah pemetaan disetujui pengelola lain. Persediaan mencakup karantina. Tidak mengimpor histori. Antrean belum posted: '.$pending.'. Nilai tidak diketahui dan transaksi distribusi/konsinyasi/promo sponsor menunggu rekonsiliasi; tidak diasumsikan nol.'];
+            'notice' => 'Otomatisasi berlaku untuk transaksi baru setelah pemetaan disetujui pengelola lain. Persediaan mencakup karantina. Tidak mengimpor histori. Antrean belum posted: '.$pending.'. Wholesale baru ikut otomatis setelah pemetaan tambahan disetujui organisasi sendiri. Pembelian ditampung sebelum rekonsiliasi persediaan. Nilai tidak diketahui serta distribusi/konsinyasi/promo sponsor menunggu rekonsiliasi; tidak diasumsikan nol.'];
     }
 }

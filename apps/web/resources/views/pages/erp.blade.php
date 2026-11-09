@@ -1,5 +1,9 @@
-<x-templates.console><a href="/app/organizations/{{ $organization }}">← Organisasi</a><h1>Bahan baku, pembelian dan produksi</h1>
+<x-templates.console>
+@php($finance=in_array($context['section']??$q['section']??'materials',['accounts','periods','journals','trial_balance','posting','posting_events','valuations','valuation_stock','cost_ledger']))
+<a href="/app/organizations/{{ $organization }}">← Organisasi</a><h1>{{ $finance?'Pembukuan dan jurnal':'Bahan baku, pembelian dan produksi' }}</h1>
+@if($finance)<p>Pemetaan akun disetujui pengelola lain. Periksa antrean dan tanggal sumber sebelum menutup periode. Pembelian wholesale ditampung sebelum rekonsiliasi persediaan.</p>@else
 <p>Hasil produksi masuk karantina sampai owner/admin pusat menyelesaikan pemeriksaan. Jumlah bahan menggunakan satuan yang tercantum; harga dan biaya dalam rupiah. Tidak ada resep, biaya, atau masa simpan bawaan.</p>
+@endif
 @if($pending || $candidate)
 @php($review=$pending??$candidate)<section class="panel"><h2>{{ $pending?'Hasil belum pasti':'Tinjauan sebelum dikirim' }} · {{ $review['form']['label'] }}</h2>
 <pre class="audit-snapshot">{{ $review['snapshot'] }}</pre><dl>@foreach($review['display'] as $label=>$value)<dt>{{ $label }}</dt><dd>{{ $value }}</dd>@endforeach</dl>

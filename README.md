@@ -10,11 +10,13 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.29.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.33.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
 [ERP bahan baku dan produksi](docs/manufacturing-erp.md) kini menghubungkan penerimaan bahan/pembelian supplier, resep berversi termasuk adonan setengah jadi, pemakaian aktual, biaya/HPP, hasil karantina dan pemeriksaan owner/admin pusat sebelum masuk stok distribusi/POS. Web dan Flutter native tersedia melalui administrasi pusat. Lihat batas cakupan dan skenario uji pada panduan; status DL-01–DL-20 sebelumnya bukan klaim ERP manufaktur lengkap atau siap produksi.
+
+[Pembukuan otomatis ERP/POS](docs/automatic-accounting.md) dan [keuangan wholesale](docs/wholesale-accounting.md) tersedia setelah pemetaan akun disetujui pengelola berbeda pada organisasi masing-masing. Nilai/HPP distribusi dan komersial mengikuti batas rekonsiliasi yang dijelaskan di panduan.
 
 ## Setup dan akun pertama
 

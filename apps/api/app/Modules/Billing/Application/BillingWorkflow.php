@@ -3,6 +3,7 @@
 namespace App\Modules\Billing\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\BillingPosting;
 use App\Modules\Billing\Infrastructure\ConsignmentReport;
 use App\Modules\Billing\Infrastructure\Invoice;
 use App\Modules\Billing\Infrastructure\InvoiceCredit;
@@ -143,6 +144,9 @@ final class BillingWorkflow
             $i->decided_at = now();
             $i->decision_note = $v['reason'];
             $i->save();
+            if ($action === 'accept') {
+                app(BillingPosting::class)->invoice($i, $u->id);
+            }
             if ($action !== 'accept') {
                 DB::table('invoice_shipment_lines')->where('invoice_id', $id)->update(['active_shipment_line_id' => null]);
             }$this->audit($u, $o, 'invoice_'.$action, $id, $i->toArray());
@@ -163,6 +167,7 @@ final class BillingWorkflow
             abort_if(InvoicePayment::where('invoice_id', $id)->where('reference', $v['reference'])->exists(), 409, 'Referensi pembayaran sudah digunakan.');
             $p = InvoicePayment::create(['invoice_id' => $id, 'kind' => $v['kind'], 'method' => $v['method'], 'amount' => (int) $v['amount'], 'reference' => $v['reference'], 'paid_on' => $v['paid_on'], 'note' => $v['note'], 'status' => 'verified', 'verified_by' => $u->id, 'verified_at' => now()]);
             $i->increment('version');
+            app(BillingPosting::class)->payment($i, $p, $u->id);
             $this->audit($u, $o, 'payment_verified', $p->id, $p->toArray());
 
             return $this->document($i->refresh());
@@ -180,6 +185,7 @@ final class BillingWorkflow
                 abort_unless($this->balance($i)['refunded_amount'] === 0, 409, 'Rekonsiliasi refund kredit sebelum membalik penerimaan.');
             }$p->fill(['status' => 'reversed', 'reversed_by' => $u->id, 'reversed_at' => now(), 'reversal_reason' => $v['reason']])->save();
             $i->increment('version');
+            app(BillingPosting::class)->payment($i, $p, $u->id, true);
             $this->audit($u, $o, 'payment_reversed', $p->id, $p->toArray());
 
             return $this->document($i->refresh());
@@ -240,6 +246,9 @@ final class BillingWorkflow
                 abort_unless(($v['consent'] ?? false) === true && $c->base_amount <= $limit['base'] && $c->tax_amount <= $limit['tax'], 422, 'Periksa persetujuan dan batas kredit.');
             }$c->fill(['status' => ['accept' => 'accepted', 'reject' => 'rejected', 'withdraw' => 'withdrawn'][$action], 'pending_invoice_id' => null, 'version' => $c->version + 1, 'decided_by' => $u->id, 'decided_at' => now(), 'decision_note' => $v['reason']])->save();
             $i->increment('version');
+            if ($action === 'accept') {
+                app(BillingPosting::class)->credit($i, $c, $u->id);
+            }
             $this->audit($u, $o, 'credit_'.$action, $credit, $c->toArray());
 
             return $this->document($i->refresh());

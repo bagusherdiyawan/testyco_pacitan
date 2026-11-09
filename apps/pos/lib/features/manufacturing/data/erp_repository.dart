@@ -6,6 +6,11 @@ class ErpRepository {
   final ApiClient api;
   final String organization;
   static const sections = {
+    'cost_ledger': 'Jejak nilai / HPP batch',
+    'posting': 'Pemetaan jurnal otomatis',
+    'posting_events': 'Antrean jurnal sumber',
+    'valuations': 'Review nilai saldo awal',
+    'valuation_stock': 'Nilai persediaan produk',
     'operators': 'Izin operator ERP',
     'accounts': 'Akun buku besar',
     'periods': 'Periode pembukuan',
@@ -24,6 +29,13 @@ class ErpRepository {
     'trace': 'Jejak bahan ke produksi',
   };
   static const actions = {
+    'posting_policy',
+    'posting_decide',
+    'posting_suspend',
+    'posting_reconcile',
+    'posting_retry',
+    'value_propose',
+    'value_decide',
     'operator_grant',
     'account',
     'accounting_period',

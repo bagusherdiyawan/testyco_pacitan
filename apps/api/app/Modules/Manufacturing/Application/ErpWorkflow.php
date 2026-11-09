@@ -3,7 +3,9 @@
 namespace App\Modules\Manufacturing\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Accounting\Application\GeneralLedger;
+use App\Modules\Accounting\Application\InventoryValuation;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Materials\Application\MaterialConfiguration;
@@ -33,6 +35,13 @@ final class ErpWorkflow
                 'material' => Material::create(['organization_id' => $org, 'code' => $v['code'], 'name' => $v['name'], 'unit' => $v['unit'], 'minimum_quantity' => Quantity::parse($v['minimum'], $v['unit'], true), 'expiry_required' => $v['expiry_required'], 'fefo_required' => $v['fefo_required'], 'active' => true, 'version' => 1])->toArray(),
                 'material_configure' => app(MaterialConfiguration::class)->update($org, $v),
                 'operator_grant' => app(OperatorPermissions::class)->set($u, $org, $v),
+                'posting_policy' => app(AutomaticPosting::class)->policy($u, $org, $v),
+                'posting_decide' => app(AutomaticPosting::class)->decide($u, $org, $v),
+                'posting_suspend' => app(AutomaticPosting::class)->suspend($org, $v),
+                'posting_reconcile' => app(AutomaticPosting::class)->reconcile($u, $org, $v),
+                'posting_retry' => app(AutomaticPosting::class)->retry($org, $v),
+                'value_propose' => app(InventoryValuation::class)->propose($u, $org, $v),
+                'value_decide' => app(InventoryValuation::class)->decide($u, $org, $v),
                 'account' => app(GeneralLedger::class)->account($org, $v),
                 'accounting_period' => app(GeneralLedger::class)->period($org, $v),
                 'journal' => app(GeneralLedger::class)->journal($u, $org, $v),
@@ -43,7 +52,7 @@ final class ErpWorkflow
                 'purchase' => $this->purchases->create($u, $org, $v),
                 'purchase_decide' => $this->purchases->decide($org, $v),
                 'receive' => $this->purchases->receive($u, $org, $v),
-                'payment' => $this->purchases->payment($org, $v),
+                'payment' => $this->purchases->payment($u, $org, $v),
                 'recipe' => $this->production->recipe($org, $v),
                 'production' => $this->production->create($u, $org, $v),
                 'production_cancel' => $this->production->cancel($org, $v),

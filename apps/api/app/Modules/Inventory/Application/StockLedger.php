@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Application;
 
+use App\Modules\Accounting\Application\InventoryValuation;
 use App\Modules\Commercial\Application\ConsignmentAutomation;
 use App\Modules\Inventory\Domain\StockBucket;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
@@ -15,7 +16,7 @@ use Illuminate\Support\Str;
 
 final class StockLedger
 {
-    public function credit(string $organization, string $store, array $product, string $batch, string $expiry, int $packs, int $actor, string $sourceType, string $sourceId, string $bucket, ?string $note = null): array
+    public function credit(string $organization, string $store, array $product, string $batch, string $expiry, int $packs, int $actor, string $sourceType, string $sourceId, string $bucket, ?string $note = null, ?int $inventoryValue = null): array
     {
         abort_unless(in_array($bucket, ['usable', 'quarantined'], true), 422);
         $key = ['store_id' => $store, 'product_id' => $product['id'], 'batch_code' => $batch, 'pack_size' => $product['pack_size']];
@@ -25,7 +26,7 @@ final class StockLedger
         abort_unless($record->expires_on->format('Y-m-d') === $expiry && $record->condition === $product['condition'], 409, 'Identitas batch sudah ada dengan tanggal/kondisi berbeda.');
         if ($packs > 0) {
             $pieces = $packs * $record->pack_size;
-            $this->apply($record, $actor, [$bucket => $pieces], $sourceType, $sourceId, $note);
+            $this->apply($record, $actor, [$bucket => $pieces], $sourceType, $sourceId, $note, inventoryValue: $inventoryValue);
         }
 
         if (app()->getProvider(ReliabilityServiceProvider::class)) {
@@ -47,7 +48,7 @@ final class StockLedger
         return $batch->fresh()->toArray();
     }
 
-    public function apply(InventoryBatch|MaterialLot $batch, int $actor, array $changes, string $sourceType, string $sourceId, ?string $note = null, int $valueDelta = 0): InventoryBatch|MaterialLot
+    public function apply(InventoryBatch|MaterialLot $batch, int $actor, array $changes, string $sourceType, string $sourceId, ?string $note = null, int $valueDelta = 0, ?int $inventoryValue = null, ?string $costOrigin = null): InventoryBatch|MaterialLot
     {
         abort_unless(DB::transactionLevel() > 0, 500, 'Pergerakan stok harus dalam transaksi.');
         if ($batch instanceof MaterialLot) {
@@ -72,6 +73,7 @@ final class StockLedger
             $deltas[$key] = $delta;
         }
         if ($deltas) {
+            app(InventoryValuation::class)->movement(clone $batch, $deltas, $sourceType, $sourceId, $actor, $inventoryValue, $costOrigin);
             if (isset($attributes['ready_pieces']) && $attributes['ready_pieces'] === 0) {
                 $attributes['ready_expires_at'] = null;
             }

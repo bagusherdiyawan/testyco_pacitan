@@ -3,6 +3,7 @@
 namespace App\Modules\Sales\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\PosAccounting;
 use App\Modules\Commercial\Application\SponsoredPromotions;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Inventory\Application\SaleReturns;
@@ -77,7 +78,7 @@ final class RefundWorkflow
                         $n = max(0, min($offset + $a->pieces, $end) - max($offset, $start));
                         $offset += $a->pieces;
                         if ($n > 0) {
-                            $allocations[] = ['sale_allocation_id' => $a->id, 'batch_id' => $a->inventory_batch_id, 'product_id' => $product, 'batch_code' => $a->batch_code, 'pieces' => $n, 'destination_bucket' => 'quarantined'];
+                            $allocations[] = ['sale_allocation_id' => $a->id, 'cost_offset' => max(0, $start - ($offset - $a->pieces)), 'batch_id' => $a->inventory_batch_id, 'product_id' => $product, 'batch_code' => $a->batch_code, 'pieces' => $n, 'destination_bucket' => 'quarantined'];
                         }
                     }
                 }
@@ -120,17 +121,23 @@ final class RefundWorkflow
             $this->shifts->recordRefund($shift, $u, $review['amount'], $s->payment_method, $v['reference'], $v['reason']);
             $refund = SaleRefund::create(['sale_id' => $id, 'cash_shift_id' => $shift->id, 'actor_id' => $u->id, 'payment_method' => $s->payment_method, 'reference' => $v['reference'], 'stock_disposition' => $v['stock_disposition'], 'amount' => $review['amount'], 'lines' => $review['lines'], 'reason' => $v['reason'], 'refunded_at' => now()]);
             $allocations = [];
-            foreach ($review['lines'] as $line) {
-                foreach ($line['allocations'] as $a) {
-                    $allocations[] = [...$a, 'source_id' => (string) Str::ulid()];
+            $frozenLines = $review['lines'];
+            foreach ($frozenLines as $i => $line) {
+                foreach ($line['allocations'] as $j => $a) {
+                    $allocation = [...$a, 'source_id' => (string) Str::ulid()];
+                    $frozenLines[$i]['allocations'][$j] = $allocation;
+                    $allocations[] = $allocation;
                 }
             }
+            $refund->lines = $frozenLines;
+            $refund->save();
             // Voucher lock precedes batch locks, matching checkout's lock ordering.
             if ($s->voucher_snapshot) {
                 Voucher::whereKey($s->voucher_snapshot['id'])->lockForUpdate()->firstOrFail();
             }
             $this->vouchers->restore($s->voucher_snapshot, $id, $review['fully_refunded']);
             $this->stock->quarantine($s->organization_id, $s->store_id, $u->id, $allocations, $v['reason']);
+            app(PosAccounting::class)->refund($s, $refund, array_column($allocations, 'source_id'));
             $s->increment('version');
             app(SponsoredPromotions::class)->refunded($s);
             Audit::record($u->id, $s->organization_id, 'sale.refunded', $refund->id, null, $refund->toArray());

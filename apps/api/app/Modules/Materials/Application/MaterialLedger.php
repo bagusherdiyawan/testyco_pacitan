@@ -2,6 +2,7 @@
 
 namespace App\Modules\Materials\Application;
 
+use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Inventory\Application\StockLedger;
 use App\Modules\Materials\Infrastructure\MaterialLot;
 use App\Shared\Domain\Proportion;
@@ -47,6 +48,17 @@ final class MaterialLedger
             }
             DB::table('erp_material_entries')->insert(['id' => (string) Str::ulid(), 'organization_id' => $lot->organization_id, 'material_lot_id' => $lot->id, 'actor_id' => $actor, 'bucket' => $bucket, 'quantity_delta' => $delta, 'value_delta' => $first ? $valueDelta : 0, 'source_type' => $type, 'source_id' => $source, 'note' => $note, 'created_at' => now()]);
             $first = false;
+        }
+
+        $terms = match ($type) {
+            'material_receipt' => [['raw', $lot->purchase_id ? 'payable' : 'opening', $valueDelta]],
+            'material_reject' => [['loss', 'raw', -$valueDelta]],
+            'production_quality' => $valueDelta < 0 ? [['loss', 'raw', -$valueDelta]] : [],
+            'material_count' => $valueDelta > 0 ? [['raw', 'adjustment', $valueDelta]] : [['adjustment', 'raw', -$valueDelta]],
+            default => [],
+        };
+        if ($terms) {
+            app(AutomaticPosting::class)->record($lot->organization_id, $actor, $type, $lot->id.':'.$lot->stock_revision, $type === 'material_receipt' ? $lot->received_on->format('Y-m-d') : now('Asia/Jakarta')->format('Y-m-d'), $terms, $note);
         }
 
         return $lot;

@@ -892,6 +892,39 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST',erp_path+'/journal_reverse',{'operation_id':str(uuid.uuid4()),'id':journal['id'],'version':2,'period_id':period['id'],'number':'GL-HTTP-REV','posted_on':erp_day,'evidence':'Verified correction fixture','note':'Reverse exact original'},reviewer_token,201)
         assert 'aset Rp0' in api(base,'GET',erp_path+'/context?section=trial_balance&period_id='+period['id'],token=owner)['data'][-1]['summary']
         print('PASS: ERP operator grant/revoke/scoped role and finance denial; explicit accounts/period/manual balanced journal, independent review/replay, web trial balance and linked reversal',flush=True)
+        # Automatic accounting is prospective; real posting worker, source UUID replay and batch COGS.
+        roles={'cash':('asset','debit'),'bank':('asset','debit'),'raw':('asset','debit'),'finished':('asset','debit'),'wip':('asset','debit'),'payable':('liability','credit'),'sales':('revenue','credit'),'discount':('expense','debit'),'refund':('expense','debit'),'cogs':('expense','debit'),'loss':('expense','debit'),'opening':('equity','credit'),'adjustment':('expense','debit'),'labor':('liability','credit'),'overhead':('liability','credit')}
+        mapping={'note':'Explicit standing authority; opening balances reconciled separately'}
+        for role,(kind,normal) in roles.items():
+            account=erp_post('account',{'code':'AUTO-'+role,'name':'Akun '+role,'kind':kind,'normal_balance':normal});mapping[role+'_account']=account['id']
+        policy=erp_post('posting_policy',mapping)
+        consent={'operation_id':str(uuid.uuid4()),'id':policy['id'],'version':1,'decision':'approve','note':'Independently verified mapping'}
+        api(base,'POST',erp_path+'/posting_decide',consent,owner,expected=403)
+        api(base,'POST',erp_path+'/posting_decide',consent,reviewer_token,201)
+        api(base,'POST',erp_path+'/posting_decide',consent,reviewer_token,201)
+        assert not api(base,'GET',erp_path+'/context?section=posting_events',token=owner)['data']
+        am=erp_post('material',{'code':'AUTO-EGG','name':'Telur otomatis','unit':'pcs','minimum':'0','expiry_required':False,'fefo_required':False})
+        al=erp_post('receive',{'source':'opening','store_id':source,'material_id':am['id'],'quantity':'3','opening_value':10,'batch_code':'AUTO-RAW','received_on':erp_day,'evidence':'Opening evidence','note':'Measured3'})
+        erp_post('material_quality',{'id':al['id'],'version':1,'decision':'release','quantity':'3','note':'QC verified'})
+        ar=erp_post('recipe',{'product_id':ep['id'],'title':'Auto recipe','output_packs':1,'ingredients':{am['id']:'3'},'instructions':'Explicit actual consumption'})
+        ap=erp_post('production',{'store_id':source,'recipe_id':ar['id'],'recipe_versions':{ar['id']:ar['version']},'number':'AUTO-HTTP-1','runs':1,'note':'Actual plan'})
+        av={'operation_id':str(uuid.uuid4()),'id':ap['id'],'version':1,'allocations':{al['id']:'3'},'allocation_revisions':{al['id']:2},'batch_code':'AUTO-OUTPUT','produced_on':erp_day,'expires_on':erp_expiry,'good_packs':1,'failed_pieces':0,'labor_cost':0,'overhead_cost':0,'cost_allocation':'all_to_good_output','cost_evidence':'Actual10IDR','note':'Measured output'}
+        ao=api(base,'POST',erp_path+'/complete',av,owner,201)['data'];api(base,'POST',erp_path+'/complete',av,owner,201)
+        erp_post('production_quality',{'id':ap['id'],'version':2,'stock_revision':1,'decision':'release','note':'Owner inspected'})
+        ashift=api(base,'POST',f'stores/{source}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Auto accounting smoke','opening_cash':0},owner,201)['data']
+        ai=api(base,'POST',f'stores/{source}/sales/intents',{'operation_id':str(uuid.uuid4()),'shift_id':ashift['id'],'lines':[{'product_id':ep['id'],'unit':'pack','quantity':1,'allocations':[{'batch_id':ao['output_batch_id'],'bucket':'usable','quantity':1}]}]},owner,201)['data']
+        pay_request={'operation_id':str(uuid.uuid4()),'payment_method':'cash','cash_received':ai['total_amount']}
+        automatic_sale=api(base,'POST',f'sales/intents/{ai["id"]}/pay',pay_request,owner)['data'];api(base,'POST',f'sales/intents/{ai["id"]}/pay',pay_request,owner)
+        queue=api(base,'GET',erp_path+'/context?section=posting_events',token=owner)
+        assert len(queue['data'])==4 and all(e['status']=='pending' for e in queue['data'])
+        assert 'Jurnal dibukukan: 4' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert all(e['status']=='posted' for e in api(base,'GET',erp_path+'/context?section=posting_events',token=owner)['data'])
+        costs=api(base,'GET',erp_path+'/context?section=cost_ledger',token=owner)
+        assert any(r['source_type']=='pos_sale' and r['value_delta']==-10 for r in costs['data'])
+        assert 'HPP penjualan' in central_browser.open(web+erp_web+'?section=posting_events').read().decode()
+        assert 'ERP-OUTPUT-LOT' in central_browser.open(web+erp_web+'?section=valuation_stock').read().decode()
+        print('PASS: approved prospective account mapping, ERP source events, exact batch POS COGS, worker exactly-once posting, native-compatible queue/cost metadata and live BFF',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

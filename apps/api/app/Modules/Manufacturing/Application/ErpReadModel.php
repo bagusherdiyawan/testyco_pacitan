@@ -3,6 +3,7 @@
 namespace App\Modules\Manufacturing\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\AccountingAccess;
 use App\Modules\Accounting\Application\AccountingReadModel;
 use App\Modules\Catalog\Infrastructure\Product;
 use App\Modules\Identity\Infrastructure\Store;
@@ -20,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 
 final class ErpReadModel
 {
-    public const SECTIONS = ['materials', 'suppliers', 'purchases', 'lots', 'recipes', 'productions', 'counts', 'ledger', 'planning', 'report', 'trace', 'operators', 'accounts', 'periods', 'journals', 'trial_balance'];
+    public const SECTIONS = ['materials', 'suppliers', 'purchases', 'lots', 'recipes', 'productions', 'counts', 'ledger', 'planning', 'report', 'trace', 'operators', 'accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger'];
 
     public function __construct(private ErpAccess $access) {}
 
@@ -48,6 +49,11 @@ final class ErpReadModel
     {
         $section = $v['section'] ?? 'materials';
         $store = $v['store_id'] ?? null;
+        if (in_array($section, AccountingReadModel::SECTIONS, true)) {
+            app(AccountingAccess::class)->manage($u, $org);
+
+            return ['organization_id' => $org, 'section' => $section, 'can_manage' => true, 'allowed_sections' => $this->access->manager($u, $org) ? self::SECTIONS : AccountingReadModel::SECTIONS, 'observed_at' => now()->toIso8601String(), ...app(AccountingReadModel::class)->context($org, $section, $v, $u->id)];
+        }
         $manager = $this->access->manager($u, $org);
         if (! $manager) {
             abort_unless(in_array($section, ['productions', 'lots', 'recipes'], true) && is_string($store), 403);
@@ -58,11 +64,6 @@ final class ErpReadModel
         }
         if (isset($v['material_id'])) {
             abort_unless(Material::where('organization_id', $org)->whereKey($v['material_id'])->exists(), 403);
-        }
-        if (in_array($section, AccountingReadModel::SECTIONS, true)) {
-            $this->access->manage($u, $org);
-
-            return ['organization_id' => $org, 'section' => $section, 'can_manage' => true, 'observed_at' => now()->toIso8601String(), ...app(AccountingReadModel::class)->context($org, $section, $v, $u->id)];
         }
         $options = $this->options($org, $store, $section);
         if (! $manager) {
@@ -94,10 +95,6 @@ final class ErpReadModel
         $rows = [];
         foreach ($p->items() as $item) {
             $row = is_object($item) && method_exists($item, 'toArray') ? $item->toArray() : (array) $item;
-            if ($section === 'purchases') {
-                $balance = $r['received_amount'] - $r['credited_amount'] - $r['paid_amount'] + $r['refunded_amount'];
-                $lines[] = 'Utang Rp'.max(0, $balance).'; piutang refund supplier Rp'.max(0, -$balance).'; lewat jatuh tempo: '.($balance > 0 && $r['due_on'] < now('Asia/Jakarta')->format('Y-m-d') ? 'ya' : 'tidak');
-            }
             if ($section === 'lots') {
                 $row['version'] = $row['stock_revision'];
             }

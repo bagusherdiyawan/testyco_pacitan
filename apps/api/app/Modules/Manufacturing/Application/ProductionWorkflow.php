@@ -3,6 +3,7 @@
 namespace App\Modules\Manufacturing\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Catalog\Application\BundlePricing;
 use App\Modules\Catalog\Infrastructure\Product;
 use App\Modules\Costing\Application\ProductionCosts;
@@ -140,7 +141,7 @@ final class ProductionWorkflow
         $total = Rupiah::add($goods, $operating);
         $batch = $outputLot = null;
         if ($hasOutput && ! $semi) {
-            $batch = $this->stock->credit($org, $p->store_id, $snapshot, $v['batch_code'], $v['expires_on'], $v['good_packs'], $u->id, 'production_output', $p->id, 'quarantined', $v['note']);
+            $batch = $this->stock->credit($org, $p->store_id, $snapshot, $v['batch_code'], $v['expires_on'], $v['good_packs'], $u->id, 'production_output', $p->id, 'quarantined', $v['note'], $total);
         }
         if ($hasOutput && $semi) {
             $outputLot = MaterialLot::create(['organization_id' => $org, 'store_id' => $p->store_id, 'material_id' => $material->id, 'material_name' => $material->name, 'unit' => $material->unit, 'batch_code' => $v['batch_code'], 'received_on' => $v['produced_on'], 'expires_on' => $v['expires_on'], 'provenance' => ['source' => 'production', 'production_id' => $p->id], 'evidence' => $v['cost_evidence'], 'usable_quantity' => 0, 'quarantined_quantity' => 0, 'waste_quantity' => 0, 'remaining_value' => 0, 'stock_revision' => 0, 'blocked' => false]);
@@ -148,6 +149,9 @@ final class ProductionWorkflow
         }
         $p->fill(['status' => $hasOutput ? 'awaiting_quality' : 'failed', 'version' => $p->version + 1, 'batch_code' => $v['batch_code'], 'produced_on' => $v['produced_on'], 'expires_on' => $v['expires_on'], 'good_packs' => $semi ? null : $v['good_packs'], 'failed_pieces' => $semi ? null : $v['failed_pieces'], 'good_quantity' => $goodQuantity, 'failed_quantity' => $failedQuantity, 'output_batch_id' => $batch['id'] ?? null, 'output_material_lot_id' => $outputLot?->id, 'allocations' => $allocations, 'completed_by' => $u->id, 'costs' => app(ProductionCosts::class)->calculate($goods, $v['labor_cost'], $v['overhead_cost'], $v['cost_evidence'], $semi ? null : $v['good_packs'] * $snapshot['pack_size'], $goodQuantity, $semi ? $material->unit : 'pcs'), 'note' => $v['note']]);
         $p->save();
+        app(AutomaticPosting::class)->record($org, $u->id, 'production_consumption', $p->id, $v['produced_on'], [['wip', 'raw', $goods]], $v['cost_evidence']);
+        $destination = $hasOutput ? ($semi ? 'raw' : 'finished') : 'loss';
+        app(AutomaticPosting::class)->record($org, $u->id, 'production_output', $p->id, $v['produced_on'], [[$destination, 'wip', $goods], [$destination, 'labor', $v['labor_cost']], [$destination, 'overhead', $v['overhead_cost']]], $v['cost_evidence']);
 
         return $p->toArray();
     }

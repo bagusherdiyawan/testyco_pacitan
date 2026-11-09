@@ -3,6 +3,7 @@
 namespace App\Modules\Procurement\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Manufacturing\Application\ErpAccess;
 use App\Modules\Materials\Application\MaterialLedger;
 use App\Modules\Materials\Domain\Quantity;
@@ -86,13 +87,14 @@ final class Purchasing
         return [...$lot->toArray(), 'version' => $lot->stock_revision];
     }
 
-    public function payment(string $org, array $v): array
+    public function payment(User $u, string $org, array $v): array
     {
         $p = Purchase::where('organization_id', $org)->lockForUpdate()->findOrFail($v['id']);
         abort_unless($p->version === $v['version'] && $p->status === 'approved' && $v['verified'] === true && $v['amount'] <= (($v['kind'] ?? 'payment') === 'supplier_refund' ? max(0, -($p->received_amount - $p->credited_amount - $p->paid_amount + $p->refunded_amount)) : max(0, $p->received_amount - $p->credited_amount - $p->paid_amount + $p->refunded_amount)), 409, 'Versi/saldo atau verifikasi pembayaran tidak sesuai.');
         $payments = $p->payments;
         abort_if(collect($payments)->contains('reference', $v['reference']), 409, 'Referensi pembayaran sudah dipakai.');
-        $payments[] = ['id' => (string) Str::ulid(), 'kind' => $v['kind'] ?? 'payment', 'amount' => $v['amount'], 'method' => $v['method'], 'reference' => $v['reference'], 'paid_on' => $v['paid_on'], 'note' => $v['note']];
+        $paymentId = (string) Str::ulid();
+        $payments[] = ['id' => $paymentId, 'kind' => $v['kind'] ?? 'payment', 'amount' => $v['amount'], 'method' => $v['method'], 'reference' => $v['reference'], 'paid_on' => $v['paid_on'], 'note' => $v['note']];
         $p->payments = $payments;
         if (($v['kind'] ?? 'payment') === 'supplier_refund') {
             $p->refunded_amount = Rupiah::add($p->refunded_amount, $v['amount']);
@@ -101,6 +103,9 @@ final class Purchasing
         }
         $p->version++;
         $p->save();
+        $cash = $v['method'] === 'cash' ? 'cash' : 'bank';
+        $terms = ($v['kind'] ?? 'payment') === 'supplier_refund' ? [[$cash, 'payable', $v['amount']]] : [['payable', $cash, $v['amount']]];
+        app(AutomaticPosting::class)->record($org, $u->id, 'supplier_payment', $paymentId, $v['paid_on'], $terms, $v['reference']);
 
         return $p->toArray();
     }

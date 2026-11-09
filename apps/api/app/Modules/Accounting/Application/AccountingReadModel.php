@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 final class AccountingReadModel
 {
-    public const SECTIONS = ['accounts', 'periods', 'journals', 'trial_balance'];
+    public const SECTIONS = ['accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger'];
 
     private function options(string $table, string $org): array
     {
@@ -32,6 +32,9 @@ final class AccountingReadModel
     {
         if (isset($v['period_id'])) {
             abort_unless(DB::table('accounting_periods')->where('organization_id', $org)->where('id', $v['period_id'])->exists(), 404);
+        }
+        if (in_array($section, ['posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger'], true)) {
+            return app(PostingReadModel::class)->context($org, $section, $actor);
         }
         $accounts = $this->options('accounting_accounts', $org);
         $periods = $this->options('accounting_periods', $org);
@@ -87,7 +90,7 @@ final class AccountingReadModel
                         $actions[] = $make('journal_decide', $label, [$note], ['id' => $r['id'], 'version' => $r['version'], 'decision' => $d], $r['id'], $r['version'] + 1);
                     }
                 }
-                if ($r['status'] === 'posted' && ! $r['reversed_by'] && ! $r['reversal_of'] && $r['created_by'] !== $actor) {
+                if (! DB::table('accounting_events')->where('journal_id', $r['id'])->exists() && $r['status'] === 'posted' && ! $r['reversed_by'] && ! $r['reversal_of'] && $r['created_by'] !== $actor) {
                     $actions[] = $make('journal_reverse', 'Balik jurnal dengan jejak', [$field('period_id', 'Periode pembalikan terbuka', 'choice', $periodOptions), $field('number', 'Nomor jurnal pembalikan'), $field('posted_on', 'Tanggal pembalikan WIB', 'date'), $field('evidence', 'Bukti pembalikan'), $note], ['id' => $r['id'], 'version' => $r['version']], $r['id'], $r['version'] + 1);
                 }
             }
@@ -145,6 +148,6 @@ final class AccountingReadModel
         abort_unless($sumD === $sumC && $sumClosing === 0, 409, 'Buku besar tidak seimbang; laporan ditolak.');
         $rows[] = ['id' => 'TOTAL', 'organization_id' => $org, 'summary' => 'Periode '.$p->name.' · debit Rp'.$sumD.' · kredit Rp'.$sumC.' · neto akun pendapatan periode Rp'.$revenue.' · neto akun beban periode Rp'.$expense.' · selisih nominal periode Rp'.($revenue - $expense).' · aset Rp'.$assets.' · liabilitas Rp'.$liabilities.' · ekuitas Rp'.$equity.' · hasil kumulatif belum ditutup Rp'.$cumulativeProfit, 'forms' => []];
 
-        return ['data' => $rows, 'current_page' => 1, 'next_page_url' => null, 'notice' => 'Saldo bertanda debit positif/kredit negatif. Pembalikan tetap memasukkan jurnal asli dan lawannya sesuai tanggal buku. Laporan berasal jurnal yang dibukukan, tidak otomatis mengambil nilai stok/POS/ERP.'];
+        return ['data' => $rows, 'current_page' => 1, 'next_page_url' => null, 'notice' => 'Saldo bertanda debit positif/kredit negatif. Pembalikan tetap memasukkan jurnal asli dan lawannya sesuai tanggal buku. Laporan mencakup jurnal manual dan jurnal sumber otomatis yang sudah posted. Periksa antrean sumber agar laporan tidak dibaca sebagai lengkap saat masih ada kasus tertahan.'];
     }
 }

@@ -87,6 +87,15 @@ class AdministrationHome extends StatelessWidget {
   Widget build(BuildContext context) {
     final id = organization['id'] as String;
     final pages = <String, Widget>{
+      if ((organization['type'] == 'center' &&
+              {'owner', 'admin'}.contains(organization['role'])) ||
+          (organization['type'] == 'partner' &&
+              organization['role'] == 'partner_lead'))
+        'Pembukuan dan jurnal otomatis': ErpPage(
+          repository: ErpRepository(api, id),
+          initialSection: 'posting',
+          financeOnly: organization['type'] != 'center',
+        ),
       if (organization['type'] == 'center' &&
           ['owner', 'admin'].contains(organization['role']) &&
           const bool.fromEnvironment(

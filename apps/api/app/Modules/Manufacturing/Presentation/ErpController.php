@@ -2,6 +2,7 @@
 
 namespace App\Modules\Manufacturing\Presentation;
 
+use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Manufacturing\Application\ErpReadModel;
 use App\Modules\Manufacturing\Application\ErpWorkflow;
 use Illuminate\Http\Request;
@@ -28,6 +29,11 @@ final class ErpController
             'material' => ['code' => 'required|string|max:60', 'name' => 'required|string|max:120', 'unit' => 'required|in:g,kg,ml,l,pcs', 'minimum' => 'required|string|max:20', 'expiry_required' => 'required|boolean', 'fefo_required' => 'required|boolean'],
             'material_configure' => [...$key, 'name' => 'required|string|max:120', 'minimum' => 'required|string|max:20', 'expiry_required' => 'required|boolean', 'fefo_required' => 'required|boolean', 'active' => 'required|boolean'],
             'operator_grant' => ['assignment' => 'required|string|regex:/^[1-9][0-9]*:[0-9A-Z]{26}$/i', 'grant_versions' => 'present|array|max:1000', 'grant_versions.*' => 'required|integer|min:1', 'enabled' => 'required|boolean', ...$note],
+            'posting_policy' => [...array_fill_keys(array_map(fn ($role) => $role.'_account', array_keys(AutomaticPosting::ROLES)), 'required|ulid'), ...$note],
+            'posting_decide', 'value_decide' => [...$key, 'decision' => 'required|in:approve,reject', ...$note],
+            'posting_reconcile' => [...$key, 'journal_id' => 'required|ulid', ...$note],
+            'posting_suspend', 'posting_retry' => [...$key, ...$note],
+            'value_propose' => ['batch_id' => 'required|ulid', 'stock_revision' => 'required|integer|min:0', 'amount' => 'required|integer|min:0|max:1000000000000', ...$note],
             'account' => ['code' => 'required|string|max:40', 'name' => 'required|string|max:160', 'kind' => 'required|in:asset,liability,equity,revenue,expense', 'normal_balance' => 'required|in:debit,credit'],
             'accounting_period' => ['name' => 'required|string|max:120', 'starts_on' => 'required|date_format:Y-m-d', 'ends_on' => 'required|date_format:Y-m-d|after_or_equal:starts_on', ...$note],
             'journal' => ['period_id' => 'required|ulid', 'number' => 'required|string|max:80', 'posted_on' => $date, 'debits' => 'present|array|max:100', 'debits.*' => 'nullable|integer|min:0|max:1000000000000', 'credits' => 'present|array|max:100', 'credits.*' => 'nullable|integer|min:0|max:1000000000000', 'evidence' => 'required|string|max:2000', ...$note],

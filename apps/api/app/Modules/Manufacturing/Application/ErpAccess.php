@@ -3,6 +3,7 @@
 namespace App\Modules\Manufacturing\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\AccountingAccess;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
@@ -32,6 +33,11 @@ final class ErpAccess
 
     public function command(User $u, string $org, string $action, array $v): void
     {
+        if (in_array($action, AccountingAccess::ACTIONS, true)) {
+            app(AccountingAccess::class)->manage($u, $org);
+
+            return;
+        }
         if ($this->manager($u, $org)) {
             return;
         }

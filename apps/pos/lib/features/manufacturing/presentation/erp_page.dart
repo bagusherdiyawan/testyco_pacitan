@@ -4,9 +4,17 @@ import '../../administration/presentation/admin_widgets.dart';
 import '../data/erp_repository.dart';
 
 class ErpPage extends StatefulWidget {
-  const ErpPage({required this.repository, this.operatorStore, super.key});
+  const ErpPage({
+    required this.repository,
+    this.operatorStore,
+    this.initialSection = 'materials',
+    this.financeOnly = false,
+    super.key,
+  });
   final ErpRepository repository;
   final String? operatorStore;
+  final String initialSection;
+  final bool financeOnly;
   @override
   State<ErpPage> createState() => _ErpPageState();
 }
@@ -21,6 +29,7 @@ class _ErpPageState extends State<ErpPage> {
   @override
   void initState() {
     super.initState();
+    section = widget.initialSection;
     if (widget.operatorStore != null) {
       section = "productions";
       store = widget.operatorStore;
@@ -95,8 +104,24 @@ class _ErpPageState extends State<ErpPage> {
               items: ErpRepository.sections.entries
                   .where(
                     (e) =>
-                        widget.operatorStore == null ||
-                        {'productions', 'lots', 'recipes'}.contains(e.key),
+                        (widget.operatorStore == null ||
+                            {
+                              'productions',
+                              'lots',
+                              'recipes',
+                            }.contains(e.key)) &&
+                        (!widget.financeOnly ||
+                            {
+                              'accounts',
+                              'periods',
+                              'journals',
+                              'trial_balance',
+                              'posting',
+                              'posting_events',
+                              'valuations',
+                              'valuation_stock',
+                              'cost_ledger',
+                            }.contains(e.key)),
                   )
                   .map(
                     (e) => DropdownMenuItem(

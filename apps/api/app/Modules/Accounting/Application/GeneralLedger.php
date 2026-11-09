@@ -91,6 +91,7 @@ final class GeneralLedger
         $status = $v['decision'] === 'close' ? 'closed' : 'open';
         abort_if($p['status'] === $status, 409);
         if ($status === 'closed') {
+            abort_if(DB::table('accounting_events')->where('organization_id', $org)->whereBetween('event_on', [$p['starts_on'], $p['ends_on']])->whereNotIn('status', ['posted', 'reconciled'])->exists(), 409, 'Selesaikan antrean jurnal sumber sebelum menutup periode.');
             abort_if(DB::table('accounting_journals')->where('period_id', $p['id'])->where('status', 'draft')->exists(), 409, 'Selesaikan jurnal draft sebelum menutup periode.');
         }
         DB::table('accounting_periods')->where('id', $p['id'])->update(['status' => $status, 'version' => $p['version'] + 1, 'note' => $v['note'], 'updated_at' => now()]);
@@ -103,6 +104,7 @@ final class GeneralLedger
         $j = $this->row('accounting_journals', $org, $v['id']);
         abort_unless($j['version'] === $v['version'] && $j['status'] === 'posted' && ! $j['reversed_by'] && ! $j['reversal_of'], 409, 'Jurnal tidak dapat dibalik lagi.');
         abort_if($j['created_by'] === $u->id, 403, 'Pembalikan wajib dilakukan pengelola lain.');
+        abort_if(DB::table('accounting_events')->where('journal_id', $j['id'])->exists(), 409, 'Jurnal otomatis dikoreksi melalui transaksi sumber, bukan pembalikan manual.');
         $this->periodFor($org, $v['period_id'], $v['posted_on']);
         abort_if($v['posted_on'] < $j['posted_on'], 422);
         $lines = json_decode($j['lines'], true);

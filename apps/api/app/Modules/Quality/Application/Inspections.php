@@ -3,6 +3,7 @@
 namespace App\Modules\Quality\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Inventory\Application\StockLedger;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use App\Modules\Manufacturing\Infrastructure\Production;
@@ -49,6 +50,9 @@ final class Inspections
                     $p->version++;
                     $p->save();
                 }
+            }
+            if ($v['decision'] === 'return') {
+                app(AutomaticPosting::class)->record($org, $u->id, 'supplier_return', $lot->id.':'.($lot->stock_revision + 1), now('Asia/Jakarta')->format('Y-m-d'), [['payable', 'raw', $v['supplier_credit']], ['loss', 'raw', $value - $v['supplier_credit']]], $v['note']);
             }
             $lot = $this->materials->apply($lot, $u->id, $changes, -$value, 'material_'.$v['decision'], $lot->id, $v['note']);
         }

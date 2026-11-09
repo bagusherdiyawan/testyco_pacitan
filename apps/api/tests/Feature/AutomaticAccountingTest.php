@@ -9,6 +9,7 @@ use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
 use App\Modules\Inventory\Application\StockLedger;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
+use App\Modules\Procurement\Infrastructure\Purchase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -308,17 +309,34 @@ class AutomaticAccountingTest extends TestCase
         $this->assertDatabaseMissing('accounting_events', ['source_type' => 'pos_sale']);
         $this->assertSame(0, app(AutomaticPosting::class)->drain());
     }
+
     public function test_supplier_reversal_requires_other_manager_and_replays_once(): void
     {
-        $supplier=$this->cmd('supplier',['name'=>'Supplier','contact'=>'Contact','address'=>'Address']);
-        $payment=(string)Str::ulid();
-        $p=\App\Modules\Procurement\Infrastructure\Purchase::create(['organization_id'=>$this->org->id,'store_id'=>$this->store->id,'supplier_id'=>$supplier['id'],'number'=>'REV-PO','status'=>'approved','version'=>1,'ordered_on'=>'2026-11-09','due_on'=>'2026-11-30','lines'=>[],'total_amount'=>10,'received_amount'=>10,'credited_amount'=>0,'paid_amount'=>10,'refunded_amount'=>0,'created_by'=>$this->owner->id,'note'=>'Fixture','payments'=>[['id'=>$payment,'actor_id'=>$this->owner->id,'kind'=>'payment','amount'=>10,'method'=>'cash','reference'=>'PAY1','paid_on'=>'2026-11-09','note'=>'Verified']]]);
-        $v=['operation_id'=>(string)Str::uuid(),'id'=>$p->id,'version'=>1,'payment_id'=>$payment,'verified'=>true,'note'=>'Wrong matching verified'];
-        $this->postJson($this->url('payment_reverse'),$v)->assertForbidden();
+        $supplier = $this->cmd('supplier', ['name' => 'Supplier', 'contact' => 'Contact', 'address' => 'Address']);
+        $payment = (string) Str::ulid();
+        $p = Purchase::create(['organization_id' => $this->org->id, 'store_id' => $this->store->id, 'supplier_id' => $supplier['id'], 'number' => 'REV-PO', 'status' => 'approved', 'version' => 1, 'ordered_on' => '2026-11-09', 'due_on' => '2026-11-30', 'lines' => [], 'total_amount' => 10, 'received_amount' => 10, 'credited_amount' => 0, 'paid_amount' => 10, 'refunded_amount' => 0, 'created_by' => $this->owner->id, 'note' => 'Fixture', 'payments' => [['id' => $payment, 'actor_id' => $this->owner->id, 'kind' => 'payment', 'amount' => 10, 'method' => 'cash', 'reference' => 'PAY1', 'paid_on' => '2026-11-09', 'note' => 'Verified']]]);
+        $v = ['operation_id' => (string) Str::uuid(), 'id' => $p->id, 'version' => 1, 'payment_id' => $payment, 'verified' => true, 'note' => 'Wrong matching verified'];
+        $this->postJson($this->url('payment_reverse'), $v)->assertForbidden();
         Sanctum::actingAs($this->reviewer);
-        $this->postJson($this->url('payment_reverse'),$v)->assertCreated()->assertJsonPath('data.paid_amount',0);
-        $this->postJson($this->url('payment_reverse'),$v)->assertCreated()->assertJsonPath('data.version',2);
-        $this->postJson($this->url('payment_reverse'),[...$v,'operation_id'=>(string)Str::uuid(),'version'=>2])->assertConflict();
+        $this->postJson($this->url('payment_reverse'), $v)->assertCreated()->assertJsonPath('data.paid_amount', 0);
+        $this->postJson($this->url('payment_reverse'), $v)->assertCreated()->assertJsonPath('data.version', 2);
+        $this->postJson($this->url('payment_reverse'), [...$v, 'operation_id' => (string) Str::uuid(), 'version' => 2])->assertConflict();
     }
 
+    public function test_supplier_reversal_preserves_original_policy_and_exact_journal_terms(): void
+    {
+        $this->activate();
+        $supplier = $this->cmd('supplier', ['name' => 'Supplier', 'contact' => 'Contact', 'address' => 'Address']);
+        $payment = (string) Str::ulid();
+        $p = Purchase::create(['organization_id' => $this->org->id, 'store_id' => $this->store->id, 'supplier_id' => $supplier['id'], 'number' => 'REV-GL', 'status' => 'approved', 'version' => 1, 'ordered_on' => '2026-11-09', 'due_on' => '2026-11-30', 'lines' => [], 'total_amount' => 10, 'received_amount' => 10, 'credited_amount' => 0, 'paid_amount' => 10, 'refunded_amount' => 0, 'created_by' => $this->owner->id, 'note' => 'Fixture', 'payments' => [['id' => $payment, 'actor_id' => $this->owner->id, 'kind' => 'payment', 'amount' => 10, 'method' => 'bank_transfer', 'reference' => 'PAY-GL', 'paid_on' => '2026-11-09', 'note' => 'Verified']]]);
+        DB::transaction(fn () => app(AutomaticPosting::class)->record($this->org->id, $this->owner->id, 'supplier_payment', $payment, '2026-11-09', [['payable', 'bank', 10]], 'Verified payment'));
+        $this->cmd('posting_suspend', ['id' => $this->policy['id'], 'version' => 2, 'note' => 'Suspend new sources']);
+        Sanctum::actingAs($this->reviewer);
+        $this->cmd('payment_reverse', ['id' => $p->id, 'version' => 1, 'payment_id' => $payment, 'verified' => true, 'note' => 'Wrong matching verified']);
+        $reverse = DB::table('accounting_events')->where('source_type', 'supplier_payment_reverse')->firstOrFail();
+        $this->assertSame($this->policy['id'], $reverse->policy_id);
+        $this->assertSame([['bank', 'payable', 10]], json_decode($reverse->terms, true));
+        $this->assertSame(2, app(AutomaticPosting::class)->drain());
+        $this->assertSame(0,app(AutomaticPosting::class)->drain());
+    }
 }

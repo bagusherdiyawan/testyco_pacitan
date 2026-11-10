@@ -147,6 +147,9 @@ final class DistributionReceiptPosting
             } elseif ($known && ! $reason && $origin && $received < $line->quantity_packs) {
                 DB::table('accounting_events')->where('id', $origin->id)->where('status', 'review_required')->update(['reason' => 'Selisih fisik '.($line->quantity_packs - $received).' kemasan: HPP penerimaan Rp'.$recognized.' dari biaya dispatch Rp'.(-(int) $cost->value_delta).'; sisa nilai Rp'.(-(int) $cost->value_delta - $recognized).' memerlukan penyelesaian berizin, bukan barang diterima fiktif.', 'version' => $origin->version + 1, 'updated_at' => now()]);
             }
+            if ($known && ! $reason && $received < $line->quantity_packs) {
+                app(DistributionCosting::class)->missing($order, $line->shipment_id, $cost, $received * $line->pack_size, $actor);
+            }
         }
     }
 

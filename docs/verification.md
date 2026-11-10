@@ -1,5 +1,16 @@
 # Bukti implementasi dan pengujian
 
+## Valuasi pengganti, biaya hilang dan ownership retur — 10 November 2026
+
+**829 tes lulus:** API389/9746 assertions, web163/1436, Flutter277. Ini19tes tambahan atas baseline810:15API,2web,2native. Analyzer bersih; Composer strict kedua aplikasi, PHP Pint API301files/web110files, OpenAPI0.40.0 refs/path/unique operations, sintaks Python dan git diff --check lulus. Pemeriksaan ekuivalen scripts/check menggunakan Composer terkunci dan SDK Flutter3.35.7/Dart3.9.2 terverifikasi pada host karena Docker VFS. Tidak ada perubahan dependensi atau lockfile.
+
+Tes mencakup pembagian remaining stock value lintas batch pengganti dengan HPP/refund historis tetap, sebelum/sesudah invoice final, received versus missing supplier expense, unproven buyout bukan biaya gratis, rollback kedua batch/source expense/receipt saat persistence kedua gagal, porsi dua pihak dengan sisa rupiah klaim, role/tenant/versi/replay, shortage credit dengan jumlah aktual, seluruh kiriman awal hilang serta invoice multi-kiriman dengan satu kiriman sepenuhnya hilang tanpa stok fiktif, return custody bukan aset/disposisi pemasok dan tidak mencairkan biaya stok lain, accepted versus partial credit, closed period/retry, return partial missing versus ownership release, seluruh retur hilang, serta known0 supplier recovery tanpa nominal zero journal. Web/native menahan consent/request/version/UUID melalui503→403→ACK, menolak row asing dan mengescape bukti; widget390/1200px.
+
+Seluruh isolated scripts/smoke-identity.py lulus sampai logout/MFA, termasuk alur lama. Skenario baru memakai pemetaan dan persetujuan aktual: buyer remaining108000/88pieces setelah replacement dengan supplier expense10001 dan real worker2/0; dua pihak melalui BFF CSRF/review/confirm menyetujui residual5000 menjadi loss2500/claim2500, diteruskan credit kekurangan10000 dan freight variance20000 dengan worker5/0; supplier return16pieces tetap custody0owned sampai kredit20000disetujui, lalu inventory original cost10000, revalue1/0 serta GL4/0. Buku asing ditolak dan ledger total/replay tetap tepat. Parser skrip memilih form_key keputusan approve secara eksplisit, sehingga tidak keliru mengambil tombol reject yang memiliki action URL sama.
+
+Migrasi36 diterapkan tanpa reset dan tanpa fixture/policy/consent ke DB development. API/web/scheduler healthy dan normal API/BFF smoke lulus. Cache dan DB smoke tetap terpisah; tidak mengirim email/dana atau byte ke perangkat. Hasil review bukan dukungan mengarang biaya: cutover/unknown/manual-reconciled/mapping berubah, lineage ambigu, serta physical consignor cost tetap memerlukan bukti/rekonsiliasi. PostgreSQL concurrency, printer/perangkat dan UAT tetap release gates. Panduan keputusan dan cakupan: [ADR060](distribution-cost-settlement.md).
+
+
 ## Transfer internal aktual — 10 November 2026
 
 **810 tes lulus:** API374/8429 assertions, web161/1417, Flutter275. Flutter analyzer bersih; Composer strict kedua aplikasi, Pint296files, OpenAPI0.39.0 local refs/path/operation uniqueness, sintaks Python dan git diff --check lulus. Pemeriksaan ekuivalen scripts/check menggunakan Composer terkunci dan SDK Flutter3.35.7/Dart3.9.2 pada host karena Docker VFS; dependensi/lockfile tetap.

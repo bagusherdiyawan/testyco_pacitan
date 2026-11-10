@@ -11,7 +11,7 @@ Ringkasan ERP tambahan per10November2026 (terpisah dari DL baseline):
 | Transfer internal penerimaan aktual baik/karantina, biaya aktual tanpa omzet | Tersedia; biaya barang belum diterima tetap review sumber |
 | GL hak share/sponsor dan verified payments | Tersedia dengan policy prospektif per organisasi |
 | Closing formal, laba ditahan, reopening, laba rugi/posisi keuangan | Tersedia API/web/Flutter |
-| Costing receipt tanpa bukti, sisa barang hilang, replacement/distribution return dan physical consignor COGS | Masih review/rekonsiliasi; belum otomatis |
+| Valuasi pengganti, kesepakatan biaya hilang dan ownership retur buyout terbukti | Tersedia API/web/Flutter sesuai ADR060; sumber tanpa bukti/lineage ambigu dan physical consignor COGS tetap review |
 
 | ID | Paket dengan batas yang dapat diuji | Status sekarang |
 | --- | --- | --- |
@@ -73,3 +73,5 @@ Pemeriksaan lanjutan10November2026 juga menutup kehilangan HPP pada full-good tr
 Lanjutan ADR057 menutup costing campuran **full-good receipts yang terbukti** dalam satu batch: invoice multi-kiriman atau berurutan, existing correction layers, source dates dan future refunds. Dispatch parsial dapat berbagi batch ketika masing-masing diterima baik penuh. Actual shortage/damage/replacement/distribution-return dan physical consignment costing tetap dibedakan, bukan dilabeli selesai.
 
 Lanjutan ADR059: transfer internal satu organisasi kini mencakup penerimaan aktual parsial/rusak dengan pembagian biaya dispatch, karantina dan residual missing review. Tidak membuat omzet/HPP penjualan atau aset untuk barang yang belum diterima. Sumber sudah direkonsiliasi/account berubah/unknown tetap review.
+
+Lanjutan ADR060 menerapkan tiga keputusan pengguna: pembagian sisa nilai stok pengganti, beban/claim hilang dengan persetujuan pusat→pimpinan mitra, serta custody→ownership retur setelah fisik dan kredit. Tidak mengasumsikan unknown0, pembayaran klaim sudah terjadi, atau lineage campuran telah terbukti. Lihat [panduan operasional](../distribution-cost-settlement.md).

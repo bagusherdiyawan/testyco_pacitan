@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.39.0",
-    "description": "Authenticated, modular organization/store-scoped operations. Explicit per-document wholesale invoice basis, discounts/shipping/tax/rounding/due date and partner consent; verified manual partial collections, reversals, customer-credit liability, bounded two-party credits and signed-contract/manual consignment reports. Confirmed physical returns move damaged goods from partner quarantine to original center quarantine, never usable. Online POS supports cash and explicitly verified QRIS/transfer, own-issuer-funded store/product vouchers and reviewed manager refunds using historical discounted prices and actual component allocations. No payment-provider calls, automatic profit sharing, automatic offline noncash settlement. Cash-sales reports retain original cash-sale scope and exclude noncash/B2B and refund deduction; refunds are separately recorded. Immutable UUID retries, parent/version locks, private files and scoped audit remain mandatory. Development SQLite only; PostgreSQL concurrency, production tax/legal acceptance, device/printer and UAT are not verified. DL18–20: SMTP/inbox (push deferred), explicit organization-leader SOP/recall/FEFO, encrypted MFA/reset and device sessions, durable encrypted cash-only offline queue with review conflicts, contract-backed asset lifecycle and bounded commercial cohort reports with evidenced net costs. External SMTP delivery and real device Keystore/release remain unverified. Explicit bilateral standing consignment/profit-sharing and sponsored promotions now accrue immutable settlement deltas with historical refund reversals and hard sponsor budgets, separate from manual invoices. Coordinated recalls follow real receipt provenance and recipient-leader hold/release. Native ESC/POS TCP LAN58/80mm and browser/system printing are client integrations; transport send is not physical print acknowledgement. Push and payment gateways remain deferred. ERP manufacturing: own active center owner/admin only. Exact kg/g/l/ml/whole-pcs material ledgers dispatch through StockLedger.apply; explicit opening values, approved supplier purchases/partial receipts/verified payments and supplier refunds. Immutable recipe versions may output a finished product or an intermediate material. Production consumes actual eligible reviewed lot revisions atomically with quarantined output and lot-derived costs; owner/admin must inspect before release. Explicit FEFO and minimum settings, independent material counts, internal transfers, bounded planning/HPP and transitive material trace. No invented recipe, yield, lifetime, tax, cost or auto bank/recall policy. Web and native Flutter use scoped declarative forms and immutable UUID retry. Explicit per-user/per-assigned-store production grants now allow warehouse/store managers to plan and record production including process cost; supplier finance and mandatory QC remain owner/admin only. Manual double-entry accounting includes explicit chart/normal balances, independent draft review, exact linked reversals, activity-versioned open/closed periods and bounded opening/movement/closing trial balance with period account net movements and as-of categories. No automatic ERP/POS historical posting or chart/tax mapping is implied."
+    "version": "0.40.0",
+    "description": "Authenticated, modular organization/store-scoped operations. Explicit per-document wholesale invoice basis, discounts/shipping/tax/rounding/due date and partner consent; verified manual partial collections, reversals, customer-credit liability, bounded two-party credits and signed-contract/manual consignment reports. Confirmed physical returns move damaged goods from partner quarantine to original center quarantine, never usable. Online POS supports cash and explicitly verified QRIS/transfer, own-issuer-funded store/product vouchers and reviewed manager refunds using historical discounted prices and actual component allocations. No payment-provider calls, automatic profit sharing, automatic offline noncash settlement. Cash-sales reports retain original cash-sale scope and exclude noncash/B2B and refund deduction; refunds are separately recorded. Immutable UUID retries, parent/version locks, private files and scoped audit remain mandatory. Development SQLite only; PostgreSQL concurrency, production tax/legal acceptance, device/printer and UAT are not verified. DL18–20: SMTP/inbox (push deferred), explicit organization-leader SOP/recall/FEFO, encrypted MFA/reset and device sessions, durable encrypted cash-only offline queue with review conflicts, contract-backed asset lifecycle and bounded commercial cohort reports with evidenced net costs. External SMTP delivery and real device Keystore/release remain unverified. Explicit bilateral standing consignment/profit-sharing and sponsored promotions now accrue immutable settlement deltas with historical refund reversals and hard sponsor budgets, separate from manual invoices. Coordinated recalls follow real receipt provenance and recipient-leader hold/release. Native ESC/POS TCP LAN58/80mm and browser/system printing are client integrations; transport send is not physical print acknowledgement. Push and payment gateways remain deferred. ERP manufacturing: own active center owner/admin only. Exact kg/g/l/ml/whole-pcs material ledgers dispatch through StockLedger.apply; explicit opening values, approved supplier purchases/partial receipts/verified payments and supplier refunds. Immutable recipe versions may output a finished product or an intermediate material. Production consumes actual eligible reviewed lot revisions atomically with quarantined output and lot-derived costs; owner/admin must inspect before release. Explicit FEFO and minimum settings, independent material counts, internal transfers, bounded planning/HPP and transitive material trace. No invented recipe, yield, lifetime, tax, cost or auto bank/recall policy. Web and native Flutter use scoped declarative forms and immutable UUID retry. Explicit per-user/per-assigned-store production grants now allow warehouse/store managers to plan and record production including process cost; supplier finance and mandatory QC remain owner/admin only. Manual double-entry accounting includes explicit chart/normal balances, independent draft review, exact linked reversals, activity-versioned open/closed periods and bounded opening/movement/closing trial balance with period account net movements and as-of categories. No automatic ERP/POS historical posting or chart/tax mapping is implied. ADR060 adds source-proven replacement costing, bilateral missing-cost agreements and return custody/ownership. Only remaining buyer stock value is redistributed, including quarantine, preserving historical COGS; supplier replacement expense covers actual received dispatch cost. Pending replacement valuation blocks depletion. Missing burden is explicitly proposed by center then approved by partner leader; exact loss/claim journals do not transfer funds. Supplier return custody is excluded from owned inventory quantity/value and disposal until physical receipt and accepted credit coverage; supplier recovery uses original dispatch cost. Own-org section distribution_settlements supports missing_propose(id,version,owner_share_basis_points,note), missing_decide(id,version,decision,consent,note), distribution_retry(id,version,note), all with operation_id. Pure shortage credits can reconcile actual invoice quantity/capital; ambiguous mixed damage/shortage remains reviewed. Unknown/cutover/manual-reconciled/mixed lineage never becomes guessed zero. See docs/distribution-cost-settlement.md."
   },
   "security": [
     {
@@ -21187,7 +21187,8 @@
                 "invoice_variances",
                 "closings",
                 "income_statement",
-                "balance_sheet"
+                "balance_sheet",
+                "distribution_settlements"
               ]
             }
           },
@@ -21334,7 +21335,10 @@
                 "invoice_revalue_retry",
                 "closing_propose",
                 "closing_decide",
-                "commercial_policy"
+                "commercial_policy",
+                "missing_propose",
+                "missing_decide",
+                "distribution_retry"
               ]
             }
           }
@@ -34552,7 +34556,10 @@
               "invoice_revalue_retry",
               "closing_propose",
               "closing_decide",
-              "commercial_policy"
+              "commercial_policy",
+              "missing_propose",
+              "missing_decide",
+              "distribution_retry"
             ]
           },
           "label": {
@@ -34667,7 +34674,8 @@
               "invoice_variances",
               "closings",
               "income_statement",
-              "balance_sheet"
+              "balance_sheet",
+              "distribution_settlements"
             ]
           },
           "can_manage": {
@@ -34730,7 +34738,8 @@
                 "invoice_variances",
                 "closings",
                 "income_statement",
-                "balance_sheet"
+                "balance_sheet",
+                "distribution_settlements"
               ]
             }
           },
@@ -35016,14 +35025,15 @@
             "type": "string"
           },
           "quantity_delta": {
-            "type": "integer"
+            "type": "integer",
+            "description": "Signed owned inventory quantity movement; physical custody receipts may have zero owned quantity until title passes. Physical stock ledger remains separate."
           },
           "value_delta": {
             "type": [
               "integer",
               "null"
             ],
-            "description": "Signed actual batch cost movement in IDR; null means unknown. Same-organization internal transfer receipts carry proportional immutable dispatch cost into good/quarantined stock; missing value stays source review, with no sales COGS or commercial journal. Opening valuation is separately reviewed; bucket transformations conserve value."
+            "description": "Signed actual batch cost movement in IDR; null means unknown. Same-organization internal transfer receipts carry proportional immutable dispatch cost into good/quarantined stock; missing value stays source review, with no sales COGS or commercial journal. Opening valuation is separately reviewed; bucket transformations conserve value. ADR060 distribution_value entries carry immutable monetary or ownership proof; source-proven replacement additions are provisional zero only while depletion is blocked pending allocation."
           }
         },
         "additionalProperties": true
@@ -35463,6 +35473,220 @@
           }
         },
         "additionalProperties": true
+      },
+      "MissingCostProposalRequest": {
+        "type": "object",
+        "required": [
+          "operation_id",
+          "id",
+          "version",
+          "note",
+          "owner_share_basis_points"
+        ],
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "ulid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "owner_share_basis_points": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 10000,
+            "description": "Explicit share borne by owner at dispatch; supplier for original/replacement, buyer for return before title reversal. No default."
+          }
+        },
+        "additionalProperties": false
+      },
+      "MissingCostDecisionRequest": {
+        "type": "object",
+        "required": [
+          "operation_id",
+          "id",
+          "version",
+          "note",
+          "decision",
+          "consent"
+        ],
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "id": {
+            "type": "string",
+            "format": "ulid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "note": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2000
+          },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "approve",
+              "reject"
+            ]
+          },
+          "consent": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DistributionValueProof": {
+        "type": "object",
+        "description": "Immutable own-org StockLedger monetary/ownership proof. Ownership quantity changes do not fabricate physical piece movements. Historical costs are unchanged.",
+        "required": [
+          "id",
+          "organization_id",
+          "job_id",
+          "inventory_batch_id",
+          "stock_revision",
+          "before_quantity",
+          "after_quantity",
+          "before_value",
+          "after_value",
+          "value_delta",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "ulid"
+          },
+          "organization_id": {
+            "type": "string",
+            "format": "ulid"
+          },
+          "job_id": {
+            "type": "string",
+            "format": "ulid"
+          },
+          "inventory_batch_id": {
+            "type": "string",
+            "format": "ulid"
+          },
+          "stock_revision": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "before_quantity": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "after_quantity": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "before_value": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "after_value": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "value_delta": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": true
+      },
+      "DistributionSettlementRow": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/ErpRow"
+          },
+          {
+            "type": "object",
+            "required": [
+              "kind",
+              "status",
+              "version"
+            ],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "replacement",
+                  "return",
+                  "missing"
+                ]
+              },
+              "status": {
+                "type": "string",
+                "enum": [
+                  "pending",
+                  "review_required",
+                  "applied",
+                  "awaiting_agreement",
+                  "proposed",
+                  "approved",
+                  "rejected"
+                ]
+              },
+              "version": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "event_on": {
+                "type": "string",
+                "format": "date"
+              },
+              "source_id": {
+                "type": "string",
+                "format": "ulid"
+              },
+              "missing_value": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "owner_share_basis_points": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 10000
+              },
+              "result": {
+                "type": "object",
+                "description": "Own organization only: conserved stock value or returned/recovered value. Never counterparty books.",
+                "additionalProperties": true
+              },
+              "value_proofs": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "$ref": "#/components/schemas/DistributionValueProof"
+                }
+              }
+            },
+            "additionalProperties": true
+          }
+        ]
       }
     }
   }

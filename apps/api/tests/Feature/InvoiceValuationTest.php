@@ -4,12 +4,14 @@ namespace Tests\Feature;
 
 use App\Models\User;
 use App\Modules\Accounting\Application\AutomaticPosting;
+use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Accounting\Application\InvoiceValuation;
 use App\Modules\Accounting\Application\WholesalePolicy;
 use App\Modules\Billing\Infrastructure\Invoice;
 use App\Modules\Catalog\Infrastructure\Product;
 use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
+use App\Modules\Inventory\Application\FoodSafety;
 use App\Modules\Inventory\Application\StockLedger;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use App\Modules\Partnership\Infrastructure\PartnershipContract;
@@ -18,6 +20,7 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Laravel\Sanctum\Sanctum;
+use Symfony\Component\HttpKernel\Exception\HttpException;
 use Tests\TestCase;
 
 class InvoiceValuationTest extends TestCase
@@ -847,6 +850,344 @@ class InvoiceValuationTest extends TestCase
         $this->assertSame(0, DB::table('accounting_events')->where('organization_id', $this->partner->id)->where('source_type', 'invoice_variance_depletion')->count());
         $this->assertGreaterThan(0, app(AutomaticPosting::class)->drain());
         $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
+
+    private function costingCase(array $d, string $type): string
+    {
+        $path = '/api/v1/orders/'.$d['order']['id'].'/shipments/'.$d['shipment']['id'].'/discrepancy';
+        $this->act($this->lead)->postJson($path, ['operation_id' => (string) Str::uuid(), 'order_version' => $d['order']['version'], 'reason' => 'Actual discrepancy', 'reference' => 'Checked delivery'])->assertCreated();
+        $plan = $this->act($this->owner)->postJson($path.'/resolutions', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'type' => $type, 'proposal' => 'Agreed physical resolution', 'reference' => 'Cost rules independently recorded'])->assertCreated()->json('data');
+        $this->act($this->lead)->postJson($path.'/resolutions/'.$plan['resolution']['id'].'/confirm', ['operation_id' => (string) Str::uuid(), 'version' => 2])->assertOk();
+
+        return $path;
+    }
+
+    private function valuedReplacement(array $d, int $good = 20, int $bad = 0, bool $receive = true): array
+    {
+        $path = $this->costingCase($d, 'replacement').'/replacements';
+        $stock = $this->act($this->owner)->postJson('/api/v1/stores/'.$this->source->id.'/inventory/intakes', ['operation_id' => (string) Str::uuid(), 'product_id' => $this->supplierProduct->id, 'batch_code' => 'REPLACEMENT-COST', 'expires_on' => '2030-01-01', 'quantity_packs' => 20, 'note' => 'Actual replacement source'])->assertCreated()->json('data');
+        $proposal = $this->erp($this->center, 'value_propose', ['batch_id' => $stock['id'], 'stock_revision' => $stock['stock_revision'], 'amount' => 20001, 'note' => 'Verified actual opening'], $this->owner);
+        $reviewer = User::findOrFail(DB::table('organization_user')->where('organization_id', $this->center->id)->where('role', 'admin')->value('user_id'));
+        $this->erp($this->center, 'value_decide', ['id' => $proposal['id'], 'version' => 1, 'decision' => 'approve', 'note' => 'Independent proof'], $reviewer);
+        $sent = $this->act($this->owner)->postJson($path, ['operation_id' => (string) Str::uuid(), 'version' => 3, 'handler' => 'Replacement courier', 'lines' => [['original_shipment_line_id' => $d['shipment']['lines'][0]['id'], 'allocations' => [['batch_id' => $stock['id'], 'quantity_packs' => 20]]]]])->assertCreated()->json('data');
+        $request = ['operation_id' => (string) Str::uuid(), 'version' => $sent['case_version'], 'lines' => [['replacement_line_id' => $sent['replacement']['lines'][0]['id'], 'good_packs' => $good, 'damaged_packs' => $bad, 'condition_note' => 'Actual replacement inspected']]];
+        $url = $path.'/'.$sent['replacement']['id'].'/receive';
+        if ($receive) {
+            $this->act($this->lead)->postJson($url, $request)->assertOk();
+            $this->postJson($url, $request)->assertOk();
+        }
+
+        return [$sent, $url, $request];
+    }
+
+    private function valuedReturn(array $d, $batch, int $received = 20): array
+    {
+        $path = $this->costingCase($d, 'return').'/returns';
+        $sent = $this->act($this->lead)->postJson($path, ['operation_id' => (string) Str::uuid(), 'version' => 3, 'destination_bucket' => 'quarantined', 'handler' => 'Actual return courier', 'lines' => [['original_shipment_line_id' => $d['shipment']['lines'][0]['id'], 'allocations' => [['batch_id' => $batch->id, 'quantity_packs' => 20]]]]])->assertCreated()->json('data');
+        $request = ['operation_id' => (string) Str::uuid(), 'version' => $sent['case_version'], 'lines' => [['return_line_id' => $sent['return']['lines'][0]['id'], 'received_packs' => $received, 'condition_note' => 'Actual custody inspected']]];
+        $url = $path.'/'.$sent['return']['id'].'/receive';
+        $this->act($this->owner)->postJson($url, $request)->assertOk();
+        $this->postJson($url, $request)->assertOk();
+
+        return $sent;
+    }
+
+    private function returnCredit(array $d, array $invoice, int $base = 40000): array
+    {
+        $case = DB::table('shipment_discrepancies')->where('supply_order_id', $d['order']['id'])->firstOrFail();
+        $this->act($this->owner)->getJson($this->billing($d))->assertOk();
+        // Read authoritative invoice version; returned document pagination remains separate from costing.
+        $version = DB::table('invoices')->where('id', $invoice['id'])->value('version');
+        $this->postJson($this->billing($d).'/invoices/'.$invoice['id'].'/credits', ['operation_id' => (string) Str::uuid(), 'version' => $version, 'case_id' => $case->id, 'base_amount' => $base, 'tax_amount' => 0, 'reason' => 'Agreed return credit'])->assertCreated();
+        $credit = DB::table('invoice_credits')->where('invoice_id', $invoice['id'])->where('status', 'pending')->firstOrFail();
+        $version = DB::table('invoices')->where('id', $invoice['id'])->value('version');
+        $request = ['operation_id' => (string) Str::uuid(), 'version' => $version, 'consent' => true, 'reason' => 'Physical custody and credit checked'];
+        $url = $this->billing($d).'/invoices/'.$invoice['id'].'/credits/'.$credit->id.'/accept';
+        $this->act($this->lead)->postJson($url, $request)->assertOk();
+        $this->postJson($url, $request)->assertOk();
+
+        return (array) $credit;
+    }
+
+    public function test_replacement_redistributes_only_remaining_owned_value_and_charges_supplier_once(): void
+    {
+        [$d,$buyer,$original] = $this->actualReceipt(80, 20);
+        $this->finalInvoice($d, 0);
+        $sale = $this->sell($original, 40);
+        [$sent] = $this->valuedReplacement($d);
+        $new = InventoryBatch::where('store_id', $this->target->id)->where('batch_code', 'REPLACEMENT-COST')->firstOrFail();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $original->id, 'quantity' => 60, 'remaining_value' => 90000]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $new->id, 'quantity' => 20, 'remaining_value' => 30000]);
+        $saleEntry = DB::table('inventory_cost_entries')->where('source_type', 'pos_sale')->firstOrFail();
+        $this->assertSame(-80000, $saleEntry->value_delta);
+        $this->assertDatabaseHas('accounting_distribution_jobs', ['kind' => 'replacement', 'source_id' => $sent['replacement']['lines'][0]['id'], 'status' => 'applied']);
+        $cost = $this->event($this->center->id, 'replacement_cost', $sent['replacement']['lines'][0]['id']);
+        $this->assertSame([['loss', 'finished', 20001]], $this->terms($cost));
+        $this->assertSame(0, app(DistributionCosting::class)->drain());
+        $this->assertDatabaseCount('inventory_distribution_values', 2);
+        $this->refund($sale, 10);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $original->id, 'quantity' => 70, 'remaining_value' => 110000]);
+        $this->act($this->lead)->getJson('/api/v1/organizations/'.$this->partner->id.'/erp/context?section=distribution_settlements')->assertOk()->assertSee('120000')->assertDontSee('20001');
+        $this->act($this->owner)->getJson('/api/v1/organizations/'.$this->partner->id.'/erp/context?section=distribution_settlements')->assertForbidden();
+    }
+
+    public function test_replacement_before_final_invoice_waits_then_automatically_uses_final_purchase_value(): void
+    {
+        [$d,$buyer,$original] = $this->actualReceipt(80, 20);
+        $this->valuedReplacement($d);
+        $this->assertDatabaseHas('accounting_distribution_jobs', ['kind' => 'replacement', 'status' => 'review_required']);
+        $replacement = InventoryBatch::where('store_id', $this->target->id)->where('batch_code', 'REPLACEMENT-COST')->firstOrFail();
+        $this->assertFalse(app(FoodSafety::class)->eligible($replacement, 'usable'));
+        $this->assertFalse(app(FoodSafety::class)->eligible($original->fresh(), 'usable'));
+        $this->finalInvoice($d, 20000);
+        $this->assertSame(1, app(DistributionCosting::class)->drain());
+        $this->assertSame(220000, (int) DB::table('inventory_values')->where('organization_id', $this->partner->id)->sum('remaining_value'));
+        $this->assertSame(120, (int) DB::table('inventory_values')->where('organization_id', $this->partner->id)->sum('quantity'));
+        $this->assertSame(0, app(DistributionCosting::class)->drain());
+    }
+
+    public function test_missing_cost_requires_two_parties_and_posts_exact_loss_and_claim_without_stock(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(90, 0);
+        $this->costingCase($d, 'credit');
+        $missing = DB::table('accounting_missing_costs')->firstOrFail();
+        $this->assertSame(10001, $missing->missing_value);
+        $url = '/api/v1/organizations/'.$this->center->id.'/erp/missing_propose';
+        $body = ['operation_id' => (string) Str::uuid(), 'id' => $missing->id, 'version' => 1, 'owner_share_basis_points' => 5000, 'note' => 'Each party bears half, integer remainder to counterparty claim'];
+        $this->act($this->warehouse)->postJson($url, $body)->assertForbidden();
+        $this->act($this->lead)->postJson($url, $body)->assertForbidden();
+        $this->act($this->owner)->postJson($url, $body)->assertCreated();
+        $this->postJson($url, $body)->assertCreated();
+        $decision = ['operation_id' => (string) Str::uuid(), 'id' => $missing->id, 'version' => 2, 'decision' => 'approve', 'consent' => true, 'note' => 'Buyer leader agrees exact cost split'];
+        $this->postJson('/api/v1/organizations/'.$this->center->id.'/erp/missing_decide', $decision)->assertForbidden();
+        $this->act($this->outsider)->postJson('/api/v1/organizations/'.$this->partner->id.'/erp/missing_decide', $decision)->assertForbidden();
+        $this->act($this->lead)->postJson('/api/v1/organizations/'.$this->partner->id.'/erp/missing_decide', $decision)->assertCreated();
+        $this->postJson('/api/v1/organizations/'.$this->partner->id.'/erp/missing_decide', $decision)->assertCreated();
+        $this->assertSame([['loss', 'finished', 5000], ['trade_receivable', 'finished', 5001]], $this->terms($this->event($this->center->id, 'distribution_missing', $missing->id)));
+        $this->assertSame([['loss', 'trade_payable', 5001]], $this->terms($this->event($this->partner->id, 'distribution_missing', $missing->id)));
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 90, 'remaining_value' => 180000]);
+        $this->assertDatabaseHas('accounting_events', ['source_type' => 'stock_review', 'source_id' => $missing->source_entry_id, 'status' => 'reconciled']);
+        $this->assertSame(4, app(AutomaticPosting::class)->drain());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
+
+    public function test_return_is_unowned_custody_until_accepted_credit_then_recovers_original_supplier_cost(): void
+    {
+        [$d,$buyer,$batch,$source] = $this->actualReceipt(80, 20);
+        $invoice = $this->finalInvoice($d, 0);
+        $sent = $this->valuedReturn($d, $batch);
+        $fact = DB::table('accounting_return_costs')->firstOrFail();
+        $this->assertSame('held', $fact->status);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $fact->inventory_batch_id, 'quantity' => 0, 'remaining_value' => 0]);
+        $this->assertDatabaseHas('inventory_batches', ['id' => $fact->inventory_batch_id, 'quarantined_pieces' => 20]);
+        $this->assertSame(0, DB::table('accounting_events')->where('source_type', 'distribution_return_value')->count());
+        $this->returnCredit($d, $invoice);
+        app(DistributionCosting::class)->drain();
+        $this->assertDatabaseHas('accounting_return_costs', ['id' => $fact->id, 'status' => 'released', 'credit_base' => 40000]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $fact->inventory_batch_id, 'quantity' => 20, 'remaining_value' => 20000]);
+        $this->assertSame([['finished', 'cogs', 20000]], $this->terms($this->event($this->center->id, 'distribution_return_value', $fact->return_line_id)));
+        $this->assertSame([['purchase_clearing', 'finished', 40000]], $this->terms($this->event($this->partner->id, 'distribution_return_value', $fact->return_line_id)));
+        $this->assertSame(0, app(DistributionCosting::class)->drain());
+        $this->assertDatabaseCount('inventory_distribution_values', 1);
+    }
+
+    public function test_return_partial_credit_does_not_transfer_ownership_and_closed_period_requires_retry(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(80, 20);
+        $invoice = $this->finalInvoice($d, 0);
+        $this->valuedReturn($d, $batch);
+        $this->returnCredit($d, $invoice, 20000);
+        app(DistributionCosting::class)->drain();
+        $this->assertDatabaseHas('accounting_return_costs', ['status' => 'held']);
+        $this->returnCredit($d, $invoice, 20000);
+        DB::table('accounting_periods')->where('id', $buyer['period']['id'])->update(['status' => 'closed']);
+        app(DistributionCosting::class)->drain();
+        $this->assertDatabaseHas('accounting_return_costs', ['status' => 'held']);
+        $this->assertDatabaseCount('inventory_distribution_values', 0);
+        DB::table('accounting_periods')->where('id', $buyer['period']['id'])->update(['status' => 'open']);
+        $job = DB::table('accounting_distribution_jobs')->where('organization_id', $this->partner->id)->firstOrFail();
+        $this->erp($this->partner, 'distribution_retry', ['id' => $job->id, 'version' => $job->version, 'note' => 'Original periods and source documents verified'], $this->lead);
+        app(DistributionCosting::class)->drain();
+        $this->assertDatabaseHas('accounting_return_costs', ['status' => 'released']);
+    }
+
+    public function test_pure_missing_credit_reconciles_actual_quantity_without_creating_missing_stock(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(90, 0);
+        $invoice = $this->finalInvoice($d, 20000);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $invoice['id'], 'status' => 'review_required']);
+        $this->costingCase($d, 'credit');
+        $this->returnCredit($d, $invoice, 20000);
+        $this->assertSame(1, app(InvoiceValuation::class)->drain(100));
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $invoice['id'], 'status' => 'applied', 'stock_adjustment' => 20000]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 90, 'remaining_value' => 200000]);
+        $this->assertDatabaseHas('invoices', ['id' => $invoice['id'], 'subtotal' => 200000, 'total_amount' => 220000]);
+        $this->assertSame(0, app(InvoiceValuation::class)->drain(100));
+    }
+
+    public function test_replacement_shortage_is_separate_from_its_received_supplier_expense(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(80, 20);
+        $this->finalInvoice($d, 0);
+        [$sent] = $this->valuedReplacement($d, 18, 1);
+        $line = $sent['replacement']['lines'][0]['id'];
+        $this->assertSame([['loss', 'finished', 19000]], $this->terms($this->event($this->center->id, 'replacement_cost', $line)));
+        $this->assertDatabaseHas('accounting_missing_costs', ['source_line_id' => $line, 'missing_value' => 1001, 'status' => 'awaiting_agreement']);
+        $this->assertSame(200000, (int) DB::table('inventory_values')->where('organization_id', $this->partner->id)->sum('remaining_value'));
+        $this->assertSame(119, (int) DB::table('inventory_values')->where('organization_id', $this->partner->id)->sum('quantity'));
+    }
+
+    public function test_replacement_without_proven_buyout_never_invents_free_buyer_stock_or_supplier_expense(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(80, 20);
+        DB::table('accounting_events')->where('organization_id', $this->partner->id)->where('source_type', 'distribution_receipt')->update(['status' => 'reconciled']);
+        $this->valuedReplacement($d);
+        $this->assertDatabaseCount('accounting_distribution_jobs', 0);
+        $this->assertSame(0, DB::table('accounting_events')->where('source_type', 'replacement_cost')->count());
+        $new = InventoryBatch::where('store_id', $this->target->id)->where('batch_code', 'REPLACEMENT-COST')->firstOrFail();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $new->id, 'quantity' => 20, 'remaining_value' => null]);
+    }
+
+    public function test_replacement_value_failure_rolls_back_both_batches_receipt_and_expense_then_same_uuid_recovers(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(80, 20);
+        $this->finalInvoice($d, 0);
+        [$sent,$url,$request] = $this->valuedReplacement($d, receive: false);
+        DB::unprepared("CREATE TRIGGER fail_replacement_value BEFORE INSERT ON inventory_distribution_values WHEN (SELECT COUNT(*) FROM inventory_distribution_values WHERE job_id=NEW.job_id)>0 BEGIN SELECT RAISE(FAIL, 'second value persistence failure'); END");
+        $this->act($this->lead)->postJson($url, $request)->assertStatus(500);
+        $this->assertDatabaseHas('replacement_shipments', ['id' => $sent['replacement']['id'], 'received_at' => null]);
+        $this->assertDatabaseCount('inventory_distribution_values', 0);
+        $this->assertDatabaseCount('accounting_distribution_jobs', 0);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 100, 'remaining_value' => 200000]);
+        $this->assertSame(0, DB::table('accounting_events')->where('source_type', 'replacement_cost')->count());
+        DB::unprepared('DROP TRIGGER fail_replacement_value');
+        $this->postJson($url, $request)->assertOk();
+        $this->postJson($url, $request)->assertOk();
+        $this->assertDatabaseCount('inventory_distribution_values', 2);
+        $this->assertSame(200000, (int) DB::table('inventory_values')->where('organization_id', $this->partner->id)->sum('remaining_value'));
+    }
+
+    public function test_return_custody_cannot_be_written_off_or_dilute_other_owned_inventory_cost(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(80, 20);
+        $this->finalInvoice($d, 0);
+        $this->valuedReturn($d, $batch);
+        $fact = DB::table('accounting_return_costs')->firstOrFail();
+        $source = InventoryBatch::findOrFail($fact->inventory_batch_id);
+        try {
+            DB::transaction(fn () => app(StockLedger::class)->apply($source, $this->owner->id, ['quarantined' => -1, 'waste' => 1], 'test_waste', (string) Str::ulid()));
+            $this->fail('Custody is not disposable owned inventory.');
+        } catch (HttpException $e) {
+            $this->assertSame(409, $e->getStatusCode());
+        }
+        DB::transaction(fn () => app(StockLedger::class)->credit($this->center->id, $this->source->id, $this->supplierProduct->toArray(), $source->batch_code, '2030-01-01', 10, $this->owner->id, 'test_owned_receipt', (string) Str::ulid(), 'usable', inventoryValue: 5000));
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $source->id, 'quantity' => 10, 'remaining_value' => 5000]);
+        DB::transaction(fn () => app(StockLedger::class)->dispatch($source->id, $this->source->id, $this->supplierProduct->id, 1, 5, $this->owner->id, 'OWNED-DISPATCH'));
+        $this->assertDatabaseHas('inventory_cost_entries', ['source_type' => 'shipment_dispatch', 'source_id' => 'OWNED-DISPATCH', 'quantity_delta' => -5, 'value_delta' => -2500]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $source->id, 'quantity' => 5, 'remaining_value' => 2500]);
+        $this->assertDatabaseHas('inventory_batches', ['id' => $source->id, 'quarantined_pieces' => 20]);
+    }
+
+    public function test_return_missing_cost_and_ownership_release_cover_separate_parts_without_double_loss(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(80, 20);
+        $invoice = $this->finalInvoice($d, 0);
+        $this->valuedReturn($d, $batch, 18);
+        $missing = DB::table('accounting_missing_costs')->firstOrFail();
+        $this->assertSame($this->partner->id, $missing->owner_organization_id);
+        $this->assertSame(4000, $missing->missing_value);
+        $this->erp($this->center, 'missing_propose', ['id' => $missing->id, 'version' => 1, 'owner_share_basis_points' => 10000, 'note' => 'Buyer agrees to bear loss while still owner in transit'], $this->owner);
+        $this->erp($this->partner, 'missing_decide', ['id' => $missing->id, 'version' => 2, 'decision' => 'approve', 'consent' => true, 'note' => 'Both physical shortage and financial burden checked'], $this->lead);
+        $this->assertDatabaseHas('accounting_events', ['source_type' => 'stock_review', 'source_id' => $missing->source_entry_id, 'status' => 'review_required']);
+        $this->returnCredit($d, $invoice, 36000);
+        app(DistributionCosting::class)->drain();
+        $this->assertDatabaseHas('accounting_return_costs', ['status' => 'released']);
+        $this->assertDatabaseHas('accounting_events', ['source_type' => 'stock_review', 'source_id' => $missing->source_entry_id, 'status' => 'reconciled']);
+        $this->assertSame([['loss', 'finished', 4000]], $this->terms($this->event($this->partner->id, 'distribution_missing', $missing->id)));
+        $fact = DB::table('accounting_return_costs')->firstOrFail();
+        $this->assertSame([['purchase_clearing', 'finished', 36000]], $this->terms($this->event($this->partner->id, 'distribution_return_value', $fact->return_line_id)));
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $fact->inventory_batch_id, 'quantity' => 18, 'remaining_value' => 18000]);
+    }
+
+    public function test_zero_supplier_cost_return_releases_owned_pieces_without_a_fabricated_zero_journal(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(80, 20, sourceValue: 0);
+        $invoice = $this->finalInvoice($d, 0);
+        $this->valuedReturn($d, $batch);
+        $this->returnCredit($d, $invoice);
+        app(DistributionCosting::class)->drain();
+        $fact = DB::table('accounting_return_costs')->firstOrFail();
+        $this->assertSame('released', $fact->status);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $fact->inventory_batch_id, 'quantity' => 20, 'remaining_value' => 0]);
+        $this->assertSame(0, DB::table('accounting_events')->where('organization_id', $this->center->id)->where('source_type', 'distribution_return_value')->count());
+        $this->assertDatabaseHas('inventory_cost_entries', ['inventory_batch_id' => $fact->inventory_batch_id, 'source_type' => 'distribution_value', 'quantity_delta' => 20, 'value_delta' => 0]);
+    }
+
+    public function test_entire_return_missing_waits_for_bilateral_burden_and_never_creates_supplier_stock(): void
+    {
+        [$d,$buyer,$batch] = $this->actualReceipt(80, 20);
+        $this->finalInvoice($d, 0);
+        $this->valuedReturn($d, $batch, 0);
+        $this->assertDatabaseHas('accounting_return_costs', ['status' => 'lost', 'received_pieces' => 0, 'inventory_batch_id' => null]);
+        $this->assertDatabaseHas('accounting_distribution_jobs', ['kind' => 'return', 'status' => 'review_required']);
+        $this->assertSame(0, DB::table('accounting_events')->where('source_type', 'distribution_missing')->count());
+        $r = DB::table('accounting_missing_costs')->firstOrFail();
+        $this->erp($this->center, 'missing_propose', ['id' => $r->id, 'version' => 1, 'owner_share_basis_points' => 10000, 'note' => 'Buyer will bear full loss as agreed per case'], $this->owner);
+        $this->erp($this->partner, 'missing_decide', ['id' => $r->id, 'version' => 2, 'decision' => 'approve', 'consent' => true, 'note' => 'Partner leader confirms lost return and burden'], $this->lead);
+        $this->assertSame(1, app(DistributionCosting::class)->drain());
+        $this->assertSame(0, app(DistributionCosting::class)->drain());
+        $this->assertSame([['loss', 'finished', 40000]], $this->terms($this->event($this->partner->id, 'distribution_missing', $r->id)));
+        $this->assertSame(0, (int) DB::table('inventory_batches')->where('store_id', $this->source->id)->sum('quarantined_pieces'));
+        $this->assertDatabaseCount('inventory_distribution_values', 0);
+    }
+
+    public function test_entire_original_shipment_missing_can_credit_all_goods_without_fake_inventory(): void
+    {
+        $this->supplierProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        $this->localProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        [$order,$stock] = $this->ready(100, 100);
+        DB::table('inventory_values')->where('inventory_batch_id', $stock['id'])->update(['remaining_value' => 100001]);
+        $this->configure($this->center, $this->owner);
+        $this->configure($this->partner, $this->lead);
+        $sent = $this->dispatch($order, $stock, 100);
+        $d = $this->act($this->lead)->postJson('/api/v1/shipments/'.$sent['shipment']['id'].'/receive', ['operation_id' => (string) Str::uuid(), 'version' => $sent['order']['version'], 'lines' => [['shipment_line_id' => $sent['shipment']['lines'][0]['id'], 'good_packs' => 0, 'damaged_packs' => 0, 'condition_note' => 'Entire shipment not received']]])->assertOk()->json('data');
+        $invoice = $this->finalInvoice($d, 0);
+        $this->costingCase($d, 'credit');
+        $this->returnCredit($d, $invoice, 200000);
+        $this->assertSame(1, app(InvoiceValuation::class)->drain(100));
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $invoice['id'], 'status' => 'applied', 'stock_adjustment' => 0, 'cogs_adjustment' => 0]);
+        $r = DB::table('accounting_missing_costs')->firstOrFail();
+        $this->erp($this->center, 'missing_propose', ['id' => $r->id, 'version' => 1, 'owner_share_basis_points' => 10000, 'note' => 'Supplier bears entire lost shipment cost'], $this->owner);
+        $this->erp($this->partner, 'missing_decide', ['id' => $r->id, 'version' => 2, 'decision' => 'approve', 'consent' => true, 'note' => 'Leader confirms full credit and agreed burden'], $this->lead);
+        $this->assertSame([['loss', 'finished', 100001]], $this->terms($this->event($this->center->id, 'distribution_missing', $r->id)));
+        $this->assertSame(0, DB::table('inventory_values')->where('organization_id', $this->partner->id)->count());
+        $this->assertSame(0, DB::table('inventory_cost_entries')->where('source_type', 'shipment_receipt')->count());
+        $this->assertDatabaseCount('inventory_invoice_variances', 0);
+        $this->assertSame(0, DB::table('accounting_events')->where('source_type', 'distribution_cogs')->count());
+    }
+
+    public function test_shortage_credit_allocates_invoice_only_to_received_lines_when_another_shipment_is_entirely_missing(): void
+    {
+        $this->supplierProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        $this->localProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        [$order,$stock] = $this->ready(100, 100);
+        DB::table('inventory_values')->where('inventory_batch_id', $stock['id'])->update(['remaining_value' => 100001]);
+        $this->configure($this->center, $this->owner);
+        $this->configure($this->partner, $this->lead);
+        $sent = $this->dispatch($order, $stock, 50);
+        $first = $this->act($this->lead)->postJson('/api/v1/shipments/'.$sent['shipment']['id'].'/receive', ['operation_id' => (string) Str::uuid(), 'version' => $sent['order']['version'], 'lines' => [['shipment_line_id' => $sent['shipment']['lines'][0]['id'], 'good_packs' => 0, 'damaged_packs' => 0, 'condition_note' => 'First shipment entirely missing']]])->assertOk()->json('data');
+        $sent = $this->dispatch($first['order'], $stock, 50);
+        $second = $this->act($this->lead)->postJson('/api/v1/shipments/'.$sent['shipment']['id'].'/receive', ['operation_id' => (string) Str::uuid(), 'version' => $sent['order']['version'], 'lines' => [['shipment_line_id' => $sent['shipment']['lines'][0]['id'], 'good_packs' => 50, 'damaged_packs' => 0]]])->assertOk()->json('data');
+        $first['order'] = $second['order'];
+        $invoice = $this->act($this->owner)->postJson($this->billing($first).'/invoices', [...$this->invoiceBody($first), 'shipment_ids' => [$first['shipment']['id'], $second['shipment']['id']], 'shipping_amount' => 0, 'tax_basis_points' => 0])->assertCreated()->json('data');
+        $this->acceptInvoice($first, $invoice);
+        $this->costingCase($first, 'credit');
+        $this->returnCredit($first, $invoice, 100000);
+        $this->assertSame(1, app(InvoiceValuation::class)->drain(100));
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $invoice['id'], 'status' => 'applied', 'stock_adjustment' => 0]);
+        $this->assertDatabaseHas('inventory_values', ['organization_id' => $this->partner->id, 'quantity' => 50, 'remaining_value' => 100000]);
+        $this->assertSame(1, DB::table('inventory_cost_entries')->where('organization_id', $this->partner->id)->where('source_type', 'shipment_receipt')->count());
+        $this->assertDatabaseHas('invoices', ['id' => $invoice['id'], 'subtotal' => 200000]);
     }
 
     private function actualReceipt(int $good, int $damaged, int $price = 2000, bool $manualDispatch = false, bool $proofFailure = false, int $sourceValue = 100001): array

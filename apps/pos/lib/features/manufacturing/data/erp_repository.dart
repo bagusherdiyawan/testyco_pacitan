@@ -6,6 +6,7 @@ class ErpRepository {
   final ApiClient api;
   final String organization;
   static const financeSections = {
+    'distribution_settlements',
     'closings',
     'income_statement',
     'balance_sheet',
@@ -22,6 +23,7 @@ class ErpRepository {
     'cost_ledger',
   };
   static const sections = {
+    'distribution_settlements': 'Biaya pengganti, hilang dan retur',
     'closings': 'Penutupan buku formal',
     'income_statement': 'Laporan laba rugi',
     'balance_sheet': 'Posisi keuangan',
@@ -50,6 +52,9 @@ class ErpRepository {
     'trace': 'Jejak bahan ke produksi',
   };
   static const actions = {
+    'missing_propose',
+    'missing_decide',
+    'distribution_retry',
     'commercial_policy',
     'closing_propose',
     'closing_decide',

@@ -104,5 +104,7 @@ final class BillingPosting
             $terms = $org === $i->organization_id ? [['wholesale_returns', 'trade_receivable', $credit->base_amount], ['output_tax', 'trade_receivable', $credit->tax_amount]] : [['trade_payable', 'purchase_clearing', $credit->base_amount], ['trade_payable', $p->tax_treatment === 'recoverable' ? 'input_tax' : 'purchase_clearing', $credit->tax_amount]];
             app(AutomaticPosting::class)->record($org, $actor, 'wholesale_credit', $credit->id, $credit->decided_at->copy()->timezone('Asia/Jakarta')->format('Y-m-d'), $terms, $i->number.' · '.$credit->reason, $this->reason($i, $origin), $p->id);
         }
+        app(DistributionCosting::class)->wake($i->supply_order_id, 'Menunggu nota kredit');
+        DB::table('accounting_invoice_revaluations')->where('organization_id', $i->partner_id)->where('invoice_id', $i->id)->where('status', 'review_required')->where(fn ($q) => $q->where('reason', 'like', 'Jumlah invoice berbeda%')->orWhere('reason', 'like', 'Dasar penerimaan belum lengkap%'))->update(['status' => 'pending', 'reason' => null, 'version' => DB::raw('version + 1'), 'updated_at' => now()]);
     }
 }

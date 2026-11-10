@@ -12,7 +12,7 @@ Rekonsiliasi invoice membagi nilai final ke entri baik/karantina berdasarkan bij
 
 Web/Flutter menampilkan bukti penerimaan di ringkasan antrean invoice. Pembacaan tetap keuangan organisasi sendiri. Periode tertutup, sumber yang belum cocok dan lineage tanpa bukti tetap memerlukan pemeriksaan; retry tidak mengubah sumber atau menerobos periode.
 
-Batas tersisa: penyelesaian finansial barang hilang, valuasi barang pengganti/retur distribusi dan physical consignor COGS belum otomatis. Aturan biaya pengganti masih memerlukan jawaban pengguna; jangan menganggap penggantian tanpa tagihan berarti biaya pemasok/pembeli tertentu. Persetujuan kasus operasional pemasok→pimpinan mitra tetap berlaku terpisah.
+Pembaruan ADR060: [valuasi pengganti, biaya hilang dan ownership retur](distribution-cost-settlement.md) kini tersedia untuk buyout prospektif terbukti mengikuti keputusan pengguna. Physical consignor COGS serta sumber/lineage tanpa bukti tetap review.
 
 ## Transfer internal parsial/rusak — ADR059
 
@@ -22,4 +22,4 @@ Nilai total diterima adalah floor(biaya dispatch × kemasan diterima / kemasan d
 
 Penerimaan nol tidak membuat cost entry atau aset tujuan fiktif. Known0 tetap0; unknown tetapnull dan review. Bukti cost entry sumber dan kedua bagian receipt diperiksa sebelum penutupan review. Sumber sebelum aktivasi, sudah direkonsiliasi manual, policy/account berubah atau tidak aktif tidak boleh ditutup diam-diam. Nilai fisik yang terbukti tetap dibawa, sedangkan penyesuaian buku diperiksa terpisah. Seluruh pencatatan fisik/nilai/review berada dalam satu transaksi dan UUID replay tidak menambah pergerakan atau menaikkan versi review lagi.
 
-Antrean jurnal sumber pada web dan Flutter menampilkan kemasan diterima, bagian baik/karantina, biaya dibawa, jumlah belum diterima serta nilai residual. Penyelesaian finansial residual hilang tetap memerlukan kewenangan/bukti tersendiri. Ini tidak memperluas valuasi replacement/retur distribusi atau mengubah kepemilikan lintas organisasi.
+Antrean jurnal sumber pada web dan Flutter menampilkan kemasan diterima, bagian baik/karantina, biaya dibawa, jumlah belum diterima serta nilai residual. Penyelesaian finansial residual hilang tetap memerlukan kewenangan/bukti tersendiri. Cakupan pengganti dan ownership retur berikutnya mengikuti ADR060 di panduan settlement distribusi.

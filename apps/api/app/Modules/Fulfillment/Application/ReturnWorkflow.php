@@ -3,6 +3,7 @@
 namespace App\Modules\Fulfillment\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Fulfillment\Infrastructure\ReturnLine;
 use App\Modules\Fulfillment\Infrastructure\ReturnShipment;
 use App\Modules\Fulfillment\Infrastructure\Shipment;
@@ -134,6 +135,7 @@ final class ReturnWorkflow
                 $line->id = (string) Str::ulid();
                 $line->save();
                 $this->stock->apply($b, $u->id, ['quarantined' => -(int) $w['quantity_packs'] * $q['pack_size']], 'return_dispatch', $line->id, $v['note'] ?? null);
+                app(DistributionCosting::class)->returnDispatched($o, $case, $line, $u->id);
             }
             $case->increment('version');
             $s->load('lines');
@@ -164,6 +166,7 @@ final class ReturnWorkflow
                 if ($a['received_packs'] > 0) {
                     $this->stock->credit($o->supplier_organization_id, $o->source_store_id, ['id' => $l->supplier_product_id, 'sku' => $l->sku, 'name' => $l->name, 'condition' => $l->condition, 'pack_size' => $l->pack_size], $l->batch_code, $l->expires_on->format('Y-m-d'), (int) $a['received_packs'], $u->id, 'return_receipt', $l->id, 'quarantined', $a['condition_note'] ?? null);
                 }$l->update(['received_packs' => (int) $a['received_packs'], 'condition_note' => $a['condition_note'] ?? null]);
+                app(DistributionCosting::class)->returnReceived($o, $l, $u->id);
             }
             $s->update(['received_by' => $u->id, 'received_at' => now(), 'receipt_note' => $v['note'] ?? null]);
             $case->increment('version');

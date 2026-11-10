@@ -79,6 +79,15 @@ final class InvoiceCostReplay
 
                 continue;
             }
+            if ($e->source_type === 'replacement_receipt' && (int) $e->quantity_delta > 0 && $e->value_delta !== null && (int) $e->value_delta === 0) {
+                $original = DB::table('replacement_lines')->where('id', $e->source_id)->value('original_shipment_line_id');
+                $proven = $entries->where('source_type', 'shipment_receipt')->where('source_id', $original)->isNotEmpty();
+                $job = DB::table('accounting_distribution_jobs')->where('organization_id', $org)->where('kind', 'replacement')->where('source_id', $e->source_id)->first();
+                $this->require($proven && $job && $job->status !== 'applied', 'Pengganti sudah dibagi biaya atau tidak mempunyai asal; perlu rekonsiliasi invoice.');
+                $qty += (int) $e->quantity_delta;
+
+                continue;
+            }
             if ((int) $e->quantity_delta === 0) {
                 if ($e->source_type === 'invoice_variance') {
                     $v = $variances[$e->source_id] ?? null;

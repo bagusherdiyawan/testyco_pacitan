@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Accounting\Application\AutomaticPosting;
+use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Accounting\Application\InvoiceValuation;
 use App\Modules\Commercial\CommercialServiceProvider;
 use App\Modules\Identity\Application\Audit;
@@ -61,6 +62,8 @@ Artisan::command('accounting:revalue {--limit=100}', function () {
         return 1;
     }
     $done = app(InvoiceValuation::class)->drain($limit);
+    $distribution = app(DistributionCosting::class)->drain($limit);
+    $this->info('Distribusi diterapkan: '.$distribution);
     $this->info('Penyesuaian diterapkan: '.$done);
 
     return 0;

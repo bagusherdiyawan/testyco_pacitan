@@ -13,7 +13,7 @@ final class InventoryValuation
 {
     public function quantity(InventoryBatch $b): int
     {
-        return $b->usable_pieces + $b->opened_pieces + $b->ready_pieces + $b->quarantined_pieces;
+        return $b->usable_pieces + $b->opened_pieces + $b->ready_pieces + $b->quarantined_pieces - (int) DB::table('accounting_return_costs')->where('inventory_batch_id', $b->id)->where('status', 'held')->sum('received_pieces');
     }
 
     public function movement(InventoryBatch $before, array $changes, string $type, string $source, int $actor, ?int $incoming = null, ?string $origin = null): void
@@ -24,6 +24,9 @@ final class InventoryValuation
             if ($bucket !== 'waste') {
                 $delta += $n;
             }
+        }
+        if ($type === 'return_receipt' && app(DistributionCosting::class)->custody($before, $source, $delta)) {
+            $delta = 0;
         }
         $pool = DB::table('inventory_values')->where('inventory_batch_id', $before->id)->lockForUpdate()->first();
         // Pre-existing stock has unknown value, never a price-based or zero-cost estimate.

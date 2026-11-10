@@ -81,6 +81,8 @@ final class FinancialBooks
     {
         return [
             'source_events' => DB::table('accounting_events')->where('organization_id', $org)->where('event_on', '<=', $period->ends_on)->whereNotIn('status', ['posted', 'reconciled'])->count(),
+            'distribution_revaluations' => DB::table('accounting_distribution_jobs')->where('organization_id', $org)->where('event_on', '<=', $period->ends_on)->where('status', '!=', 'applied')->count(),
+            'missing_agreements' => DB::table('accounting_missing_costs')->where(fn ($q) => $q->where('owner_organization_id', $org)->orWhere('counterparty_organization_id', $org))->where('event_on', '<=', $period->ends_on)->where('status', '!=', 'approved')->count(),
             'invoice_revaluations' => DB::table('accounting_invoice_revaluations')->where('organization_id', $org)->where('event_on', '<=', $period->ends_on)->where('status', '!=', 'applied')->count(),
             'draft_journals' => DB::table('accounting_journals')->where('organization_id', $org)->where('posted_on', '<=', $period->ends_on)->where('status', 'draft')->count(),
             'earlier_open_periods' => DB::table('accounting_periods')->where('organization_id', $org)->where('ends_on', '<', $period->starts_on)->where('status', 'open')->count(),

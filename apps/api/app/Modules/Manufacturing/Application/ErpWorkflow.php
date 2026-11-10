@@ -5,9 +5,11 @@ namespace App\Modules\Manufacturing\Application;
 use App\Models\User;
 use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Accounting\Application\CommercialPolicy;
+use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Accounting\Application\GeneralLedger;
 use App\Modules\Accounting\Application\InventoryValuation;
 use App\Modules\Accounting\Application\InvoiceValuation;
+use App\Modules\Accounting\Application\MissingCostSettlement;
 use App\Modules\Accounting\Application\PeriodClosing;
 use App\Modules\Accounting\Application\WholesalePolicy;
 use App\Modules\Identity\Application\Audit;
@@ -30,6 +32,9 @@ final class ErpWorkflow
         $this->access->command($u, $org, $action, $v);
 
         return $this->ops->run($org, $u->id, $v['operation_id'], 'erp.'.$action.':'.$org, $v, function () use ($u, $org, $action, $v) {
+            if (in_array($action, ['missing_propose', 'missing_decide'], true)) {
+                return [...app(MissingCostSettlement::class)->command($u, $org, $action, $v), 'operation_id' => $v['operation_id']];
+            }
             Organization::whereKey($org)->lockForUpdate()->firstOrFail();
             $this->access->command($u, $org, $action, $v);
             if ($action === 'material') {
@@ -42,6 +47,7 @@ final class ErpWorkflow
                 'commercial_policy' => app(CommercialPolicy::class)->propose($u, $org, $v),
                 'closing_propose' => app(PeriodClosing::class)->propose($u, $org, $v),
                 'closing_decide' => app(PeriodClosing::class)->decide($u, $org, $v),
+                'distribution_retry' => app(DistributionCosting::class)->retry($org, $v),
                 'invoice_revalue_retry' => app(InvoiceValuation::class)->retry($org, $v),
                 'wholesale_policy' => app(WholesalePolicy::class)->propose($u, $org, $v),
                 'posting_policy' => app(AutomaticPosting::class)->policy($u, $org, $v),

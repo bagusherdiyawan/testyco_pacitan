@@ -91,6 +91,7 @@ final class GeneralLedger
         $status = $v['decision'] === 'close' ? 'closed' : 'open';
         abort_if($p['status'] === $status, 409);
         if ($status === 'closed') {
+            abort_if(DB::table('accounting_distribution_jobs')->where('organization_id', $org)->where('event_on', '<=', $p['ends_on'])->where('status', '!=', 'applied')->exists() || DB::table('accounting_missing_costs')->where(fn ($q) => $q->where('owner_organization_id', $org)->orWhere('counterparty_organization_id', $org))->where('event_on', '<=', $p['ends_on'])->where('status', '!=', 'approved')->exists(), 409, 'Selesaikan costing distribusi dan persetujuan biaya hilang sebelum menutup periode.');
             abort_if(DB::table('accounting_invoice_revaluations')->where('organization_id', $org)->where('event_on', '<=', $p['ends_on'])->where('status', '!=', 'applied')->exists(), 409, 'Selesaikan antrean penyesuaian nilai invoice sebelum menutup periode.');
             abort_if(DB::table('accounting_events')->where('organization_id', $org)->where('event_on', '<=', $p['ends_on'])->whereNotIn('status', ['posted', 'reconciled'])->exists(), 409, 'Selesaikan antrean jurnal sumber sebelum menutup periode.');
             abort_if(DB::table('accounting_journals')->where('period_id', $p['id'])->where('status', 'draft')->exists(), 409, 'Selesaikan jurnal draft sebelum menutup periode.');

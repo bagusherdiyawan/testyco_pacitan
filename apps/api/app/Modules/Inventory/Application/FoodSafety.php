@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Application;
 
+use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,9 @@ final class FoodSafety
 
     public function eligible(InventoryBatch $b, string $bucket): bool
     {
+        if (app(DistributionCosting::class)->blocked($b->organization_id, $b->id)) {
+            return false;
+        }
         $p = $this->policy($b->organization_id);
         if (! array_key_exists($b->organization_id, $this->coordinated)) {
             $this->coordinated[$b->organization_id] = DB::table('recall_targets')->where('organization_id', $b->organization_id)->where('status', 'held')->pluck('inventory_batch_id')->flip()->all();
@@ -54,7 +58,7 @@ final class FoodSafety
 
     public function assertEligible(InventoryBatch $b, string $bucket): void
     {
-        abort_unless($this->eligible($b, $bucket), 409, 'Batch diblokir recall/kedaluwarsa atau masa simpan siap jual belum sah/berakhir. Tinjau stok dan SOP.');
+        abort_unless($this->eligible($b, $bucket), 409, 'Batch diblokir review biaya pengganti, recall/kedaluwarsa atau masa simpan siap jual belum sah/berakhir. Tinjau stok dan SOP.');
     }
 
     public function lockCandidates(string $store, array $products): void

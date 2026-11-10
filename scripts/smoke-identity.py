@@ -1149,7 +1149,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'GET',partner_erp+'/context?section=invoice_variances',token=owner,expected=403)
         print('PASS: same-batch restock after prior valuation, weighted sale, second invoice/replay, immutable receipt proof, buyer stock204000/cogs correction2106 and real worker7/0',flush=True)
         # Full physical receipt split between usable/quarantine, then a genuinely short receipt.
-        partial_fixtures=[]
+        partial_fixtures=[];costing_fixtures={}
         for code,good,damaged in [('GL-ACTUAL-DAMAGE',8,2),('GL-ACTUAL-SHORT',9,0)]:
             stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':code,'expires_on':'2030-01-01','quantity_packs':10,'note':'Actual good/quarantine/shortage fixture'},owner,201)['data']
             opening=finance_post(erp_path,'value_propose',{'batch_id':stock['id'],'stock_revision':stock['stock_revision'],'amount':50000,'note':'Verified independent source-cost proof'},owner)
@@ -1194,9 +1194,93 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
                 ledger_before+=1
             assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
             partial_fixtures.append(actual_invoice['id'])
+            costing_fixtures[code]={'order':actual_order['id'],'shipment':actual_sent['shipment']['id'],'line':actual_sent['shipment']['lines'][0]['id'],'invoice':actual_invoice['id'],'batch':actual_batch['id']}
         actual_html=opener.open(web+variance_web+'?section=invoice_variances').read().decode();assert 'karantina 16' in actual_html and 'belum diterima 8 biji' in actual_html
         api(base,'GET',partner_erp+'/context?section=invoice_variances',token=owner,expected=403)
         print('PASS: actual good/quarantine receipt costs, split final invoice and POS COGS, missing goods excluded, seller proportional45000/residual5000 review, BFF evidence and revalue/GL replay',flush=True)
+        print('Pacing replacement/missing/return costing HTTP checks for a new rate-limit window.',flush=True);time.sleep(60)
+        def costing_case(oid,sid,kind):
+            detail=api(base,'GET',f'orders/{oid}',token=lead_token)['data']
+            path=f'orders/{oid}/shipments/{sid}/discrepancy'
+            case=api(base,'POST',path,{'operation_id':str(uuid.uuid4()),'order_version':detail['version'],'reason':'Physical discrepancy and financial follow-up','reference':'Verified source receipt'},lead_token,201)['data']
+            plan=api(base,'POST',path+'/resolutions',{'operation_id':str(uuid.uuid4()),'version':1,'type':kind,'proposal':'Explicitly agreed operational resolution','reference':'Separate cost and ownership rules'},owner,201)['data']
+            api(base,'POST',path+'/resolutions/'+plan['resolution']['id']+'/confirm',{'operation_id':str(uuid.uuid4()),'version':2},lead_token)
+            return path,case
+        def costing_credit(oid,iid,cid,amount):
+            path=f'orders/{oid}/billing/invoices/{iid}'
+            invoice=next(i for i in api(base,'GET',f'orders/{oid}/billing',token=owner)['invoices']['data'] if i['id']==iid)
+            proposed=api(base,'POST',path+'/credits',{'operation_id':str(uuid.uuid4()),'version':invoice['version'],'case_id':cid,'base_amount':amount,'tax_amount':0,'reason':'Physical scope and agreed credit checked'},owner,201)['data']
+            credit=next(c for c in proposed['credits'] if c['status']=='pending')
+            body={'operation_id':str(uuid.uuid4()),'version':proposed['version'],'consent':True,'reason':'Recipient leader approves financial credit'}
+            api(base,'POST',path+'/credits/'+credit['id']+'/accept',body,lead_token);api(base,'POST',path+'/credits/'+credit['id']+'/accept',body,lead_token)
+        def costing_form(html,action,key):
+            for fragment in re.findall(r'<form\b[^>]*>.*?</form>',html,re.S):
+                parser=Forms();parser.feed(fragment)
+                candidate=parser.forms.get(action)
+                if candidate and candidate.get('form_key')==key:return candidate
+            raise AssertionError('Expected reviewed costing action missing: '+key)
+        short=costing_fixtures['GL-ACTUAL-SHORT']
+        short_path,short_case=costing_case(short['order'],short['shipment'],'credit')
+        missing=next(r for r in api(base,'GET',erp_path+'/context?section=distribution_settlements',token=owner)['data'] if r['kind']=='missing' and 'order '+short['order'] in r['summary'])
+        assert missing['missing_value']==5000
+        # Exercise real BFF CSRF/review/confirm for both independent parties.
+        mh=central_browser.open(web+erp_web+'?section=distribution_settlements').read().decode()
+        mf=costing_form(mh,erp_web+'/review','missing_propose-'+missing['id']+'-');mf['values[owner_share_basis_points]']='5000';mf['values[note]']='Supplier and buyer each bear half of missing cost'
+        mh=central_browser.open(Request(web+erp_web+'/review',data=urlencode(mf).encode())).read().decode()
+        central_browser.open(Request(web+erp_web+'/confirm',data=urlencode(fields(mh,erp_web+'/confirm')).encode())).read()
+        partner_cost_web='/app/'+partner_erp
+        mh=opener.open(web+partner_cost_web+'?section=distribution_settlements').read().decode()
+        mf=costing_form(mh,partner_cost_web+'/review','missing_decide-'+missing['id']+'-approve');mf['values[consent]']='1';mf['values[note]']='Partner leader approves Rp2500 payable and Rp2500 supplier loss'
+        mh=opener.open(Request(web+partner_cost_web+'/review',data=urlencode(mf).encode())).read().decode()
+        opener.open(Request(web+partner_cost_web+'/confirm',data=urlencode(fields(mh,partner_cost_web+'/confirm')).encode())).read()
+        assert next(r for r in api(base,'GET',partner_erp+'/context?section=distribution_settlements',token=lead_token)['data'] if r['id']==missing['id'])['status']=='approved'
+        costing_credit(short['order'],short['invoice'],short_case['case']['id'],10000)
+        assert 'Penyesuaian diterapkan: 1' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+        assert 'Jurnal dibukukan: 5' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert any('GL-ACTUAL-SHORT' in r['summary'] and '110000' in r['summary'] for r in api(base,'GET',partner_erp+'/context?section=valuation_stock',token=lead_token)['data'])
+        damage=costing_fixtures['GL-ACTUAL-DAMAGE'];rp,_=costing_case(damage['order'],damage['shipment'],'replacement')
+        replacement_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':'GL-REPLACEMENT-COST','expires_on':'2030-01-01','quantity_packs':2,'note':'Replacement cost source'},owner,201)['data']
+        opening=finance_post(erp_path,'value_propose',{'batch_id':replacement_stock['id'],'stock_revision':replacement_stock['stock_revision'],'amount':10001,'note':'Actual replacement source value'},owner)
+        finance_post(erp_path,'value_decide',{'id':opening['id'],'version':1,'decision':'approve','note':'Independent opening proof'},reviewer_token)
+        replacement=api(base,'POST',rp+'/replacements',{'operation_id':str(uuid.uuid4()),'version':3,'handler':'Replacement source courier','lines':[{'original_shipment_line_id':damage['line'],'allocations':[{'batch_id':replacement_stock['id'],'quantity_packs':2}]}]},owner,201)['data']
+        body={'operation_id':str(uuid.uuid4()),'version':replacement['case_version'],'lines':[{'replacement_line_id':replacement['replacement']['lines'][0]['id'],'good_packs':2,'damaged_packs':0}]}
+        ru=rp+'/replacements/'+replacement['replacement']['id']+'/receive'
+        api(base,'POST',ru,body,lead_token);api(base,'POST',ru,body,lead_token)
+        replacement_job=next(r for r in api(base,'GET',partner_erp+'/context?section=distribution_settlements',token=lead_token)['data'] if r['kind']=='replacement')
+        assert replacement_job['status']=='applied' and '108000' in replacement_job['summary'] and '88' in replacement_job['summary']
+        assert 'Jurnal dibukukan: 2' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        ledger_before+=1
+        # A new full-valued buyout return: supplier physically holds custody before title passes.
+        rt_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':'GL-RETURN-COST','expires_on':'2030-01-01','quantity_packs':10,'note':'Valued return source'},owner,201)['data']
+        opening=finance_post(erp_path,'value_propose',{'batch_id':rt_stock['id'],'stock_revision':rt_stock['stock_revision'],'amount':50001,'note':'Actual original supplier cost'},owner)
+        finance_post(erp_path,'value_decide',{'id':opening['id'],'version':1,'decision':'approve','note':'Independent original cost proof'},reviewer_token)
+        rt_order=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':ws['id'],'local_product_id':wl['id'],'quantity_packs':10}]},lead_token,201)['data']
+        rt_order=api(base,'POST',f'orders/{rt_order["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':rt_order['version']},lead_token)['data']
+        rt_order=api(base,'POST',f'orders/{rt_order["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':rt_order['version'],'source_store_id':source},owner)['data']
+        rt_sent=api(base,'POST',f'orders/{rt_order["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':rt_order['version'],'handler':'Original buyout courier','lines':[{'order_line_id':rt_order['lines'][0]['id'],'allocations':[{'batch_id':rt_stock['id'],'quantity_packs':10}]}]},owner,201)['data']
+        rt_invoice=api(base,'POST',f'orders/{rt_order["id"]}/billing/invoices',{'operation_id':str(uuid.uuid4()),'mode':'buyout','basis':'dispatched','shipment_ids':[rt_sent['shipment']['id']],'due_on':'2030-12-31','discount_amount':0,'shipping_amount':0,'tax_basis_points':0,'rounding':'half_up','note':'Explicit buyout before receipt'},owner,201)['data']
+        api(base,'POST',f'orders/{rt_order["id"]}/billing/invoices/{rt_invoice["id"]}/accept',{'operation_id':str(uuid.uuid4()),'version':1,'consent':True,'reason':'Buyer confirms invoice'},lead_token)
+        api(base,'POST',f'shipments/{rt_sent["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':rt_sent['order']['version'],'lines':[{'shipment_line_id':rt_sent['shipment']['lines'][0]['id'],'good_packs':8,'damaged_packs':2,'condition_note':'Two damaged packs physically verified'}]},lead_token)
+        assert 'Jurnal dibukukan: 5' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        rt_batch=next(b for b in api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data'] if b['batch_code']=='GL-RETURN-COST')
+        rp,rt_case=costing_case(rt_order['id'],rt_sent['shipment']['id'],'return')
+        returned=api(base,'POST',rp+'/returns',{'operation_id':str(uuid.uuid4()),'version':3,'destination_bucket':'quarantined','handler':'Return custody courier','lines':[{'original_shipment_line_id':rt_sent['shipment']['lines'][0]['id'],'allocations':[{'batch_id':rt_batch['id'],'quantity_packs':2}]}]},lead_token,201)['data']
+        body={'operation_id':str(uuid.uuid4()),'version':returned['case_version'],'lines':[{'return_line_id':returned['return']['lines'][0]['id'],'received_packs':2}]}
+        rr=rp+'/returns/'+returned['return']['id']+'/receive';api(base,'POST',rr,body,owner);api(base,'POST',rr,body,owner)
+        assert any('GL-RETURN-COST' in r['summary'] and '0biji milik organisasi' in r['summary'] and 'titipan retur 16biji' in r['summary'] for r in api(base,'GET',erp_path+'/context?section=valuation_stock',token=owner)['data'])
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        costing_credit(rt_order['id'],rt_invoice['id'],rt_case['case']['id'],20000)
+        assert 'Distribusi diterapkan: 1' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+        assert 'Distribusi diterapkan: 0' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+        assert any('GL-RETURN-COST' in r['summary'] and '10000' in r['summary'] and '16biji milik organisasi' in r['summary'] for r in api(base,'GET',erp_path+'/context?section=valuation_stock',token=owner)['data'])
+        assert 'Jurnal dibukukan: 4' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        api(base,'GET',partner_erp+'/context?section=distribution_settlements',token=owner,expected=403)
+        assert 'Biaya asal dipulihkan' in central_browser.open(web+erp_web+'?section=distribution_settlements').read().decode()
+        ledger_before+=3
+        print('PASS: replacement preserves buyer108000/current88pieces and supplier expense10001; real bilateral BFF missing5000 split/claim and shortage credit/freight reconciliation; return custody excluded until accepted credit then supplier original cost10000; private books, real workers and replay',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

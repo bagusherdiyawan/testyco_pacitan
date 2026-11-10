@@ -182,10 +182,57 @@ final class InvoiceValuation
                 app(AutomaticPosting::class)->record($s->organization_id, $s->actor_id, 'invoice_variance_depletion', $id.':'.$day, $day, $depletion, $invoice->number.' · koreksi HPP penjualan sesudah invoice', null, $s->policy_id);
             }
             DB::table('accounting_invoice_revaluations')->where('id', $id)->update(['status' => 'applied', 'reason' => null, 'stock_adjustment' => $stock, 'cogs_adjustment' => $cogs, 'loss_adjustment' => $loss, 'version' => $s->version + 1, 'updated_at' => now()]);
+            app(DistributionCosting::class)->wake($invoice->supply_order_id, 'Invoice final belum');
             Audit::record($s->actor_id, $s->organization_id, 'accounting.invoice_valued', $id, null, ['automatic' => true, 'invoice_id' => $invoice->id, 'policy_id' => $s->policy_id, 'stock_adjustment' => $stock, 'cogs_adjustment' => $cogs, 'loss_adjustment' => $loss, 'version' => $s->version + 1]);
 
             return true;
         }, 3);
+    }
+
+    /** Only a pure shortage case has unambiguous quantity coverage without new physical goods. */
+    private function shortageCredits(Invoice $invoice, object $state): array
+    {
+        $credits = DB::table('invoice_credits as c')->join('shipment_discrepancies as d', 'd.id', '=', 'c.case_id')->join('shipment_discrepancy_resolutions as r', 'r.id', '=', 'c.resolution_id')->where('c.invoice_id', $invoice->id)->where('c.status', 'accepted')->where('r.type', 'credit')->where('r.status', 'confirmed')->select('c.*', 'd.snapshot')->limit(101)->get();
+        $this->require($credits->count() <= 100 && strlen(json_encode($credits)) <= 8 * 1024 * 1024, 'Bukti kredit kekurangan melampaui batas.');
+        $covered = [];
+        $base = $tax = 0;
+        $day = '0000-00-00';
+        foreach ($credits->groupBy('case_id') as $group) {
+            $snapshot = json_decode($group->first()->snapshot, true)['lines'];
+            if (collect($snapshot)->contains(fn ($l) => (int) $l['damaged_packs'] > 0)) {
+                continue;
+            }
+            $gross = 0;
+            $quantities = [];
+            foreach ($snapshot as $line) {
+                $il = collect($invoice->lines)->firstWhere('shipment_line_id', $line['shipment_line_id']);
+                if (! $il || (int) $line['missing_packs'] === 0) {
+                    continue;
+                }
+                $gross = Rupiah::add($gross, Rupiah::multiply((int) $il['unit_price'], (int) $line['missing_packs']));
+                $quantities[$line['shipment_line_id']] = (int) $il['quantity_pieces'] - (int) $line['missing_packs'] * (int) $line['pack_size'];
+            }
+            if (! $quantities) {
+                continue;
+            }
+            $required = Proportion::floor((int) $invoice->subtotal - (int) $invoice->discount_amount, $gross, (int) $invoice->subtotal);
+            if ((int) $group->sum('base_amount') < $required) {
+                continue;
+            }
+            foreach ($group as $credit) {
+                $event = DB::table('accounting_events')->where('organization_id', $state->organization_id)->where('source_type', 'wholesale_credit')->where('source_id', $credit->id)->first();
+                $this->require($event && in_array($event->status, ['pending', 'posted'], true) && $event->policy_id === $state->policy_id, 'Kredit kekurangan belum mempunyai jurnal/pemetaan asal yang sah.');
+                $base = Rupiah::add($base, (int) $credit->base_amount);
+                $tax = Rupiah::add($tax, (int) $credit->tax_amount);
+                $day = max($day, $this->day($credit->decided_at));
+            }
+            foreach ($quantities as $line => $qty) {
+                $this->require(! isset($covered[$line]) && $qty >= 0, 'Kredit kekurangan mengulang sumber kuantitas.');
+                $covered[$line] = $qty;
+            }
+        }
+
+        return ['quantities' => $covered, 'base' => $base, 'tax' => $tax, 'day' => $day];
     }
 
     private function plan(Invoice $invoice, object $s): array
@@ -198,6 +245,7 @@ final class InvoiceValuation
         $settings = DB::table('accounting_wholesale_policies')->where('organization_id', $org)->where('policy_id', $s->policy_id)->first();
         $this->require($p && $settings && $settings->invoice_variance_basis === 'remaining_stock_and_historical_cogs', 'Pemetaan asal tidak mengaktifkan alokasi selisih invoice.');
         $mapping = json_decode($p->mapping, true);
+        $shortage = $this->shortageCredits($invoice, $s);
         $capital = $invoice->subtotal - $invoice->discount_amount;
         if ($settings->freight_treatment === 'clearing') {
             $capital = Rupiah::add($capital, $invoice->shipping_amount);
@@ -205,11 +253,23 @@ final class InvoiceValuation
         if ($settings->tax_treatment === 'clearing') {
             $capital = Rupiah::add($capital, $invoice->tax_amount);
         }
+        $capital -= $shortage['base'] + ($settings->tax_treatment === 'clearing' ? $shortage['tax'] : 0);
+        $this->require($capital >= 0, 'Kredit melampaui biaya pembelian yang dapat dialokasikan.');
         $this->require(count($invoice->lines) <= 100 && $invoice->subtotal >= 0, 'Alokasi invoice maksimal100baris dan subtotal positif.');
+        $lineWeights = [];
+        $allocationSubtotal = 0;
+        foreach ($invoice->lines as $line) {
+            $effectiveQuantity = $shortage['quantities'][$line['shipment_line_id']] ?? (int) $line['quantity_pieces'];
+            $lineWeight = isset($shortage['quantities'][$line['shipment_line_id']]) && (int) $line['quantity_pieces'] > 0 ? Proportion::floor((int) $line['line_total'], $effectiveQuantity, (int) $line['quantity_pieces']) : (int) $line['line_total'];
+            $lineWeights[$line['shipment_line_id']] = $lineWeight;
+            $allocationSubtotal = Rupiah::add($allocationSubtotal, $lineWeight);
+        }
+        $this->require($allocationSubtotal > 0 || $capital === 0, 'Biaya tersisa tanpa barang diterima memerlukan penyelesaian tagihan/beban; tidak boleh membentuk aset fiktif.');
         $receiptIds = array_column($invoice->lines, 'shipment_line_id');
         $receiptRows = DB::table('inventory_cost_entries')->where('organization_id', $org)->where('source_type', 'shipment_receipt')->whereIn('source_id', $receiptIds)->where('quantity_delta', '>', 0)->limit(201)->get();
         $receiptEvidence = app(ReceiptCostEvidence::class)->read($org, $receiptIds);
         foreach ($invoice->lines as $line) {
+            $line['quantity_pieces'] = $shortage['quantities'][$line['shipment_line_id']] ?? $line['quantity_pieces'];
             if ((int) $line['line_total'] !== 0) {
                 continue;
             }
@@ -219,6 +279,7 @@ final class InvoiceValuation
         if ($capital === $invoice->subtotal) {
             $unchanged = true;
             foreach ($invoice->lines as $line) {
+                $line['quantity_pieces'] = $shortage['quantities'][$line['shipment_line_id']] ?? $line['quantity_pieces'];
                 if ((int) $line['line_total'] === 0) {
                     continue;
                 }
@@ -254,14 +315,18 @@ final class InvoiceValuation
             }
         };
         foreach ($invoice->lines as $line) {
+            $line['quantity_pieces'] = $shortage['quantities'][$line['shipment_line_id']] ?? $line['quantity_pieces'];
             if ((int) $line['line_total'] === 0) {
                 continue;
             }
-            $weight += (int) $line['line_total'];
-            $next = Proportion::floor($capital, $weight, $invoice->subtotal);
+            $weight += $lineWeights[$line['shipment_line_id']];
+            $next = Proportion::floor($capital, $weight, max(1, $allocationSubtotal));
             $final = $next - $allocated;
             $allocated = $next;
             $receipts = $receiptRows->where('source_id', $line['shipment_line_id'])->sortBy('stock_revision')->values();
+            if ((int) $line['quantity_pieces'] === 0 && $receipts->isEmpty() && $final === 0) {
+                continue;
+            }
             $this->require($receipts->count() >= 1 && $receipts->count() <= 2 && $receipts->pluck('inventory_batch_id')->unique()->count() === 1, 'Dasar penerimaan belum lengkap atau beberapa batch; perlu alokasi terperinci.');
             $receipt = $receipts->first();
             $batch = $batches[$receipt->inventory_batch_id] ?? null;
@@ -269,7 +334,7 @@ final class InvoiceValuation
             $receiptEvent = $receiptEvidence['origins'][$line['shipment_line_id']] ?? null;
             $this->require($receiptEvent && $receiptEvent->policy_id === $s->policy_id && $receiptEvent->trusted, 'Pemetaan/jurnal penerimaan asal berbeda atau perlu ditinjau.');
             $checkDay($receiptEvent->event_on);
-            $effectiveDay = max($this->day($invoice->decided_at), $receiptEvent->event_on);
+            $effectiveDay = max($this->day($invoice->decided_at), $receiptEvent->event_on, $shortage['day']);
             $checkDay($effectiveDay);
             if (! isset($groups[$batch->id])) {
                 $groups[$batch->id] = ['batch' => $batch, 'day' => $effectiveDay, 'line' => $line['shipment_line_id'], 'targets' => [], 'lines' => [], 'days' => []];
@@ -365,7 +430,7 @@ final class InvoiceValuation
             }
             $out[] = ['day' => $effectiveDay, 'line' => $group['line'], 'receipts' => $receiptProofs, 'batch' => $batch, 'original' => $original, 'final' => $final, 'remaining' => (int) $pool->quantity, 'before' => (int) $pool->remaining_value, 'after' => $after, 'stock' => $stock, 'cogs' => $cogs, 'loss' => $loss, 'sales' => $sales, 'movements' => $movements, 'components' => $components];
         }
-        $this->require($weight === $invoice->subtotal && $allocated === $capital && $gross <= Rupiah::LIMIT && (! $laterGross || max($laterGross) <= Rupiah::LIMIT), 'Alokasi subtotal atau batas jurnal tidak sesuai.');
+        $this->require($weight === $allocationSubtotal && $allocated === $capital && $gross <= Rupiah::LIMIT && (! $laterGross || max($laterGross) <= Rupiah::LIMIT), 'Alokasi subtotal atau batas jurnal tidak sesuai.');
 
         return $out;
     }

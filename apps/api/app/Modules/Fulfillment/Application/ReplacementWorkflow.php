@@ -3,6 +3,7 @@
 namespace App\Modules\Fulfillment\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Fulfillment\Infrastructure\ReplacementLine;
 use App\Modules\Fulfillment\Infrastructure\ReplacementShipment;
 use App\Modules\Fulfillment\Infrastructure\Shipment;
@@ -187,12 +188,14 @@ final class ReplacementWorkflow
                 abort_unless($good + $damage <= $line->quantity_packs, 422, 'Penerimaan melebihi jumlah dikirim.');
                 abort_unless($good === $line->quantity_packs || trim((string) ($a['condition_note'] ?? '')) !== '', 422, 'Selisih penerimaan wajib disertai catatan.');
                 $product = ['id' => $line->local_product_id, 'sku' => $line->local_sku, 'name' => $line->local_name, 'pack_size' => $line->pack_size, 'condition' => $line->condition];
+                $buyerCost = app(DistributionCosting::class)->replacementPolicy($order, $line) ? 0 : null;
                 foreach (['usable' => $good, 'quarantined' => $damage] as $bucket => $packs) {
                     if ($packs > 0) {
-                        $this->stock->credit($order->organization_id, $order->store_id, $product, $line->batch_code, $line->expires_on->format('Y-m-d'), $packs, $user->id, 'replacement_receipt', $line->id, $bucket, $a['condition_note'] ?? null);
+                        $this->stock->credit($order->organization_id, $order->store_id, $product, $line->batch_code, $line->expires_on->format('Y-m-d'), $packs, $user->id, 'replacement_receipt', $line->id, $bucket, $a['condition_note'] ?? null, $buyerCost);
                     }
                 }
                 $line->update(['good_packs' => $good, 'damaged_packs' => $damage, 'condition_note' => $a['condition_note'] ?? null]);
+                app(DistributionCosting::class)->replacementReceived($order, $line, $user->id);
             }
             $shipment->update(['received_at' => now(), 'received_by' => $user->id, 'receipt_note' => $v['note'] ?? null]);
             $case->increment('version');

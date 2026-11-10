@@ -1,5 +1,7 @@
 # Penyesuaian biaya invoice final — ADR054/057
 
+Pembaruan ADR060: [pengganti, kesepakatan biaya hilang dan custody/ownership retur](distribution-cost-settlement.md) memperluas batas distribusi lama pada panduan ini untuk sumber buyout yang terbukti.
+
 Pembaruan10November2026: [penerimaan aktual baik/karantina dan kekurangan kiriman](actual-receipt-costing.md), ADR058, memperluas batas full-good di panduan ini. Pengganti/retur distribusi dan nilai consignor belum otomatis.
 
 Implementasi development10November2026, mengikuti keputusan pengguna: kepemilikan berpindah saat penerimaan dikonfirmasi; biaya awal harga pesanan disetujui; selisih invoice dibagi ke persediaan tersisa dan HPP barang terjual. Ini melanjutkan penerimaan baik penuh pada ADR053, termasuk penerimaan campuran yang terbukti dalam satu pool batch, dan bukan penggantian seluruh costing dengan harga invoice.

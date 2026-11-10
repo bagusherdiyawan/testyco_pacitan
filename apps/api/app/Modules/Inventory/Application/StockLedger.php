@@ -2,6 +2,8 @@
 
 namespace App\Modules\Inventory\Application;
 
+use App\Modules\Accounting\Application\DistributionCosting;
+use App\Modules\Accounting\Application\DistributionValueWriter;
 use App\Modules\Accounting\Application\InventoryValuation;
 use App\Modules\Commercial\Application\ConsignmentAutomation;
 use App\Modules\Inventory\Domain\StockBucket;
@@ -54,6 +56,9 @@ final class StockLedger
         if ($batch instanceof MaterialLot) {
             return app(MaterialLedger::class)->commit($batch, $actor, $changes, $valueDelta, $sourceType, $sourceId, $note ?? '');
         }
+        if ($sourceType === 'distribution_value' && $changes === []) {
+            return app(DistributionValueWriter::class)->write($batch, $sourceId, $valueDelta);
+        }
         if ($valueDelta !== 0) {
             abort_unless($sourceType === 'invoice_variance' && $changes === [], 422, 'Nilai produk hanya dapat dikoreksi melalui sumber invoice terverifikasi.');
 
@@ -61,6 +66,10 @@ final class StockLedger
         }
         abort_unless($valueDelta === 0, 422, 'Nilai bahan tidak boleh diposting pada ledger biji.');
         $batch = InventoryBatch::lockForUpdate()->findOrFail($batch->id);
+        $ownedDelta = array_sum(array_filter($changes, fn ($key) => $key !== 'waste', ARRAY_FILTER_USE_KEY));
+        if ($ownedDelta < 0) {
+            abort_if(app(DistributionCosting::class)->blocked($batch->organization_id, $batch->id), 409, 'Pembagian biaya pengganti masih menunggu pemeriksaan; selesaikan valuasi sebelum barang dikeluarkan.');
+        }
         $attributes = [];
         $deltas = [];
         foreach ($changes as $key => $delta) {
@@ -73,6 +82,10 @@ final class StockLedger
             abort_if($remaining < 0, 409, 'Stok pada bucket sumber tidak cukup.');
             if ($bucket === StockBucket::Sealed) {
                 abort_unless($remaining % $batch->pack_size === 0, 422, 'Stok utuh harus berupa kelipatan isi kemasan historis.');
+            }
+            if ($key === 'quarantined' && $delta < 0) {
+                $custody = (int) DB::table('accounting_return_costs')->where('inventory_batch_id', $batch->id)->where('status', 'held')->sum('received_pieces');
+                abort_unless($remaining >= $custody, 409, 'Barang titipan retur belum menjadi milik organisasi; nota kredit harus disetujui dahulu.');
             }
             $attributes[$bucket->column()] = $remaining;
             $deltas[$key] = $delta;

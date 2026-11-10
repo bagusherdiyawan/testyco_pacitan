@@ -232,6 +232,7 @@ class WholesaleAccountingTest extends TestCase
         $d = $this->received();
         $seller = $this->configure($this->center, $this->owner);
         $buyer = $this->configure($this->partner, $this->lead);
+        $this->assertDatabaseHas('accounting_wholesale_policies', ['organization_id' => $this->partner->id, 'ownership_basis' => 'receipt_confirmed', 'provisional_basis' => 'approved_order', 'invoice_variance_basis' => 'remaining_stock_and_historical_cogs']);
         $stock = DB::table('stock_entries')->count();
         $cost = DB::table('inventory_cost_entries')->count();
         $i = $this->accepted($d, 1000, 2000);

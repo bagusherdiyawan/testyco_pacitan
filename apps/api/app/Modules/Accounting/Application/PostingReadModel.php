@@ -70,6 +70,9 @@ final class PostingReadModel
             if ($section === 'posting') {
                 $settings = DB::table('accounting_wholesale_policies')->where('policy_id', $r['id'])->where('organization_id', $org)->first();
                 if ($settings) {
+                    if ($settings->ownership_basis !== null) {
+                        $text[] = 'Aturan distribusi disepakati: kepemilikan saat penerimaan dikonfirmasi; biaya sementara dari pesanan disetujui; selisih invoice dialokasikan ke stok tersisa/HPP historis. Snapshot aturan ini belum mengaktifkan posting distribusi otomatis.';
+                    }
                     $text[] = 'Aturan: pembayaran yang diverifikasi penjual mencatat kas/bank sesuai metode pada kedua buku. Cocokkan bukti dengan rekening organisasi sendiri. Pembelian memakai penampung biaya sebelum rekonsiliasi persediaan.';
                     $text[] = 'Cakupan wholesale · pajak pembelian: '.($settings->tax_treatment === 'recoverable' ? 'dapat dikreditkan' : 'masuk penampung biaya').' · ongkir: '.($settings->freight_treatment === 'expense' ? 'beban periode' : 'masuk penampung biaya').' · dasar: '.$settings->base_policy_id.' versi'.$settings->base_policy_version;
                 }

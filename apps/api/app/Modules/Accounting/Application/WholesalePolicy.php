@@ -39,7 +39,7 @@ final class WholesalePolicy
         abort_unless(count(array_unique(array_column($mapping, 'account_id'))) === count($mapping), 422, 'Gunakan akun tersendiri per fungsi agar tidak mencampur POS/wholesale.');
         $p = ['id' => (string) Str::ulid(), 'organization_id' => $org, 'status' => 'draft', 'version' => 1, 'mapping' => json_encode($mapping), 'note' => $v['note'], 'created_by' => $u->id, 'created_at' => now(), 'updated_at' => now()];
         DB::table('accounting_policies')->insert($p);
-        DB::table('accounting_wholesale_policies')->insert(['policy_id' => $p['id'], 'organization_id' => $org, 'base_policy_id' => $base->id, 'base_policy_version' => $base->version, 'tax_treatment' => $v['tax_treatment'], 'freight_treatment' => $v['freight_treatment'], 'created_at' => now()]);
+        DB::table('accounting_wholesale_policies')->insert(['policy_id' => $p['id'], 'organization_id' => $org, 'ownership_basis' => 'receipt_confirmed', 'provisional_basis' => 'approved_order', 'invoice_variance_basis' => 'remaining_stock_and_historical_cogs', 'base_policy_id' => $base->id, 'base_policy_version' => $base->version, 'tax_treatment' => $v['tax_treatment'], 'freight_treatment' => $v['freight_treatment'], 'created_at' => now()]);
 
         return $p;
     }

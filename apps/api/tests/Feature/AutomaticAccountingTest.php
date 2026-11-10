@@ -337,6 +337,6 @@ class AutomaticAccountingTest extends TestCase
         $this->assertSame($this->policy['id'], $reverse->policy_id);
         $this->assertSame([['bank', 'payable', 10]], json_decode($reverse->terms, true));
         $this->assertSame(2, app(AutomaticPosting::class)->drain());
-        $this->assertSame(0,app(AutomaticPosting::class)->drain());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
     }
 }

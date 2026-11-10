@@ -6,6 +6,9 @@ class ErpRepository {
   final ApiClient api;
   final String organization;
   static const financeSections = {
+    'closings',
+    'income_statement',
+    'balance_sheet',
     'invoice_variances',
     'distribution_costs',
     'accounts',
@@ -19,6 +22,9 @@ class ErpRepository {
     'cost_ledger',
   };
   static const sections = {
+    'closings': 'Penutupan buku formal',
+    'income_statement': 'Laporan laba rugi',
+    'balance_sheet': 'Posisi keuangan',
     'invoice_variances': 'Penyesuaian biaya invoice',
     'distribution_costs': 'Biaya historis distribusi',
     'cost_ledger': 'Jejak nilai / HPP batch',
@@ -44,6 +50,9 @@ class ErpRepository {
     'trace': 'Jejak bahan ke produksi',
   };
   static const actions = {
+    'commercial_policy',
+    'closing_propose',
+    'closing_decide',
     'invoice_revalue_retry',
     'wholesale_policy',
     'posting_policy',
@@ -107,6 +116,11 @@ class ErpRepository {
         c['forms'] is! List) {
       throw const FormatException('Lingkup ERP tidak cocok.');
     }
+    if (filters.containsKey('period_id') &&
+        {'closings', 'income_statement', 'balance_sheet'}.contains(section) &&
+        c['selected_period_id'] != filters['period_id']) {
+      throw const FormatException('Periode laporan tidak cocok.');
+    }
     for (final row in c['data']) {
       if (filters.containsKey('store_id') &&
           {'productions', 'lots'}.contains(section) &&
@@ -114,7 +128,7 @@ class ErpRepository {
         throw const FormatException('Gudang ERP tidak cocok.');
       }
       if (filters.containsKey('period_id') &&
-          section == 'journals' &&
+          {'journals', 'closings'}.contains(section) &&
           row['period_id'] != filters['period_id']) {
         throw const FormatException('Periode jurnal tidak cocok.');
       }

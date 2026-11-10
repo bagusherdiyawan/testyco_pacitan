@@ -33,6 +33,12 @@ final class DistributionReceiptPosting
     public function quote(SupplyOrder $order, ShipmentLine $line, int $good, int $damaged, int $unitPrice): array
     {
         $none = ['value' => null, 'policy_id' => null];
+        if ($order->kind === 'internal_transfer' && $order->supplier_organization_id === $order->organization_id && $good === $line->quantity_packs && $damaged === 0) {
+            $cost = DB::table('inventory_cost_entries')->where('organization_id', $order->organization_id)->where('source_type', 'shipment_dispatch')->where('source_id', $line->id)->first();
+            $known = $cost && $cost->value_delta !== null && -(int) $cost->quantity_delta === $good * $line->pack_size;
+
+            return ['value' => $known ? -(int) $cost->value_delta : null, 'policy_id' => null];
+        }
         if (! $this->eligible($order, $line, $good, $damaged)) {
             return $none;
         }
@@ -64,6 +70,20 @@ final class DistributionReceiptPosting
 
     public function received(SupplyOrder $order, ShipmentLine $line, int $actor, ?int $value, ?string $policyId = null): void
     {
+        if ($order->kind === 'internal_transfer' && $order->supplier_organization_id === $order->organization_id) {
+            if ($value !== null && $line->good_packs === $line->quantity_packs && $line->damaged_packs === 0) {
+                $cost = DB::table('inventory_cost_entries')->where('organization_id', $order->organization_id)->where('source_type', 'shipment_dispatch')->where('source_id', $line->id)->first();
+                $sourceEvent = $cost ? DB::table('accounting_events')->where('organization_id', $order->organization_id)->where('source_type', 'stock_review')->where('source_id', $cost->id)->first() : null;
+                $active = DB::table('accounting_policies')->where('organization_id', $order->organization_id)->where('status', 'active')->first();
+                $origin = $sourceEvent ? DB::table('accounting_policies')->where('organization_id', $order->organization_id)->where('id', $sourceEvent->policy_id)->first() : null;
+                if ($active && $origin && json_decode($active->mapping, true)['finished']['account_id'] === json_decode($origin->mapping, true)['finished']['account_id'] && $sourceEvent->status === 'review_required') {
+                    $this->covered($order->organization_id, 'shipment_dispatch', $line->id, 'Transfer internal satu organisasi/akun persediaan; biaya aktual diterima '.$line->id);
+                    $this->covered($order->organization_id, 'shipment_receipt', $line->id, 'Transfer internal satu organisasi/akun persediaan; biaya aktual diterima '.$line->id);
+                }
+            }
+
+            return; // One entity, same inventory account: no revenue, payable or COGS journal.
+        }
         if (! $this->eligible($order, $line, $line->good_packs, $line->damaged_packs)) {
             return;
         }
@@ -85,9 +105,9 @@ final class DistributionReceiptPosting
         }
     }
 
-    private function covered(string $org, string $type, string $source): void
+    private function covered(string $org, string $type, string $source, ?string $reason = null): void
     {
         $ids = DB::table('inventory_cost_entries')->where('organization_id', $org)->where('source_type', $type)->where('source_id', $source)->pluck('id');
-        DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'stock_review')->whereIn('source_id', $ids)->where('status', 'review_required')->update(['status' => 'reconciled', 'reason' => 'Dicakup aturan penerimaan dan event distribusi '.$source, 'version' => DB::raw('version + 1'), 'updated_at' => now()]);
+        DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'stock_review')->whereIn('source_id', $ids)->where('status', 'review_required')->update(['status' => 'reconciled', 'reason' => $reason ?? 'Dicakup aturan penerimaan dan event distribusi '.$source, 'version' => DB::raw('version + 1'), 'updated_at' => now()]);
     }
 }

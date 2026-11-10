@@ -1,5 +1,5 @@
 <x-templates.console>
-@php($finance=in_array($context['section']??$q['section']??'materials',['invoice_variances','distribution_costs','accounts','periods','journals','trial_balance','posting','posting_events','valuations','valuation_stock','cost_ledger']))
+@php($finance=in_array($context['section']??$q['section']??'materials',['closings','income_statement','balance_sheet','invoice_variances','distribution_costs','accounts','periods','journals','trial_balance','posting','posting_events','valuations','valuation_stock','cost_ledger']))
 <a href="/app/organizations/{{ $organization }}">← Organisasi</a><h1>{{ $finance?'Pembukuan dan jurnal':'Bahan baku, pembelian dan produksi' }}</h1>
 @if($finance)<p>Pemetaan akun disetujui pengelola lain. Periksa antrean dan tanggal sumber sebelum menutup periode. Pembelian wholesale ditampung sebelum rekonsiliasi persediaan.</p>@else
 <p>Hasil produksi masuk karantina sampai owner/admin pusat menyelesaikan pemeriksaan. Jumlah bahan menggunakan satuan yang tercantum; harga dan biaya dalam rupiah. Tidak ada resep, biaya, atau masa simpan bawaan.</p>
@@ -11,10 +11,10 @@
 @else<form method="post" action="/app/organizations/{{ $organization }}/erp/confirm">@csrf<x-atoms.button>Konfirmasi dan kirim</x-atoms.button></form><form method="post" action="/app/organizations/{{ $organization }}/erp/edit">@csrf<x-atoms.button>Kembali ke formulir</x-atoms.button></form>@endif</section>
 @else
 <nav class="panel">@foreach(array_intersect_key(\App\Modules\Manufacturing\Presentation\ErpController::SECTIONS,array_flip($context['allowed_sections']??array_keys(\App\Modules\Manufacturing\Presentation\ErpController::SECTIONS))) as $key=>$label)<a href="{{ url()->current().'?'.http_build_query(['section'=>$key,...(($context['can_manage']??false)?[]:['store_id'=>$q['store_id']??''])]) }}">{{ $label }}</a> · @endforeach</nav>
-<form method="get" class="panel"><input type="hidden" name="section" value="{{ $context['section'] }}"><label>Gudang<select name="store_id">@if($context['can_manage']??false)<option value="">Semua</option>@endif
-@foreach($context['filter_stores'] as $id=>$name)<option value="{{ $id }}" @selected(($q['store_id']??'')===$id)>{{ $name }}</option>@endforeach</select></label>
+<form method="get" class="panel"><input type="hidden" name="section" value="{{ $context['section'] }}">@if(!$finance)<label>Gudang<select name="store_id">@if($context['can_manage']??false)<option value="">Semua</option>@endif
+@foreach($context['filter_stores'] as $id=>$name)<option value="{{ $id }}" @selected(($q['store_id']??'')===$id)>{{ $name }}</option>@endforeach</select></label>@endif
 @if(in_array($context['section'],['lots','planning']))<label>Bahan<select name="material_id"><option value="">Semua</option>@foreach($context['filter_materials'] as $id=>$name)<option value="{{ $id }}" @selected(($q['material_id']??'')===$id)>{{ $name }}</option>@endforeach</select></label>@endif
-@if(in_array($context['section'],['journals','trial_balance']))<label>Periode<select name="period_id"><option value="">Pilih</option>@foreach($context['filter_periods']??[] as $id=>$name)<option value="{{ $id }}" @selected(($q['period_id']??'')===$id)>{{ $name }}</option>@endforeach</select></label>@endif
+@if(in_array($context['section'],['journals','trial_balance','closings','income_statement','balance_sheet']))<label>Periode<select name="period_id"><option value="">Pilih</option>@foreach($context['filter_periods']??[] as $id=>$name)<option value="{{ $id }}" @selected(($q['period_id']??'')===$id)>{{ $name }}</option>@endforeach</select></label>@endif
 @if($context['section']==='report')<label>Dari (WIB)<input type="date" name="from" value="{{ $q['from']??'' }}" required></label><label>Sampai inklusif (WIB)<input type="date" name="to" value="{{ $q['to']??'' }}" required></label>@endif
 <x-atoms.button>Terapkan filter</x-atoms.button></form>
 @if(isset($context['notice']))<p>{{ $context['notice'] }}</p>@endif

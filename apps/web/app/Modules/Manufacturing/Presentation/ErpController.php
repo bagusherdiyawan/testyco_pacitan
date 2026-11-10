@@ -11,9 +11,9 @@ use Illuminate\Validation\Rule;
 
 final class ErpController
 {
-    public const SECTIONS = ['invoice_variances' => 'Penyesuaian biaya invoice', 'distribution_costs' => 'Biaya historis distribusi', 'cost_ledger' => 'Jejak nilai / HPP batch', 'posting' => 'Pemetaan jurnal otomatis', 'posting_events' => 'Antrean jurnal sumber', 'valuations' => 'Review nilai saldo awal', 'valuation_stock' => 'Nilai persediaan produk', 'operators' => 'Izin operator ERP', 'accounts' => 'Akun buku besar', 'periods' => 'Periode pembukuan', 'journals' => 'Jurnal debit/kredit', 'trial_balance' => 'Neraca saldo dan ringkasan akun', 'materials' => 'Bahan baku / kemasan', 'suppliers' => 'Pemasok', 'purchases' => 'Pembelian dan pembayaran', 'lots' => 'Lot, pemeriksaan dan stok bahan', 'recipes' => 'Resep produksi', 'productions' => 'Pelaksanaan dan pemeriksaan produksi', 'counts' => 'Review opname bahan', 'ledger' => 'Pergerakan bahan', 'planning' => 'Kebutuhan bahan', 'report' => 'Biaya produksi / HPP', 'trace' => 'Jejak bahan ke hasil produksi'];
+    public const SECTIONS = ['closings' => 'Penutupan buku formal', 'income_statement' => 'Laporan laba rugi', 'balance_sheet' => 'Posisi keuangan', 'invoice_variances' => 'Penyesuaian biaya invoice', 'distribution_costs' => 'Biaya historis distribusi', 'cost_ledger' => 'Jejak nilai / HPP batch', 'posting' => 'Pemetaan jurnal otomatis', 'posting_events' => 'Antrean jurnal sumber', 'valuations' => 'Review nilai saldo awal', 'valuation_stock' => 'Nilai persediaan produk', 'operators' => 'Izin operator ERP', 'accounts' => 'Akun buku besar', 'periods' => 'Periode pembukuan', 'journals' => 'Jurnal debit/kredit', 'trial_balance' => 'Neraca saldo dan ringkasan akun', 'materials' => 'Bahan baku / kemasan', 'suppliers' => 'Pemasok', 'purchases' => 'Pembelian dan pembayaran', 'lots' => 'Lot, pemeriksaan dan stok bahan', 'recipes' => 'Resep produksi', 'productions' => 'Pelaksanaan dan pemeriksaan produksi', 'counts' => 'Review opname bahan', 'ledger' => 'Pergerakan bahan', 'planning' => 'Kebutuhan bahan', 'report' => 'Biaya produksi / HPP', 'trace' => 'Jejak bahan ke hasil produksi'];
 
-    public const ACTIONS = ['invoice_revalue_retry', 'wholesale_policy', 'posting_policy', 'posting_decide', 'posting_suspend', 'posting_reconcile', 'posting_retry', 'value_propose', 'value_decide', 'operator_grant', 'account', 'accounting_period', 'journal', 'journal_decide', 'journal_reverse', 'period_status', 'material', 'material_configure', 'supplier', 'purchase', 'purchase_decide', 'receive', 'payment_reverse', 'payment', 'recipe', 'production', 'production_cancel', 'complete', 'material_quality', 'production_quality', 'transfer', 'count', 'count_decide'];
+    public const ACTIONS = ['commercial_policy', 'closing_propose', 'closing_decide', 'invoice_revalue_retry', 'wholesale_policy', 'posting_policy', 'posting_decide', 'posting_suspend', 'posting_reconcile', 'posting_retry', 'value_propose', 'value_decide', 'operator_grant', 'account', 'accounting_period', 'journal', 'journal_decide', 'journal_reverse', 'period_status', 'material', 'material_configure', 'supplier', 'purchase', 'purchase_decide', 'receive', 'payment_reverse', 'payment', 'recipe', 'production', 'production_cancel', 'complete', 'material_quality', 'production_quality', 'transfer', 'count', 'count_decide'];
 
     public function __construct(private Backend $api, private PendingMutation $pending) {}
 
@@ -36,11 +36,14 @@ final class ErpController
     {
         $c = $this->api->request('GET', $this->path($org).'/context', $q)->json();
         abort_unless(is_array($c) && ($c['organization_id'] ?? null) === $org && ($c['section'] ?? null) === ($q['section'] ?? 'materials') && (($c['can_manage'] ?? false) === true || ($c['can_operate'] ?? false) === true) && is_array($c['data'] ?? null) && ($c['current_page'] ?? null) === (int) ($q['page'] ?? 1) && is_array($c['forms'] ?? null), 503, 'Lingkup ERP tidak cocok.');
+        if (isset($q['period_id']) && in_array($q['section'] ?? '', ['closings', 'income_statement', 'balance_sheet'], true)) {
+            abort_unless(($c['selected_period_id'] ?? null) === $q['period_id'], 503, 'Periode laporan tidak cocok.');
+        }
         foreach ($c['data'] as $row) {
             if (isset($q['store_id']) && in_array($q['section'] ?? '', ['productions', 'lots'], true)) {
                 abort_unless(($row['store_id'] ?? null) === $q['store_id'], 503);
             }
-            if (isset($q['period_id']) && ($q['section'] ?? '') === 'journals') {
+            if (isset($q['period_id']) && in_array($q['section'] ?? '', ['journals', 'closings'], true)) {
                 abort_unless(($row['period_id'] ?? null) === $q['period_id'], 503);
             }
             abort_unless(($row['organization_id'] ?? null) === $org && is_string($row['id'] ?? null) && is_string($row['summary'] ?? null) && is_array($row['forms'] ?? null), 503);

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commercial\Application;
 
+use App\Modules\Accounting\Application\CommercialPosting;
 use App\Modules\Commercial\Infrastructure\CommercialAgreement;
 use App\Modules\Sales\Infrastructure\Sale;
 use Illuminate\Support\Facades\DB;
@@ -26,6 +27,10 @@ final class CommercialJournal
         } else {
             DB::table('commercial_positions')->insert(['id' => $id, ...$d]);
         }
-        DB::table('commercial_entries')->insert(['id' => (string) Str::ulid(), 'commercial_agreement_id' => $g->id, 'commercial_position_id' => $id, 'position_version' => $version, 'amount' => $amount - (int) ($p?->amount ?? 0), 'basis_amount' => $basis - (int) ($p?->basis_amount ?? 0), 'snapshot' => json_encode(['source_key' => $source, 'original_receipt' => $sale->number, 'original_sold_at' => $sale->sold_at->toIso8601String(), 'sale_version' => $sale->version, 'agreement_id' => $g->id, 'terms' => $g->terms, ...$snapshot], JSON_THROW_ON_ERROR), 'created_at' => now()]);
+        $entryId = (string) Str::ulid();
+        $priorEntry = DB::table('commercial_entries')->where('commercial_position_id', $id)->orderByDesc('position_version')->first();
+        $priorTax = $priorEntry ? (int) (json_decode($priorEntry->snapshot, true)['tax_amount'] ?? 0) : 0;
+        DB::table('commercial_entries')->insert(['id' => $entryId, 'commercial_agreement_id' => $g->id, 'commercial_position_id' => $id, 'position_version' => $version, 'amount' => $amount - (int) ($p?->amount ?? 0), 'basis_amount' => $basis - (int) ($p?->basis_amount ?? 0), 'snapshot' => json_encode(['source_key' => $source, 'original_receipt' => $sale->number, 'original_sold_at' => $sale->sold_at->toIso8601String(), 'sale_version' => $sale->version, 'agreement_id' => $g->id, 'terms' => $g->terms, ...$snapshot], JSON_THROW_ON_ERROR), 'created_at' => now()]);
+        app(CommercialPosting::class)->entry($g, $entryId, $id, $version, $sale, $amount - (int) ($p?->amount ?? 0), (int) ($snapshot['tax_amount'] ?? 0) - $priorTax, $priorEntry ? (int) json_decode($priorEntry->snapshot, true)['sale_version'] : null, $refundQty);
     }
 }

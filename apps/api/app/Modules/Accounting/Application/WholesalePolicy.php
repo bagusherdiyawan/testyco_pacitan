@@ -28,6 +28,7 @@ final class WholesalePolicy
 
     public function propose(User $u, string $org, array $v): array
     {
+        app(CommercialPolicy::class)->guard($org);
         $base = DB::table('accounting_policies')->where('organization_id', $org)->where('id', $v['base_policy_id'])->where('status', 'active')->lockForUpdate()->firstOrFail();
         abort_unless($base->version === $v['base_policy_version'], 409, 'Pemetaan dasar berubah.');
         $mapping = array_intersect_key(json_decode($base->mapping, true), AutomaticPosting::ROLES);
@@ -47,6 +48,9 @@ final class WholesalePolicy
     public function approvalGuard(string $org, string $id): void
     {
         $w = DB::table('accounting_wholesale_policies')->where('organization_id', $org)->where('policy_id', $id)->first();
+        if (! $w && DB::table('accounting_commercial_policies')->where('organization_id', $org)->where('policy_id', $id)->exists()) {
+            return;
+        }
         if (! $w) {
             $this->baseGuard($org);
 
@@ -57,6 +61,6 @@ final class WholesalePolicy
 
     public static function labels(): array
     {
-        return [...AutomaticPosting::ROLES, ...self::ROLES];
+        return [...AutomaticPosting::ROLES, ...self::ROLES, ...CommercialPolicy::ROLES];
     }
 }

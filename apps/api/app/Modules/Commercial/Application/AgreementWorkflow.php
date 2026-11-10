@@ -3,6 +3,7 @@
 namespace App\Modules\Commercial\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\CommercialPosting;
 use App\Modules\Commercial\Infrastructure\CommercialAgreement;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Application\Audit;
@@ -183,6 +184,7 @@ final class AgreementWorkflow
             abort_unless($signed > 0 && $signed <= $balance || $signed < 0 && $signed >= $balance, 422, 'Nominal/arah wajib sesuai saldo aktual.');
             $p = ['id' => (string) Str::ulid(), 'commercial_agreement_id' => $id, 'signed_amount' => $signed, 'method' => $v['method'], 'reference' => $v['reference'], 'evidence_reference' => $v['evidence_reference'], 'verified_by' => $u->id, 'paid_on' => $v['paid_on'], 'created_at' => now()->toIso8601String()];
             DB::table('commercial_payments')->insert($p);
+            app(CommercialPosting::class)->payment($g, $p);
             $g->increment('version');
             foreach ([$g->organization_id, $g->partner_id] as $party) {
                 Audit::record($u->id, $party, 'commercial.payment_verified', $p['id'], null, $p);

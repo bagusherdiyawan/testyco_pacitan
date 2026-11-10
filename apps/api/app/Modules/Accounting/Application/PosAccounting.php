@@ -20,10 +20,10 @@ final class PosAccounting
                 $reason = 'Stok konsinyasi memerlukan rekonsiliasi kepemilikan dan settlement komersial.';
             }
         }
-        if (isset($s->voucher_snapshot['commercial_agreement_id'])) {
-            $reason = 'Pendanaan promo lintas organisasi memerlukan rekonsiliasi piutang sponsor.';
-        }
         $policy = DB::table('accounting_policies')->where('organization_id', $s->organization_id)->where('status', 'active')->first();
+        if (isset($s->voucher_snapshot['commercial_agreement_id']) && (! $policy || ! DB::table('accounting_commercial_policies')->where('organization_id', $s->organization_id)->where('policy_id', $policy->id)->exists())) {
+            $reason = 'Pendanaan promo lintas organisasi memerlukan pemetaan GL sponsor yang disetujui.';
+        }
         if ($s->offline_sale_id && $policy && $s->sold_at->lt($policy->activated_at)) {
             $reason = 'Penjualan offline terjadi sebelum aktivasi; rekonsiliasi cutover diperlukan.';
         }
@@ -38,8 +38,9 @@ final class PosAccounting
             $terms[] = ['finished', 'cogs', $c?->value_delta === null ? null : (int) $c->value_delta];
         }
         $origin = DB::table('accounting_events')->where('organization_id', $s->organization_id)->where('source_type', 'pos_sale')->where('source_id', $s->id)->first();
-        $commercial = isset($s->voucher_snapshot['commercial_agreement_id']) || DB::table('sale_allocations')->join('sale_lines', 'sale_lines.id', '=', 'sale_allocations.sale_line_id')->where('sale_lines.sale_id', $s->id)->whereNotNull('sale_allocations.commercial_origin_snapshot')->exists();
+        $sponsorCovered = $origin && in_array($origin->status, ['pending', 'posted'], true) && DB::table('accounting_commercial_policies')->where('organization_id', $s->organization_id)->where('policy_id', $origin->policy_id)->exists() && DB::table('accounting_commercial_positions')->where('organization_id', $s->organization_id)->whereIn('commercial_position_id', DB::table('commercial_positions')->where('sale_id', $s->id)->where('source_key', 'promo:'.$s->id)->select('id'))->exists();
+        $commercial = (isset($s->voucher_snapshot['commercial_agreement_id']) && ! $sponsorCovered) || DB::table('sale_allocations')->join('sale_lines', 'sale_lines.id', '=', 'sale_allocations.sale_line_id')->where('sale_lines.sale_id', $s->id)->whereNotNull('sale_allocations.commercial_origin_snapshot')->exists();
         $reason = ! $origin ? 'Refund sumber sebelum aktivasi memerlukan rekonsiliasi cutover.' : ($commercial ? 'Refund sumber komersial memerlukan rekonsiliasi settlement/promo.' : null);
-        app(AutomaticPosting::class)->record($s->organization_id, $refund->actor_id, 'pos_refund', $refund->id, $refund->refunded_at->copy()->timezone('Asia/Jakarta')->format('Y-m-d'), $terms, $refund->reference, $reason);
+        app(AutomaticPosting::class)->record($s->organization_id, $refund->actor_id, 'pos_refund', $refund->id, $refund->refunded_at->copy()->timezone('Asia/Jakarta')->format('Y-m-d'), $terms, $refund->reference, $reason, $origin && in_array($origin->status, ['pending', 'posted'], true) ? $origin->policy_id : null);
     }
 }

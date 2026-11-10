@@ -148,48 +148,58 @@ class _ErpPageState extends State<ErpPage> {
                 return Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    DropdownButtonFormField<String>(
-                      key: ValueKey('$section:$store'),
-                      initialValue: store,
-                      isExpanded: true,
-                      decoration: const InputDecoration(labelText: 'Gudang'),
-                      items: [
-                        if (widget.operatorStore == null)
-                          const DropdownMenuItem(
-                            value: '',
-                            child: Text('Semua gudang'),
+                    if (!ErpRepository.financeSections.contains(section))
+                      DropdownButtonFormField<String>(
+                        key: ValueKey('$section:$store'),
+                        initialValue: store,
+                        isExpanded: true,
+                        decoration: const InputDecoration(labelText: 'Gudang'),
+                        items: [
+                          if (widget.operatorStore == null)
+                            const DropdownMenuItem(
+                              value: '',
+                              child: Text('Semua gudang'),
+                            ),
+                          ...stores.entries.map(
+                            (e) => DropdownMenuItem(
+                              value: e.key,
+                              child: Text('${e.value}'),
+                            ),
                           ),
-                        ...stores.entries.map(
-                          (e) => DropdownMenuItem(
-                            value: e.key,
-                            child: Text('${e.value}'),
-                          ),
-                        ),
-                      ],
-                      onChanged: (v) {
-                        store = v == '' ? null : v;
-                        filters = {...filters};
-                        filters.remove('store_id');
-                        if (store != null) filters['store_id'] = store!;
-                        page = 1;
-                        reload();
-                      },
-                    ),
-                    if ({'journals', 'trial_balance'}.contains(section))
+                        ],
+                        onChanged: (v) {
+                          store = v == '' ? null : v;
+                          filters = {...filters};
+                          filters.remove('store_id');
+                          if (store != null) filters['store_id'] = store!;
+                          page = 1;
+                          reload();
+                        },
+                      ),
+                    if ({
+                      'journals',
+                      'trial_balance',
+                      'closings',
+                      'income_statement',
+                      'balance_sheet',
+                    }.contains(section))
                       DropdownButtonFormField<String>(
                         initialValue: filters['period_id'],
                         isExpanded: true,
                         decoration: const InputDecoration(
                           labelText: 'Periode pembukuan',
                         ),
-                        items: ErpRepository.object(c['filter_periods']).entries
-                            .map(
-                              (e) => DropdownMenuItem(
-                                value: e.key,
-                                child: Text('${e.value}'),
-                              ),
-                            )
-                            .toList(),
+                        items:
+                            ErpRepository.object(
+                                  c['filter_periods'] ?? <String, dynamic>{},
+                                ).entries
+                                .map(
+                                  (e) => DropdownMenuItem(
+                                    value: e.key,
+                                    child: Text('${e.value}'),
+                                  ),
+                                )
+                                .toList(),
                         onChanged: (v) {
                           filters = {...filters, 'period_id': v!};
                           page = 1;

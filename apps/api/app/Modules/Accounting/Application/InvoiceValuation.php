@@ -113,10 +113,10 @@ final class InvoiceValuation
             }
             $termsByDay = [];
             $later = [];
-            $stock = $cogs = 0;
+            $stock = $cogs = $loss = 0;
             foreach ($plan as $a) {
                 $variance = (string) Str::ulid();
-                DB::table('inventory_invoice_variances')->insert(['id' => $variance, 'revaluation_id' => $id, 'organization_id' => $s->organization_id, 'invoice_id' => $invoice->id, 'shipment_line_id' => $a['line'], 'inventory_batch_id' => $a['batch']->id, 'stock_revision' => $a['batch']->stock_revision, 'original_value' => $a['original'], 'final_value' => $a['final'], 'remaining_quantity' => $a['remaining'], 'before_value' => $a['before'], 'after_value' => $a['after'], 'stock_adjustment' => $a['stock'], 'cogs_adjustment' => $a['cogs'], 'created_at' => now()]);
+                DB::table('inventory_invoice_variances')->insert(['id' => $variance, 'revaluation_id' => $id, 'organization_id' => $s->organization_id, 'invoice_id' => $invoice->id, 'shipment_line_id' => $a['line'], 'inventory_batch_id' => $a['batch']->id, 'stock_revision' => $a['batch']->stock_revision, 'original_value' => $a['original'], 'final_value' => $a['final'], 'remaining_quantity' => $a['remaining'], 'before_value' => $a['before'], 'after_value' => $a['after'], 'stock_adjustment' => $a['stock'], 'cogs_adjustment' => $a['cogs'], 'loss_adjustment' => $a['loss'], 'created_at' => now()]);
                 if ($a['stock'] !== 0) {
                     app(StockLedger::class)->apply($a['batch'], $s->actor_id, [], 'invoice_variance', $variance, $invoice->number, valueDelta: $a['stock']);
                 }
@@ -125,21 +125,28 @@ final class InvoiceValuation
                         DB::table('inventory_invoice_sale_adjustments')->insert(['id' => (string) Str::ulid(), 'variance_id' => $variance, 'organization_id' => $s->organization_id, 'cost_entry_id' => $sale['id'], 'cost_delta' => $sale['delta'], 'created_at' => now()]);
                     }
                 }
-                $late = 0;
-                foreach ($a['sales'] as $sale) {
-                    if ($sale['day'] > $a['day'] && $sale['delta'] !== 0) {
-                        $d = $sale['delta'];
-                        $late += $d;
-                        $later[$sale['day']][] = $d > 0 ? ['cogs', 'finished', $d] : ['finished', 'cogs', -$d];
+                foreach ($a['movements'] as $movement) {
+                    if ($movement['delta'] !== 0) {
+                        DB::table('inventory_invoice_movement_adjustments')->insert(['id' => (string) Str::ulid(), 'variance_id' => $variance, 'organization_id' => $s->organization_id, 'cost_entry_id' => $movement['id'], 'expense_role' => $movement['role'], 'event_on' => max($a['day'], $movement['day']), 'cost_delta' => $movement['delta'], 'created_at' => now()]);
                     }
                 }
-                foreach ([['finished', $a['stock'] + $late], ['cogs', $a['cogs'] - $late]] as [$role,$delta]) {
+                $late = ['cogs' => 0, 'loss' => 0];
+                foreach ([...$a['sales'], ...$a['movements']] as $movement) {
+                    if ($movement['day'] > $a['day'] && $movement['delta'] !== 0) {
+                        $d = $movement['delta'];
+                        $role = $movement['role'];
+                        $late[$role] += $d;
+                        $later[$movement['day']][] = $d > 0 ? [$role, 'finished', $d] : ['finished', $role, -$d];
+                    }
+                }
+                foreach ([['finished', $a['stock'] + array_sum($late)], ['cogs', $a['cogs'] - $late['cogs']], ['loss', $a['loss'] - $late['loss']]] as [$role,$delta]) {
                     if ($delta !== 0) {
                         $termsByDay[$a['day']][] = $delta > 0 ? [$role, 'purchase_clearing', $delta] : ['purchase_clearing', $role, -$delta];
                     }
                 }
                 $stock += $a['stock'];
                 $cogs += $a['cogs'];
+                $loss += $a['loss'];
             }
             ksort($termsByDay);
             ksort($later);
@@ -149,8 +156,8 @@ final class InvoiceValuation
             foreach ($later as $day => $depletion) {
                 app(AutomaticPosting::class)->record($s->organization_id, $s->actor_id, 'invoice_variance_depletion', $id.':'.$day, $day, $depletion, $invoice->number.' · koreksi HPP penjualan sesudah invoice', null, $s->policy_id);
             }
-            DB::table('accounting_invoice_revaluations')->where('id', $id)->update(['status' => 'applied', 'reason' => null, 'stock_adjustment' => $stock, 'cogs_adjustment' => $cogs, 'version' => $s->version + 1, 'updated_at' => now()]);
-            Audit::record($s->actor_id, $s->organization_id, 'accounting.invoice_valued', $id, null, ['automatic' => true, 'invoice_id' => $invoice->id, 'policy_id' => $s->policy_id, 'stock_adjustment' => $stock, 'cogs_adjustment' => $cogs, 'version' => $s->version + 1]);
+            DB::table('accounting_invoice_revaluations')->where('id', $id)->update(['status' => 'applied', 'reason' => null, 'stock_adjustment' => $stock, 'cogs_adjustment' => $cogs, 'loss_adjustment' => $loss, 'version' => $s->version + 1, 'updated_at' => now()]);
+            Audit::record($s->actor_id, $s->organization_id, 'accounting.invoice_valued', $id, null, ['automatic' => true, 'invoice_id' => $invoice->id, 'policy_id' => $s->policy_id, 'stock_adjustment' => $stock, 'cogs_adjustment' => $cogs, 'loss_adjustment' => $loss, 'version' => $s->version + 1]);
 
             return true;
         }, 3);
@@ -237,64 +244,27 @@ final class InvoiceValuation
             $this->require($entryCount <= 10000 && $entryBytes <= 8 * 1024 * 1024, 'Jejak invoice melampaui10.000entri/8MiB; perlu alokasi terperinci.');
             $pool = DB::table('inventory_values')->where('organization_id', $org)->where('inventory_batch_id', $batch->id)->lockForUpdate()->first();
             $this->require($pool && $pool->remaining_value !== null && (int) $pool->quantity === app(InventoryValuation::class)->quantity($batch), 'Pool stok tidak diketahui atau perlu rekonsiliasi jumlah.');
-            $allocationIds = $entries->where('source_type', 'pos_sale')->pluck('source_id')->unique()->all();
-            $sourceSales = DB::table('sale_allocations as a')->join('sale_lines as l', 'l.id', '=', 'a.sale_line_id')->join('sales as s', 's.id', '=', 'l.sale_id')->where('s.organization_id', $org)->where('a.inventory_batch_id', $batch->id)->whereIn('a.id', $allocationIds)->select('a.id as allocation_id', 's.id', 's.sold_at', 's.total_amount', 's.discount_amount')->get()->keyBy('allocation_id');
-            $saleEvents = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'pos_sale')->whereIn('source_id', $sourceSales->pluck('id')->unique()->all())->get(['source_id', 'policy_id', 'status'])->keyBy('source_id');
-            $policyRows = DB::table('accounting_policies')->where('organization_id', $org)->whereIn('id', $saleEvents->pluck('policy_id')->unique()->all())->limit(1001)->get(['id', 'mapping']);
-            $entryBytes += strlen(json_encode($sourceSales)) + strlen(json_encode($saleEvents)) + strlen(json_encode($policyRows));
-            $this->require($policyRows->count() <= 1000 && $entryBytes <= 8 * 1024 * 1024, 'Bukti invoice/pemetaan melampaui8MiB/1000pemetaan; perlu rekonsiliasi terperinci.');
-            $saleMappings = [];
-            foreach ($policyRows as $row) {
-                $m = json_decode($row->mapping, true);
-                $saleMappings[$row->id] = ['cogs' => $m['cogs']['account_id'], 'finished' => $m['finished']['account_id']];
-            }
-            $sales = [];
-            $soldQty = 0;
-            $soldCost = 0;
-            foreach ($entries as $e) {
-                if ($e->id === $receipt->id || (int) $e->quantity_delta === 0) {
-                    continue;
-                }
-                $this->require($e->source_type === 'pos_sale' && (int) $e->quantity_delta < 0 && $e->value_delta !== null, 'Batch memiliki retur, waste, transfer atau penerimaan campuran; perlu alokasi terperinci.');
-                $sale = $sourceSales->get($e->source_id);
-                $this->require($sale !== null, 'Alokasi POS asal tidak dapat dibuktikan.');
-                $checkDay($this->day($sale->sold_at));
-                $saleEvent = $saleEvents->get($sale->id);
-                $this->require(($saleEvent && in_array($saleEvent->status, ['pending', 'posted'], true)) || (! $saleEvent && (int) $e->value_delta === 0 && (int) $sale->total_amount === 0 && (int) $sale->discount_amount === 0), 'Jurnal POS asal belum tersedia atau perlu rekonsiliasi.');
-                if ($saleEvent) {
-                    $sm = $saleMappings[$saleEvent->policy_id] ?? null;
-                    $this->require($sm && $sm['cogs'] === $mapping['cogs']['account_id'] && $sm['finished'] === $mapping['finished']['account_id'], 'Akun HPP/persediaan POS berbeda; perlu rekonsiliasi pemetaan.');
-                }
-                $qty = -(int) $e->quantity_delta;
-                $soldQty += $qty;
-                $soldCost -= (int) $e->value_delta;
-                $sales[] = ['id' => $e->id, 'qty' => $qty, 'cost' => -(int) $e->value_delta, 'delta' => 0, 'day' => $this->day($sale->sold_at)];
-            }
-            $initial = (int) $receipt->quantity_delta;
+            $replay = app(InvoiceCostReplay::class)->plan($org, $receipt, $entries, $final, $mapping, $checkDay);
+            $entryBytes += $replay['evidence_bytes'];
+            $this->require($entryBytes <= 8 * 1024 * 1024, 'Bukti invoice melampaui8MiB; perlu rekonsiliasi terperinci.');
+            $this->require($replay['quantity'] === (int) $pool->quantity && $replay['before'] === (int) $pool->remaining_value, 'Jumlah/nilai historis batch tidak konservatif; perlu rekonsiliasi.');
             $original = (int) $receipt->value_delta;
-            $this->require($soldQty + (int) $pool->quantity === $initial && $soldCost + (int) $pool->remaining_value === $original, 'Jumlah/nilai historis batch tidak konservatif; perlu rekonsiliasi.');
-            $after = (int) $pool->remaining_value;
-            $newSold = 0;
-            $cumulative = 0;
-            if ($final !== $original) {
-                foreach ($sales as &$a) {
-                    $cumulative += $a['qty'];
-                    $slice = Proportion::floor($final, $cumulative, $initial) - $newSold;
-                    $newSold += $slice;
-                    $a['delta'] = $slice - $a['cost'];
-                }unset($a);
-                $after = $final - $newSold;
-            }
+            $after = $replay['after'];
             $stock = $after - (int) $pool->remaining_value;
-            $cogs = $final === $original ? 0 : $newSold - $soldCost;
-            $late = 0;
-            foreach ($sales as $sale) {
-                if ($sale['day'] > $effectiveDay) {
-                    $late += $sale['delta'];
-                    $laterGross[$sale['day']] = ($laterGross[$sale['day']] ?? 0) + abs($sale['delta']);
+            $cogs = $replay['cogs'];
+            $loss = $replay['loss'];
+            $sales = $replay['sales'];
+            $movements = $replay['movements'];
+            $this->require($stock + $cogs + $loss === $final - $original, 'Alokasi koreksi tidak konservatif.');
+            $late = ['cogs' => 0, 'loss' => 0];
+            foreach ([...$sales, ...$movements] as $movement) {
+                if ($movement['day'] > $effectiveDay) {
+                    $late[$movement['role']] += $movement['delta'];
+                    $laterGross[$movement['day']] = ($laterGross[$movement['day']] ?? 0) + abs($movement['delta']);
                 }
-            }$gross += abs($stock + $late) + abs($cogs - $late);
-            $out[] = ['day' => $effectiveDay, 'line' => $line['shipment_line_id'], 'batch' => $batch, 'original' => $original, 'final' => $final, 'remaining' => (int) $pool->quantity, 'before' => (int) $pool->remaining_value, 'after' => $after, 'stock' => $stock, 'cogs' => $cogs, 'sales' => $sales];
+            }
+            $gross += abs($stock + array_sum($late)) + abs($cogs - $late['cogs']) + abs($loss - $late['loss']);
+            $out[] = ['day' => $effectiveDay, 'line' => $line['shipment_line_id'], 'batch' => $batch, 'original' => $original, 'final' => $final, 'remaining' => (int) $pool->quantity, 'before' => (int) $pool->remaining_value, 'after' => $after, 'stock' => $stock, 'cogs' => $cogs, 'loss' => $loss, 'sales' => $sales, 'movements' => $movements];
         }
         $this->require($weight === $invoice->subtotal && $allocated === $capital && $gross <= Rupiah::LIMIT && (! $laterGross || max($laterGross) <= Rupiah::LIMIT), 'Alokasi subtotal atau batas jurnal tidak sesuai.');
 

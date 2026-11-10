@@ -25,6 +25,7 @@ final class AutomaticPosting
 
     public function policy(User $u, string $org, array $v): array
     {
+        app(CommercialPolicy::class)->guard($org);
         app(WholesalePolicy::class)->baseGuard($org);
         $mapping = [];
         foreach (self::ROLES as $role => [$label,$kind,$normal]) {
@@ -46,6 +47,7 @@ final class AutomaticPosting
         abort_if($p['created_by'] === $u->id, 403, 'Persetujuan pemetaan wajib pengelola lain.');
         $status = $v['decision'] === 'approve' ? 'active' : 'rejected';
         if ($status === 'active') {
+            app(CommercialPolicy::class)->approval($org, $p['id']);
             app(WholesalePolicy::class)->approvalGuard($org, $p['id']);
             DB::table('accounting_policies')->where('organization_id', $org)->where('status', 'active')->update(['status' => 'superseded', 'updated_at' => now(), 'version' => DB::raw('version + 1')]);
         }
@@ -106,6 +108,7 @@ final class AutomaticPosting
         $e = (array) DB::table('accounting_events')->where('organization_id', $org)->where('id', $v['id'])->lockForUpdate()->firstOrFail();
         abort_unless($e['version'] === $v['version'] && $e['status'] === 'review_required', 409);
         $j = DB::table('accounting_journals')->where('organization_id', $org)->where('id', $v['journal_id'])->lockForUpdate()->firstOrFail();
+        abort_if(app(PeriodClosing::class)->protected($org, $j->id), 409, 'Jurnal penutup tidak dapat menjadi rekonsiliasi transaksi operasional.');
         abort_unless($j->status === 'posted' && ! $j->reversed_by && ! $j->reversal_of && $j->posted_on === $e['event_on'] && ! DB::table('accounting_events')->where('journal_id', $j->id)->exists(), 409, 'Gunakan jurnal manual reviewed yang belum ditautkan, pada tanggal sumber yang sama.');
         abort_if($j->created_by === $u->id, 403, 'Penautan rekonsiliasi wajib pengelola berbeda dari pembuat jurnal.');
         abort_unless(DB::table('accounting_periods')->where('organization_id', $org)->where('id', $j->period_id)->where('status', 'open')->lockForUpdate()->exists(), 409, 'Buka periode asal sebelum rekonsiliasi.');

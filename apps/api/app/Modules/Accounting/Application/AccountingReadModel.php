@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 final class AccountingReadModel
 {
-    public const SECTIONS = ['accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs', 'invoice_variances'];
+    public const SECTIONS = ['accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs', 'invoice_variances', 'closings', 'income_statement', 'balance_sheet'];
 
     private function options(string $table, string $org): array
     {
@@ -35,6 +35,9 @@ final class AccountingReadModel
         }
         if (in_array($section, ['posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs'], true)) {
             return app(PostingReadModel::class)->context($org, $section, $actor);
+        }
+        if (in_array($section, ['closings', 'income_statement', 'balance_sheet'], true)) {
+            return app(FinancialReadModel::class)->context($org, $section, $v, $actor);
         }
         if ($section === 'invoice_variances') {
             return app(InvoiceVarianceReadModel::class)->context($org);
@@ -93,7 +96,7 @@ final class AccountingReadModel
                         $actions[] = $make('journal_decide', $label, [$note], ['id' => $r['id'], 'version' => $r['version'], 'decision' => $d], $r['id'], $r['version'] + 1);
                     }
                 }
-                if (! DB::table('accounting_events')->where('journal_id', $r['id'])->exists() && $r['status'] === 'posted' && ! $r['reversed_by'] && ! $r['reversal_of'] && $r['created_by'] !== $actor) {
+                if (! app(PeriodClosing::class)->protected($org, $r['id']) && ! DB::table('accounting_events')->where('journal_id', $r['id'])->exists() && $r['status'] === 'posted' && ! $r['reversed_by'] && ! $r['reversal_of'] && $r['created_by'] !== $actor) {
                     $actions[] = $make('journal_reverse', 'Balik jurnal dengan jejak', [$field('period_id', 'Periode pembalikan terbuka', 'choice', $periodOptions), $field('number', 'Nomor jurnal pembalikan'), $field('posted_on', 'Tanggal pembalikan WIB', 'date'), $field('evidence', 'Bukti pembalikan'), $note], ['id' => $r['id'], 'version' => $r['version']], $r['id'], $r['version'] + 1);
                 }
             }

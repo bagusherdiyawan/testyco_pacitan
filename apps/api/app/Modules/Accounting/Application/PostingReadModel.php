@@ -27,7 +27,7 @@ final class PostingReadModel
         $forms = [];
         $manual = collect();
         if ($section === 'posting_events') {
-            $manual = DB::table('accounting_journals')->where('organization_id', $org)->where('status', 'posted')->whereNull('reversed_by')->whereNull('reversal_of')->where('created_by', '!=', $actor)->whereNotIn('id', DB::table('accounting_events')->where('organization_id', $org)->whereNotNull('journal_id')->select('journal_id'))->orderByDesc('id')->limit(1001)->get();
+            $manual = DB::table('accounting_journals')->where('organization_id', $org)->where('status', 'posted')->whereNull('reversed_by')->whereNull('reversal_of')->where('created_by', '!=', $actor)->whereNotIn('id', DB::table('accounting_closings')->where('organization_id', $org)->whereNotNull('journal_id')->select('journal_id'))->whereNotIn('id', DB::table('accounting_closings')->where('organization_id', $org)->whereNotNull('reopening_journal_id')->select('reopening_journal_id'))->whereNotIn('id', DB::table('accounting_events')->where('organization_id', $org)->whereNotNull('journal_id')->select('journal_id'))->orderByDesc('id')->limit(1001)->get();
             abort_if($manual->count() > 1000, 422, 'Pilihan jurnal rekonsiliasi melebihi1000.');
         }
         if ($section === 'posting') {
@@ -52,6 +52,18 @@ final class PostingReadModel
                 $wholesaleFields[] = $field('tax_treatment', 'Pajak pembelian sesuai kewenangan organisasi', 'choice', ['recoverable' => 'Pajak masukan dapat dikreditkan', 'clearing' => 'Termasuk penampung biaya pembelian']);
                 $wholesaleFields[] = $field('freight_treatment', 'Ongkir pembelian', 'choice', ['expense' => 'Beban periode', 'clearing' => 'Termasuk penampung biaya pembelian']);
                 $forms[] = $make('wholesale_policy', 'Ajukan integrasi jurnal wholesale', [...$wholesaleFields, $note], ['base_policy_id' => $active->id, 'base_policy_version' => $active->version]);
+                if (DB::table('accounting_commercial_policies')->where('organization_id', $org)->where('policy_id', $active->id)->exists()) {
+                    $forms = [];
+                }
+                $commercialFields = [];
+                foreach (CommercialPolicy::ROLES as $role => [$label,$kind,$normal]) {
+                    $choices = $accounts->filter(fn ($a) => $a->kind === $kind && $a->normal_balance === $normal)->mapWithKeys(fn ($a) => [$a->id => $a->code.' · '.$a->name])->all();
+                    $commercialFields[] = $field($role.'_account', $label, 'choice', $choices);
+                }
+                $commercialFields[] = $field('recognition_basis', 'Basis yang disahkan keuangan', 'choice', ['contractual_rights' => 'Hak bagi hasil dan pemulihan sponsor sesuai kontrak; biaya kepemilikan terpisah']);
+                $commercialFields[] = $field('tax_treatment', 'Pajak masukan bagi hasil', 'choice', ['recoverable' => 'Dapat dikreditkan', 'expense' => 'Beban bagi hasil']);
+                $forms[] = $make('commercial_policy', 'Ajukan integrasi GL bagi hasil dan sponsor', [...$commercialFields, $note], ['base_policy_id' => $active->id, 'base_policy_version' => $active->version]);
+
             }
         }
         $table = match ($section) {
@@ -69,10 +81,14 @@ final class PostingReadModel
                 }
             }
             if ($section === 'posting') {
+                $commercial = DB::table('accounting_commercial_policies')->where('organization_id', $org)->where('policy_id', $r['id'])->first();
+                if ($commercial) {
+                    $text[] = 'GL komersial hak kontraktual: bagi hasil dan sponsor; pajak masukan '.$commercial->tax_treatment.'. Ini bukan penilaian HPP milik consignor atau izin membaca buku pihak lain.';
+                }
                 $settings = DB::table('accounting_wholesale_policies')->where('policy_id', $r['id'])->where('organization_id', $org)->first();
                 if ($settings) {
                     if ($settings->ownership_basis !== null) {
-                        $text[] = 'Aturan distribusi disepakati: kepemilikan saat penerimaan dikonfirmasi; biaya sementara dari pesanan disetujui; selisih invoice dialokasikan ke stok tersisa/HPP historis. Penerimaan baik penuh memakai biaya pesanan dan HPP batch otomatis; selisih/kerusakan, konsinyasi dan penyesuaian invoice masih memerlukan rekonsiliasi.';
+                        $text[] = 'Aturan distribusi disepakati: kepemilikan saat penerimaan dikonfirmasi; biaya sementara dari pesanan disetujui; selisih invoice dialokasikan ke stok tersisa/HPP historis. Penerimaan baik penuh memakai biaya pesanan dan HPP batch otomatis; koreksi invoice dedicated receipt termasuk retur POS/susut berbukti tersedia. Selisih/kerusakan dan costing konsinyasi/transfer/pengganti tetap memerlukan rekonsiliasi ownership.';
                     }
                     $text[] = 'Aturan: pembayaran yang diverifikasi penjual mencatat kas/bank sesuai metode pada kedua buku. Cocokkan bukti dengan rekening organisasi sendiri. Pembelian memakai penampung biaya sebelum rekonsiliasi persediaan.';
                     $text[] = 'Cakupan wholesale · pajak pembelian: '.($settings->tax_treatment === 'recoverable' ? 'dapat dikreditkan' : 'masuk penampung biaya').' · ongkir: '.($settings->freight_treatment === 'expense' ? 'beban periode' : 'masuk penampung biaya').' · dasar: '.$settings->base_policy_id.' versi'.$settings->base_policy_version;
@@ -127,6 +143,6 @@ final class PostingReadModel
         $pending = DB::table('accounting_events')->where('organization_id', $org)->whereNotIn('status', ['posted', 'reconciled'])->count();
 
         return [...$page->toArray(), 'data' => $rows, 'forms' => $forms, 'filter_stores' => [], 'filter_materials' => [], 'filter_periods' => [],
-            'notice' => 'Otomatisasi berlaku untuk transaksi baru setelah pemetaan disetujui pengelola lain. Persediaan mencakup karantina. Tidak mengimpor histori. Antrean belum posted: '.$pending.'. Wholesale baru ikut otomatis setelah pemetaan tambahan disetujui organisasi sendiri. Pembelian ditampung sebelum rekonsiliasi persediaan. Nilai tidak diketahui serta distribusi/konsinyasi/promo sponsor menunggu rekonsiliasi; tidak diasumsikan nol.'];
+            'notice' => 'Otomatisasi berlaku untuk transaksi baru setelah pemetaan disetujui pengelola lain. Persediaan mencakup karantina. Tidak mengimpor histori. Antrean belum posted: '.$pending.'. Wholesale baru ikut otomatis setelah pemetaan tambahan disetujui organisasi sendiri. Pembelian ditampung sebelum rekonsiliasi persediaan. Cakupan distribusi, invoice dan hak share/sponsor mengikuti policy yang disetujui; kasus nilai/ownership yang belum terbukti tetap review, tidak diasumsikan nol.'];
     }
 }

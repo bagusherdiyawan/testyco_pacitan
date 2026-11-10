@@ -1017,6 +1017,73 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         api(base,'GET',partner_erp+'/context?section=invoice_variances',token=owner,expected=403)
         print('PASS: real quoted full-good receipt, original batch COGS, final-cost review on closed period, BFF frozen retry, revalue worker1/0 and GL worker6/0, buyer value120000 and cross-tenant denial',flush=True)
+        # Formal closing on a separate historical period, with live web review and independent approval.
+        close_day=(erp_today-timedelta(days=1)).isoformat()
+        close_period=finance_post(erp_path,'accounting_period',{'name':'Formal closing fixture','starts_on':close_day,'ends_on':close_day,'note':'Isolated previous-day fixture'},owner)
+        retained=finance_post(erp_path,'account',{'code':'GL-RETAINED','name':'Laba ditahan eksplisit','kind':'equity','normal_balance':'credit'},owner)
+        revenue=mapping['sales_account'];expense=mapping['cogs_account']
+        for number,debits,credits in [('CLOSE-REV',{cash_account['id']:300},{revenue:300}),('CLOSE-EXP',{expense:80},{cash_account['id']:80})]:
+            j=finance_post(erp_path,'journal',{'period_id':close_period['id'],'number':number,'posted_on':close_day,'debits':debits,'credits':credits,'evidence':'Isolated historical transaction fixture','note':'Independently reviewed'},owner)
+            finance_post(erp_path,'journal_decide',{'id':j['id'],'version':1,'decision':'post','note':'Actual fixture review'},reviewer_token)
+        ch=central_browser.open(web+erp_web+'?section=closings&period_id='+close_period['id']).read().decode()
+        cf=fields(ch,erp_web+'/review');cf['values[retained_account_id]']=retained['id'];cf['values[note]']='Trial balance and sources reconciled'
+        ch=central_browser.open(Request(web+erp_web+'/review',data=urlencode(cf).encode())).read().decode();assert 'Tinjauan sebelum dikirim' in ch
+        central_browser.open(Request(web+erp_web+'/confirm',data=urlencode(fields(ch,erp_web+'/confirm')).encode())).read()
+        closing=api(base,'GET',erp_path+'/context?section=closings&period_id='+close_period['id'],token=reviewer_token)['data'][0]
+        assert closing['profit']==220 and closing['status']=='draft'
+        approve={'operation_id':str(uuid.uuid4()),'id':closing['id'],'version':1,'decision':'approve','note':'Other manager verified exact closing snapshot'}
+        api(base,'POST',erp_path+'/closing_decide',approve,owner,expected=403)
+        result=api(base,'POST',erp_path+'/closing_decide',approve,reviewer_token,201)['data'];assert result['status']=='posted'
+        assert api(base,'POST',erp_path+'/closing_decide',approve,reviewer_token,201)['data']['journal_id']==result['journal_id']
+        assert api(base,'GET',erp_path+'/context?section=income_statement&period_id='+close_period['id'],token=owner)['totals']['profit']==220
+        balance=api(base,'GET',erp_path+'/context?section=balance_sheet&period_id='+close_period['id'],token=owner)['totals'];assert balance['assets']==220 and balance['equity']==220 and balance['unclosed_profit']==0
+        assert 'laba/rugi periode Rp220' in central_browser.open(web+erp_web+'?section=income_statement&period_id='+close_period['id']).read().decode()
+        closed=next(p for p in api(base,'GET',erp_path+'/context?section=periods',token=owner)['data'] if p['id']==close_period['id'])
+        finance_post(erp_path,'period_status',{'id':closed['id'],'version':closed['version'],'decision':'reopen','note':'Reopen with exact closing reversal'},owner)
+        assert api(base,'GET',erp_path+'/context?section=balance_sheet&period_id='+closed['id'],token=owner)['totals']['unclosed_profit']==220
+        print('PASS: formal closing live BFF review, independent approve/replay, retained earnings220, operating profit preserved and exact reopening journal',flush=True)
+        print('Pacing additional commercial GL HTTP checks for next rate-limit window.',flush=True);time.sleep(60)
+        # Own-org opt-in contractual-rights policy preserves the wholesale extension on both books.
+        comm_roles={'share_receivable':('asset','debit'),'share_payable':('liability','credit'),'share_income':('revenue','credit'),'share_expense':('expense','debit'),'share_output_tax':('liability','credit'),'share_input_tax':('asset','debit'),'sponsor_receivable':('asset','debit'),'sponsor_payable':('liability','credit'),'sponsor_expense':('expense','debit'),'sponsor_recovery':('revenue','credit')}
+        for path,actor,reviewer in [(erp_path,owner,reviewer_token),(partner_erp,lead_token,partner_review_token)]:
+            active=next(p for p in api(base,'GET',path+'/context?section=posting',token=actor)['data'] if p['status']=='active')
+            terms={'base_policy_id':active['id'],'base_policy_version':active['version'],'recognition_basis':'contractual_rights','tax_treatment':'recoverable','note':'Contractual share and sponsor recovery; ownership cost separate'}
+            for role,(kind,normal) in comm_roles.items():
+                a=finance_post(path,'account',{'code':'COMM-'+role,'name':'Komersial '+role,'kind':kind,'normal_balance':normal},actor);terms[role+'_account']=a['id']
+            cp=finance_post(path,'commercial_policy',terms,actor)
+            finance_post(path,'posting_decide',{'id':cp['id'],'version':1,'decision':'approve','note':'Independent commercial GL review'},reviewer)
+        sponsor_terms={'sponsor_basis_points':5000,'budget_amount':1000,'budget_restore':'proportional_refund','data_scope':'allocated_receipt_totals','voucher':{'code':'GL-SPONSOR','kind':'fixed','value':1000,'maximum_discount':1000,'minimum_subtotal':0,'usage_limit':5,'store_ids':[store],'product_ids':[wl['id']],'restore_policy':'never','terms':'Explicit rights fixture'}}
+        gls=api(base,'POST',f'organizations/{org}/commercial-agreements',{'operation_id':str(uuid.uuid4()),'kind':'sponsored_promo','contract_id':cc['id'],'starts_on':erp_day,'ends_on':'2030-12-31','reference':'GL sponsor fixture','terms':sponsor_terms},lead_token,201)['data']
+        api(base,'POST',f'organizations/{center}/commercial-agreements/{gls["id"]}/accept',{'operation_id':str(uuid.uuid4()),'version':1,'reason':'Sponsor consents to exact budget','consent':True,'sharing_consented':True},owner)
+        var_batch=next(b for b in api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data'] if b['batch_code']=='GL-VARIANCE-LOT')
+        sponsor_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Sponsored GL fixture','opening_cash':0},cashier_token,201)['data']
+        si=api(base,'POST',f'stores/{store}/sales/intents',{'operation_id':str(uuid.uuid4()),'shift_id':sponsor_shift['id'],'voucher_code':'GL-SPONSOR','lines':[{'product_id':wl['id'],'unit':'pack','quantity':1,'allocations':[{'batch_id':var_batch['id'],'bucket':'usable','quantity':1}]}]},cashier_token,201)['data']
+        sponsored_sale=api(base,'POST',f'sales/intents/{si["id"]}/pay',{'operation_id':str(uuid.uuid4()),'payment_method':'cash','cash_received':20000},cashier_token)['data'];assert sponsored_sale['voucher_snapshot']['sponsor_amount']==500
+        ledger_before+=1
+        payment={'operation_id':str(uuid.uuid4()),'version':2,'direction':'payout','amount':500,'method':'bank_transfer','reference':'GL-SPONSOR-PAID','evidence_reference':'Actual verified bank proof fixture','paid_on':erp_day,'verified':True}
+        payment_url=f'organizations/{center}/commercial-agreements/{gls["id"]}/payments'
+        api(base,'POST',payment_url,payment,owner);api(base,'POST',payment_url,payment,owner)
+        assert 'Jurnal dibukukan: 5' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert any(e['source_type']=='commercial_payment' and e['status']=='posted' for e in api(base,'GET',partner_erp+'/context?section=posting_events',token=lead_token)['data'])
+        api(base,'GET',erp_path+'/context?section=balance_sheet&period_id='+close_period['id'],token=lead_token,expected=403)
+        print('PASS: prospective commercial GL policies preserve wholesale; sponsored owned-stock POS, dual claim/payout and real worker5/0 without duplicate payment or cross-tenant books',flush=True)
+        own_store=api(base,'POST',f'organizations/{center}/stores',{'name':'Own internal cost fixture','address':'Pacitan'},owner,201)['data']['id']
+        own_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':'GL-INTERNAL-CARRY','expires_on':'2030-01-01','quantity_packs':3,'note':'Actual internal transfer fixture'},owner,201)['data']
+        own_value=finance_post(erp_path,'value_propose',{'batch_id':own_stock['id'],'stock_revision':own_stock['stock_revision'],'amount':100001,'note':'Independently verified source value'},owner)
+        finance_post(erp_path,'value_decide',{'id':own_value['id'],'version':1,'decision':'approve','note':'Actual opening proof checked'},reviewer_token)
+        own_order=api(base,'POST',f'stores/{own_store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':ws['id'],'local_product_id':ws['id'],'quantity_packs':1}]},owner,201)['data'];assert own_order['kind']=='internal_transfer' and own_order['total_amount']==0
+        own_order=api(base,'POST',f'orders/{own_order["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':own_order['version']},owner)['data']
+        own_order=api(base,'POST',f'orders/{own_order["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':own_order['version'],'source_store_id':source},owner)['data']
+        own_dispatch=api(base,'POST',f'orders/{own_order["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':own_order['version'],'handler':'Own internal transfer','lines':[{'order_line_id':own_order['lines'][0]['id'],'allocations':[{'batch_id':own_stock['id'],'quantity_packs':1}]}]},owner,201)['data']
+        own_receive={'operation_id':str(uuid.uuid4()),'version':own_dispatch['order']['version'],'lines':[{'shipment_line_id':own_dispatch['shipment']['lines'][0]['id'],'good_packs':1,'damaged_packs':0}]}
+        own_url=f'shipments/{own_dispatch["shipment"]["id"]}/receive'
+        api(base,'POST',own_url,own_receive,lead_token,expected=403)
+        api(base,'POST',own_url,own_receive,owner);api(base,'POST',own_url,own_receive,owner)
+        values=api(base,'GET',erp_path+'/context?section=valuation_stock',token=owner)['data'];assert any('GL-INTERNAL-CARRY' in v['summary'] and '33333' in v['summary'] for v in values)
+        assert 'Jurnal dibukukan: 1' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        print('PASS: own internal transfer carries actual33333IDR at zero commercial price, scoped receipt/replay and no extra revenue/COGS journal',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

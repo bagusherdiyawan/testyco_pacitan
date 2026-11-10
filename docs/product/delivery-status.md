@@ -2,6 +2,17 @@
 
 Tanggal baseline:3 November2026; pembaruan DL-18–DL-20:4 November2026. Ini daftar paket delivery untuk memantau perubahan yang nyata, bukan persentase kelengkapan seluruh BRD. ID tetap; pekerjaan baru ditambahkan, bukan mengganti arti/status item lama. **Selesai** berarti implementasi development dan tes dalam cakupan yang disebutkan; tidak berarti siap produksi. Detail kebutuhan tetap di [requirements](requirements.md), release gate di [roadmap](roadmap.md).
 
+Ringkasan ERP tambahan per10November2026 (terpisah dari DL baseline):
+
+| Cakupan pembukuan tambahan | Status development |
+| --- | --- |
+| Bahan → produksi/QC → biaya produk → POS/HPP | Tersedia |
+| Financial wholesale dan receipt provisional/final dedicated batch | Tersedia; prior POS returns dan susut berbukti sudah didukung |
+| Transfer internal full-good, biaya aktual tanpa omzet | Tersedia |
+| GL hak share/sponsor dan verified payments | Tersedia dengan policy prospektif per organisasi |
+| Closing formal, laba ditahan, reopening, laba rugi/posisi keuangan | Tersedia API/web/Flutter |
+| Costing receipt campuran/partial/damage/replacement/distribution return dan physical consignor COGS | Masih review/rekonsiliasi; belum otomatis |
+
 | ID | Paket dengan batas yang dapat diuji | Status sekarang |
 | --- | --- | --- |
 | DL-01 | Login, organisasi/toko, role/assignment, deaktivasi dan ganti sandi | Selesai API/web; Flutter login dan akses toko berizin |
@@ -54,3 +65,7 @@ Lanjutan paket1,9 November2026: [ADR052](../automatic-accounting.md) menambahkan
 Lanjutan paket1,ADR053: GL **keuangan wholesale buyout invoice/credit/payment/reversal** kini tersedia lewat opt-in own-org dan persetujuan terpisah, web/native serta worker yang sama. Buyer pembelian ditampung untuk rekonsiliasi, tidak otomatis menilai stok. Pernyataan GL wholesale manual di ADR052 sebelumnya digantikan hanya pada cakupan [panduan ini](../wholesale-accounting.md). HPP/value transfer fisik, konsinyasi dan sponsor GL belum dinyatakan otomatis.
 
 Lanjutan ADR054: invoice final kini menyesuaikan dedicated full-good receipt stock dan historical POS COGS, termasuk future refund, negative/zero cost, multi-date receipts, review/retry periode dan worker/BFF/native. Ini menggantikan batas invoice variance sebelumnya **hanya** untuk cakupan tersebut. Partial/damage/missing/replacement, prior stock returns/waste/transfer/mixed receipts, GL komersial dan closing formal belum dinyatakan selesai. Lihat [batas rinci](../invoice-valuation.md).
+
+Lanjutan10November2026: [closing formal/laporan](../financial-closing.md) kini tersedia API/web/Flutter dengan snapshot dan reviewer berbeda, jurnal laba ditahan, reopening berjejak, laba rugi yang tetap benar setelah closing, serta posisi keuangan. [GL hak bagi hasil/sponsor](../commercial-accounting.md) kini opt-in per organisasi dengan akun eksplisit, original-policy corrections, tax split dan verified payment. Invoice variance diperluas untuk prior POS returns dan susut berbukti. Ini menutup bagian closing formal, contractual settlement GL dan prior-return/waste yang sebelumnya disebut belum; **bukan** klaim costing mixed receipt/transfer/replacement/credit sesudah variance atau physical consignor COGS telah otomatis.
+
+Pemeriksaan lanjutan10November2026 juga menutup kehilangan HPP pada full-good transfer internal pusat: biaya dispatch aktual dibawa ke pool tujuan meskipun commercial total nol; tidak membuat revenue/COGS. Unknown dan policy akun yang berbeda tetap review. Lihat aturan pada [automatic accounting](../automatic-accounting.md).

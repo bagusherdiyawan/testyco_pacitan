@@ -1,0 +1,423 @@
+<?php
+
+namespace Tests\Feature;
+
+use App\Models\User;
+use App\Modules\Accounting\Application\AutomaticPosting;
+use App\Modules\Accounting\Application\InvoiceValuation;
+use App\Modules\Accounting\Application\WholesalePolicy;
+use App\Modules\Billing\Infrastructure\Invoice;
+use App\Modules\Catalog\Infrastructure\Product;
+use App\Modules\Identity\Infrastructure\Organization;
+use App\Modules\Identity\Infrastructure\Store;
+use App\Modules\Inventory\Application\StockLedger;
+use App\Modules\Inventory\Infrastructure\InventoryBatch;
+use Carbon\CarbonImmutable;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
+use Laravel\Sanctum\Sanctum;
+use Tests\TestCase;
+
+class InvoiceValuationTest extends TestCase
+{
+    use RefreshDatabase;
+
+    private Organization $center;
+
+    private Organization $partner;
+
+    private Store $source;
+
+    private Store $target;
+
+    private Product $supplierProduct;
+
+    private Product $localProduct;
+
+    private User $owner;
+
+    private User $lead;
+
+    private User $manager;
+
+    private User $cashier;
+
+    private User $warehouse;
+
+    private User $outsider;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->travelTo(CarbonImmutable::parse('2026-11-09T03:00:00Z'));
+        $this->center = Organization::create(['name' => 'Pusat', 'type' => 'center']);
+        $this->partner = Organization::create(['name' => 'Mitra A', 'type' => 'partner']);
+        $other = Organization::create(['name' => 'Mitra B', 'type' => 'partner']);
+        $this->source = Store::create(['name' => 'Gudang', 'organization_id' => $this->center->id, 'address' => 'Pacitan']);
+        $this->target = Store::create(['name' => 'A1', 'organization_id' => $this->partner->id, 'address' => 'Ponorogo']);
+        $this->owner = $this->user($this->center, 'owner');
+        $this->warehouse = $this->user($this->center, 'warehouse', [$this->source]);
+        $this->lead = $this->user($this->partner, 'partner_lead');
+        $this->manager = $this->user($this->partner, 'store_manager', [$this->target]);
+        $this->cashier = $this->user($this->partner, 'cashier', [$this->target]);
+        $this->outsider = $this->user($other, 'partner_lead');
+        $data = ['sku' => 'AYAM-8', 'name' => 'Dimsum Ayam', 'condition' => 'frozen', 'pack_size' => 8, 'portion_size' => 4, 'retail_price' => 3000, 'wholesale_price' => 18000];
+        $this->supplierProduct = Product::create([...$data, 'organization_id' => $this->center->id]);
+        $this->localProduct = Product::create([...$data, 'organization_id' => $this->partner->id]);
+    }
+
+    private function user(Organization $org, string $role, array $stores = []): User
+    {
+        $u = User::factory()->create(['active' => true]);
+        DB::table('organization_user')->insert(['organization_id' => $org->id, 'user_id' => $u->id, 'role' => $role]);
+        foreach ($stores as $s) {
+            DB::table('store_user')->insert(['user_id' => $u->id, 'store_id' => $s->id]);
+        }
+
+        return $u;
+    }
+
+    private function act(User $user): self
+    {
+        Sanctum::actingAs($user);
+
+        return $this;
+    }
+
+    private function body(int $quantity = 20): array
+    {
+        return ['operation_id' => (string) Str::uuid(), 'delivery_mode' => 'delivery', 'note' => 'Permintaan toko', 'lines' => [['supplier_product_id' => $this->supplierProduct->id, 'local_product_id' => $this->localProduct->id, 'quantity_packs' => $quantity]]];
+    }
+
+    private function create(int $quantity = 20): array
+    {
+        return $this->act($this->manager)->postJson('/api/v1/stores/'.$this->target->id.'/orders', $this->body($quantity))->assertCreated()->json('data');
+    }
+
+    private function transition(array $order, string $action, User $actor, array $extra = []): array
+    {
+        return $this->act($actor)->postJson('/api/v1/orders/'.$order['id'].'/'.$action, ['operation_id' => (string) Str::uuid(), 'version' => $order['version'], ...$extra])->assertOk()->json('data');
+    }
+
+    private function ready(int $quantity = 20, int $stock = 20): array
+    {
+        $order = $this->transition($this->create($quantity), 'approve', $this->lead);
+        $order = $this->transition($order, 'process', $this->owner, ['source_store_id' => $this->source->id]);
+        $batch = $this->act($this->warehouse)->postJson('/api/v1/stores/'.$this->source->id.'/inventory/intakes', ['operation_id' => (string) Str::uuid(), 'product_id' => $this->supplierProduct->id, 'batch_code' => 'B-001', 'expires_on' => '2030-01-01', 'quantity_packs' => $stock, 'note' => 'Penerimaan fisik gudang'])->assertCreated()->json('data');
+
+        return [$order, $batch];
+    }
+
+    private function dispatch(array $order, array $batch, int $quantity = 20): array
+    {
+        return $this->act($this->warehouse)->postJson('/api/v1/orders/'.$order['id'].'/shipments', ['operation_id' => (string) Str::uuid(), 'version' => $order['version'], 'handler' => 'Petugas', 'lines' => [['order_line_id' => $order['lines'][0]['id'], 'allocations' => [['batch_id' => $batch['id'], 'quantity_packs' => $quantity]]]]])->assertCreated()->json('data');
+    }
+
+    private function billing(array $d): string
+    {
+        return '/api/v1/orders/'.$d['order']['id'].'/billing';
+    }
+
+    private function invoiceBody(array $d, string $basis = 'dispatched'): array
+    {
+        return ['operation_id' => (string) Str::uuid(), 'mode' => 'buyout', 'basis' => $basis, 'shipment_ids' => [$d['shipment']['id']], 'due_on' => '2026-12-31', 'discount_amount' => 0, 'shipping_amount' => 0, 'tax_basis_points' => 1100, 'rounding' => 'half_up', 'note' => 'Terms reviewed per document'];
+    }
+
+    private function acceptInvoice(array $d, array $i): array
+    {
+        return $this->act($this->lead)->postJson($this->billing($d).'/invoices/'.$i['id'].'/accept', ['operation_id' => (string) Str::uuid(), 'version' => $i['version'], 'consent' => true, 'reason' => 'Agree invoice basis and due date'])->assertOk()->json('data');
+    }
+
+    private function erp(Organization $org, string $action, array $v, User $actor): array
+    {
+        return $this->act($actor)->postJson('/api/v1/organizations/'.$org->id.'/erp/'.$action, ['operation_id' => (string) Str::uuid(), ...$v])->assertCreated()->json('data');
+    }
+
+    private function configure(Organization $org, User $manager, string $tax = 'recoverable', string $freight = 'expense', bool $wholesale = true): array
+    {
+        $reviewer = $this->user($org, $org->type === 'center' ? 'admin' : 'partner_lead');
+        $period = $this->erp($org, 'accounting_period', ['name' => 'November2026', 'starts_on' => '2026-11-01', 'ends_on' => '2026-11-30', 'note' => 'Explicit period'], $manager);
+        $body = ['note' => 'Explicit base accounts'];
+        foreach (AutomaticPosting::ROLES as $role => [$label,$kind,$normal]) {
+            $a = $this->erp($org, 'account', ['code' => 'POS-'.$role, 'name' => $label, 'kind' => $kind, 'normal_balance' => $normal], $manager);
+            $body[$role.'_account'] = $a['id'];
+        }
+        $base = $this->erp($org, 'posting_policy', $body, $manager);
+        $this->erp($org, 'posting_decide', ['id' => $base['id'], 'version' => 1, 'decision' => 'approve', 'note' => 'Independent base review'], $reviewer);
+        $body = ['base_policy_id' => $base['id'], 'base_policy_version' => 2, 'tax_treatment' => $tax, 'freight_treatment' => $freight, 'note' => 'Reviewed wholesale terms'];
+        foreach (WholesalePolicy::ROLES as $role => [$label,$kind,$normal]) {
+            $a = $this->erp($org, 'account', ['code' => 'B2B-'.$role, 'name' => $label, 'kind' => $kind, 'normal_balance' => $normal], $manager);
+            $body[$role.'_account'] = $a['id'];
+        }
+        if (! $wholesale) {
+            return ['period' => $period, 'reviewer' => $reviewer, 'body' => $body, 'base' => $base];
+        }
+        $p = $this->erp($org, 'wholesale_policy', $body, $manager);
+        $this->act($manager)->postJson('/api/v1/organizations/'.$org->id.'/erp/posting_decide', ['operation_id' => (string) Str::uuid(), 'id' => $p['id'], 'version' => 1, 'decision' => 'approve', 'note' => 'Self review denied'])->assertForbidden();
+        $this->erp($org, 'posting_decide', ['id' => $p['id'], 'version' => 1, 'decision' => 'approve', 'note' => 'Independent wholesale review'], $reviewer);
+
+        return ['policy' => $p, 'period' => $period, 'reviewer' => $reviewer, 'body' => $body, 'base' => $base];
+    }
+
+    private function event(string $org, string $type, string $source): object
+    {
+        return DB::table('accounting_events')->where('organization_id', $org)->where('source_type', $type)->where('source_id', $source)->firstOrFail();
+    }
+
+    private function terms(object $event): array
+    {
+        return json_decode($event->terms, true);
+    }
+
+    private function valued(int $sold = 40, string $tax = 'recoverable', string $freight = 'clearing'): array
+    {
+        $this->supplierProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        $this->localProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        [$order,$batch] = $this->ready(100, 100);
+        DB::table('inventory_values')->where('inventory_batch_id', $batch['id'])->update(['remaining_value' => 100000]);
+        $this->configure($this->center, $this->owner);
+        $buyer = $this->configure($this->partner, $this->lead, $tax, $freight);
+        $d = $this->dispatch($order, $batch, 100);
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => $d['order']['version'], 'note' => '100accepted', 'lines' => [['shipment_line_id' => $d['shipment']['lines'][0]['id'], 'good_packs' => 100, 'damaged_packs' => 0]]];
+        $d = $this->act($this->lead)->postJson('/api/v1/shipments/'.$d['shipment']['id'].'/receive', $v)->assertOk()->json('data');
+        $b = InventoryBatch::where('store_id', $this->target->id)->firstOrFail();
+        $sale = $sold ? $this->sell($b, $sold) : null;
+
+        return [$d, $buyer, $b, $sale];
+    }
+
+    private function sell($b, int $qty): array
+    {
+        $shift = DB::table('cash_shifts')->where('store_id', $this->target->id)->where('cashier_id', $this->lead->id)->where('status', 'open')->first();
+        if (! $shift) {
+            $shift = (object) $this->act($this->lead)->postJson('/api/v1/stores/'.$this->target->id.'/shifts', ['operation_id' => (string) Str::uuid(), 'device_name' => 'Valuation POS', 'opening_cash' => 0])->assertCreated()->json('data');
+        }
+        $i = $this->act($this->lead)->postJson('/api/v1/stores/'.$this->target->id.'/sales/intents', ['operation_id' => (string) Str::uuid(), 'shift_id' => $shift->id, 'lines' => [['product_id' => $this->localProduct->id, 'unit' => 'pack', 'quantity' => $qty, 'allocations' => [['batch_id' => $b->id, 'bucket' => 'usable', 'quantity' => $qty]]]]])->assertCreated()->json('data');
+
+        return $this->postJson('/api/v1/sales/intents/'.$i['id'].'/pay', ['operation_id' => (string) Str::uuid(), 'payment_method' => 'cash', 'cash_received' => $i['total_amount']])->assertOk()->json('data');
+    }
+
+    private function proposed(array $d, int $shipping = 20000, int $discount = 0, int $tax = 0): array
+    {
+        return $this->act($this->owner)->postJson($this->billing($d).'/invoices', [...$this->invoiceBody($d), 'shipping_amount' => $shipping, 'discount_amount' => $discount, 'tax_basis_points' => $tax])->assertCreated()->json('data');
+    }
+
+    private function finalInvoice(array $d, int $shipping = 20000, int $discount = 0, int $tax = 0): array
+    {
+        $i = $this->proposed($d, $shipping, $discount, $tax);
+        $url = $this->billing($d).'/invoices/'.$i['id'].'/accept';
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => 1, 'consent' => true, 'reason' => 'Final invoice agreed'];
+        $i = $this->act($this->lead)->postJson($url, $v)->assertOk()->json('data');
+        $this->postJson($url, $v)->assertOk();
+
+        return $i;
+    }
+
+    private function refund(array $sale, int $qty): array
+    {
+        $shift = DB::table('cash_shifts')->where('id', $sale['cash_shift_id'])->firstOrFail();
+        $v = ['version' => $sale['version'], 'shift_id' => $shift->id, 'shift_version' => $shift->version, 'stock_disposition' => 'quarantine', 'reference' => 'REF-'.Str::ulid(), 'reason' => 'Actual goods returned', 'lines' => [['sale_line_id' => $sale['lines'][0]['id'], 'quantity' => $qty]]];
+        $url = '/api/v1/sales/'.$sale['id'].'/refunds';
+        $preview = $this->act($this->lead)->postJson($url.'/preview', $v)->assertOk()->json('data');
+        $v = [...$v, 'operation_id' => (string) Str::uuid(), 'verified' => true, 'review_hash' => $preview['review_hash']];
+        $r = $this->postJson($url, $v)->assertCreated()->json('data');
+        $this->postJson($url, $v)->assertCreated();
+
+        return $r;
+    }
+
+    public function test_positive_variance_updates_remaining_stock_and_original_sale_cogs_without_overwriting_history(): void
+    {
+        [$d,$buyer,$b,$sale] = $this->valued();
+        $i = $this->finalInvoice($d);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 60, 'remaining_value' => 132000]);
+        $this->assertDatabaseHas('inventory_invoice_variances', ['invoice_id' => $i['id'], 'original_value' => 200000, 'final_value' => 220000, 'stock_adjustment' => 12000, 'cogs_adjustment' => 8000]);
+        $old = DB::table('inventory_cost_entries')->where('inventory_batch_id', $b->id)->where('source_type', 'pos_sale')->firstOrFail();
+        $this->assertSame(-80000, $old->value_delta);
+        $this->assertDatabaseHas('inventory_invoice_sale_adjustments', ['cost_entry_id' => $old->id, 'cost_delta' => 8000]);
+        $this->assertDatabaseCount('inventory_invoice_variances', 1);
+        $state = DB::table('accounting_invoice_revaluations')->where('invoice_id', $i['id'])->firstOrFail();
+        $this->assertSame('applied', $state->status);
+        DB::transaction(fn () => app(InvoiceValuation::class)->capture(Invoice::findOrFail($i['id']), (object) ['id' => $buyer['policy']['id']], $this->lead->id));
+        $this->assertDatabaseCount('inventory_invoice_variances', 1);
+        $this->assertSame(6, app(AutomaticPosting::class)->drain());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+        $this->refund($sale, 10);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 70, 'remaining_value' => 154000]);
+        $this->assertDatabaseHas('inventory_cost_entries', ['inventory_batch_id' => $b->id, 'source_type' => 'sale_refund', 'quantity_delta' => 10, 'value_delta' => 22000]);
+        $this->act($this->lead)->getJson('/api/v1/organizations/'.$this->partner->id.'/erp/context?section=invoice_variances')->assertOk()->assertSee('12000')->assertSee('8000');
+    }
+
+    public function test_negative_variance_and_future_refund_use_corrected_cost(): void
+    {
+        [$d,$buyer,$b,$sale] = $this->valued();
+        $i = $this->finalInvoice($d, 0, 20000);
+        $this->assertDatabaseHas('inventory_invoice_variances', ['invoice_id' => $i['id'], 'stock_adjustment' => -12000, 'cogs_adjustment' => -8000]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 108000]);
+        $this->refund($sale, 10);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 70, 'remaining_value' => 126000]);
+    }
+
+    public function test_zero_final_cost_never_produces_negative_stock_or_refund_cost(): void
+    {
+        [$d,$buyer,$b,$sale] = $this->valued();
+        $i = $this->finalInvoice($d, 0, 200000);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'applied', 'stock_adjustment' => -120000, 'cogs_adjustment' => -80000]);
+        $this->refund($sale, 10);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 70, 'remaining_value' => 0]);
+    }
+
+    public function test_closed_period_reviews_then_retry_applies_once_and_is_tenant_guarded(): void
+    {
+        [$d,$buyer,$b] = $this->valued();
+        app(AutomaticPosting::class)->drain();
+        DB::table('accounting_periods')->where('id', $buyer['period']['id'])->update(['status' => 'closed']);
+        $i = $this->finalInvoice($d);
+        $state = DB::table('accounting_invoice_revaluations')->where('invoice_id', $i['id'])->firstOrFail();
+        $this->assertSame('review_required', $state->status);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 120000]);
+        $url = '/api/v1/organizations/'.$this->partner->id.'/erp/invoice_revalue_retry';
+        $v = ['operation_id' => (string) Str::uuid(), 'id' => $state->id, 'version' => $state->version, 'note' => 'Original periods verified and reopened'];
+        $this->act($this->manager)->postJson($url, $v)->assertForbidden();
+        $this->act($this->outsider)->postJson($url, $v)->assertForbidden();
+        $this->act($this->owner)->postJson('/api/v1/organizations/'.$this->center->id.'/erp/invoice_revalue_retry', $v)->assertNotFound();
+        DB::table('accounting_periods')->where('id', $buyer['period']['id'])->update(['status' => 'open']);
+        $period = DB::table('accounting_periods')->find($buyer['period']['id']);
+        $this->act($this->lead)->postJson('/api/v1/organizations/'.$this->partner->id.'/erp/period_status', ['operation_id' => (string) Str::uuid(), 'id' => $period->id, 'version' => $period->version, 'decision' => 'close', 'note' => 'Must block pending valuation'])->assertConflict()->assertSee('penyesuaian');
+        $this->postJson($url, $v)->assertCreated();
+        $this->postJson($url, $v)->assertCreated();
+        $this->assertSame(1, app(InvoiceValuation::class)->drain(100));
+        $this->assertSame(0, app(InvoiceValuation::class)->drain(100));
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 132000]);
+        $this->postJson($url, [...$v, 'operation_id' => (string) Str::uuid()])->assertConflict();
+    }
+
+    public function test_refund_before_finalization_is_reviewed_without_partial_revaluation(): void
+    {
+        [$d,$buyer,$b,$sale] = $this->valued();
+        $this->refund($sale, 10);
+        $before = DB::table('inventory_values')->where('inventory_batch_id', $b->id)->value('remaining_value');
+        $i = $this->finalInvoice($d);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'review_required']);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => $before]);
+        $this->assertDatabaseCount('inventory_invoice_variances', 0);
+        $this->assertDatabaseCount('inventory_invoice_sale_adjustments', 0);
+    }
+
+    public function test_adjustment_failure_rolls_back_invoice_and_value_then_same_uuid_recovers(): void
+    {
+        [$d,$buyer,$b] = $this->valued();
+        $i = $this->proposed($d);
+        $url = $this->billing($d).'/invoices/'.$i['id'].'/accept';
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => 1, 'consent' => true, 'reason' => 'Final agreement'];
+        DB::unprepared("CREATE TRIGGER fail_cost_layer BEFORE INSERT ON inventory_invoice_sale_adjustments BEGIN SELECT RAISE(ABORT, 'fixture failure'); END");
+        $this->act($this->lead)->postJson($url, $v)->assertStatus(500);
+        $this->assertDatabaseHas('invoices', ['id' => $i['id'], 'status' => 'pending', 'version' => 1]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 120000]);
+        $this->assertDatabaseCount('inventory_invoice_variances', 0);
+        $this->assertDatabaseCount('accounting_invoice_revaluations', 0);
+        DB::unprepared('DROP TRIGGER fail_cost_layer');
+        $this->postJson($url, $v)->assertOk();
+        $this->postJson($url, $v)->assertOk();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 132000]);
+        $this->assertDatabaseCount('inventory_invoice_variances', 1);
+        $this->assertDatabaseCount('inventory_invoice_sale_adjustments', 1);
+    }
+
+    public function test_retry_after_later_sales_posts_depletion_on_sale_day_not_before_sale(): void
+    {
+        [$d,$buyer,$b] = $this->valued(0);
+        app(AutomaticPosting::class)->drain();
+        DB::table('accounting_periods')->where('id', $buyer['period']['id'])->update(['status' => 'closed']);
+        $i = $this->finalInvoice($d);
+        $this->travelTo(CarbonImmutable::parse('2026-11-10T03:00:00Z'));
+        $this->sell($b, 40);
+        DB::table('accounting_periods')->where('id', $buyer['period']['id'])->update(['status' => 'open']);
+        $state = DB::table('accounting_invoice_revaluations')->where('invoice_id', $i['id'])->firstOrFail();
+        $this->erp($this->partner, 'invoice_revalue_retry', ['id' => $state->id, 'version' => $state->version, 'note' => 'Periods verified'], $this->lead);
+        app(InvoiceValuation::class)->drain(100);
+        $this->assertDatabaseHas('accounting_events', ['organization_id' => $this->partner->id, 'source_type' => 'invoice_variance', 'event_on' => '2026-11-09']);
+        $this->assertDatabaseHas('accounting_events', ['organization_id' => $this->partner->id, 'source_type' => 'invoice_variance_depletion', 'event_on' => '2026-11-10']);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 132000]);
+    }
+
+    public function test_unsold_stock_gets_full_variance_without_inventing_sale_cost(): void
+    {
+        [$d,$buyer,$b] = $this->valued(0);
+        $i = $this->finalInvoice($d);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 100, 'remaining_value' => 220000]);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'applied', 'stock_adjustment' => 20000, 'cogs_adjustment' => 0]);
+        $this->assertDatabaseCount('inventory_invoice_sale_adjustments', 0);
+    }
+
+    public function test_fully_sold_batch_keeps_zero_stock_and_future_return_uses_final_cost(): void
+    {
+        [$d,$buyer,$b,$sale] = $this->valued(100);
+        $i = $this->finalInvoice($d);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 0, 'remaining_value' => 0]);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'stock_adjustment' => 0, 'cogs_adjustment' => 20000]);
+        $this->refund($sale, 10);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 10, 'remaining_value' => 22000]);
+    }
+
+    public function test_irrecoverable_tax_is_capitalized_and_freight_expense_is_excluded(): void
+    {
+        [$d,$buyer,$b] = $this->valued(40, 'clearing', 'expense');
+        $i = $this->finalInvoice($d, 20000, 0, 1000);
+        $this->assertSame(22000, $i['tax_amount']);
+        $this->assertDatabaseHas('inventory_invoice_variances', ['invoice_id' => $i['id'], 'final_value' => 222000, 'stock_adjustment' => 13200, 'cogs_adjustment' => 8800]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 133200]);
+    }
+
+    public function test_unchanged_invoice_finalizes_without_reopening_historical_period(): void
+    {
+        [$d,$buyer,$b] = $this->valued();
+        app(AutomaticPosting::class)->drain();
+        DB::table('accounting_periods')->where('id', $buyer['period']['id'])->update(['status' => 'closed']);
+        $i = $this->finalInvoice($d, 0, 0);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'applied', 'stock_adjustment' => 0, 'cogs_adjustment' => 0]);
+        $this->assertDatabaseCount('inventory_invoice_variances', 0);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 120000]);
+    }
+
+    public function test_mixed_receipt_batch_is_reviewed_without_mutating_either_value(): void
+    {
+        [$d,$buyer,$b] = $this->valued();
+        DB::transaction(fn () => app(StockLedger::class)->credit($this->partner->id, $this->target->id, $this->localProduct->toArray(), $b->batch_code, $b->expires_on->format('Y-m-d'), 1, $this->lead->id, 'shipment_receipt', (string) Str::ulid(), 'usable', 'Other receipt fixture', 2000));
+        $i = $this->finalInvoice($d);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'review_required']);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 61, 'remaining_value' => 122000]);
+        $this->assertDatabaseCount('inventory_invoice_variances', 0);
+    }
+
+    public function test_receipts_on_different_days_keep_their_own_adjustment_dates(): void
+    {
+        $this->supplierProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        $this->localProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        [$order,$batch] = $this->ready(100, 100);
+        DB::table('inventory_values')->where('inventory_batch_id', $batch['id'])->update(['remaining_value' => 100000]);
+        $other = $this->act($this->warehouse)->postJson('/api/v1/stores/'.$this->source->id.'/inventory/intakes', ['operation_id' => (string) Str::uuid(), 'product_id' => $this->supplierProduct->id, 'batch_code' => 'B-002', 'expires_on' => '2030-01-01', 'quantity_packs' => 50, 'note' => 'Second physical lot'])->assertCreated()->json('data');
+        DB::table('inventory_values')->where('inventory_batch_id', $other['id'])->update(['remaining_value' => 50000]);
+        $this->configure($this->center, $this->owner);
+        $this->configure($this->partner, $this->lead, 'recoverable', 'clearing');
+        $first = $this->dispatch($order, $batch, 50);
+        $second = $this->dispatch($first['order'], $other, 50);
+        $body = [...$this->invoiceBody($first), 'shipment_ids' => [$first['shipment']['id'], $second['shipment']['id']], 'shipping_amount' => 20000, 'tax_basis_points' => 0];
+        $i = $this->act($this->owner)->postJson($this->billing($first).'/invoices', $body)->assertCreated()->json('data');
+        $this->acceptInvoice($first, $i);
+        $receive = function ($shipment, $version) {
+            return $this->act($this->lead)->postJson('/api/v1/shipments/'.$shipment['id'].'/receive', ['operation_id' => (string) Str::uuid(), 'version' => $version, 'lines' => [['shipment_line_id' => $shipment['lines'][0]['id'], 'good_packs' => 50, 'damaged_packs' => 0]]])->assertOk()->json('data');
+        };
+        $r = $receive($first['shipment'], $second['order']['version']);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'review_required']);
+        $target = InventoryBatch::where('store_id', $this->target->id)->where('batch_code', 'B-001')->firstOrFail();
+        $this->sell($target, 40);
+        $this->travelTo(CarbonImmutable::parse('2026-11-10T03:00:00Z'));
+        $receive($second['shipment'], $r['order']['version']);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'applied', 'event_on' => '2026-11-09', 'stock_adjustment' => 12000, 'cogs_adjustment' => 8000]);
+        $this->assertDatabaseHas('accounting_events', ['organization_id' => $this->partner->id, 'source_type' => 'invoice_variance', 'event_on' => '2026-11-09']);
+        $this->assertDatabaseHas('accounting_events', ['organization_id' => $this->partner->id, 'source_type' => 'invoice_variance', 'event_on' => '2026-11-10']);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $target->id, 'quantity' => 10, 'remaining_value' => 22000]);
+    }
+}

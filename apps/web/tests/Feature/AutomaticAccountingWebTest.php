@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Illuminate\Http\Client\Factory;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class AutomaticAccountingWebTest extends TestCase
@@ -80,5 +81,37 @@ class AutomaticAccountingWebTest extends TestCase
         $this->assertSame(2, $sent[0]['base_policy_version']);
         $this->assertSame('recoverable', $sent[0]['tax_treatment']);
         $this->assertSame('expense', $sent[0]['freight_treatment']);
+    }
+
+    public function test_invoice_valuation_retry_preserves_source_id_version_and_note_through_unknown_and_denial(): void
+    {
+        $id = (string) Str::ulid();
+        $fixed = ['id' => $id, 'version' => 2];
+        $form = ['key' => 'invoice_revalue_retry-'.$id, 'operation' => 'invoice_revalue_retry', 'label' => 'Antrekan ulang nilai invoice', 'fields' => [['key' => 'note', 'label' => 'Bukti pemeriksaan', 'kind' => 'text', 'options' => [], 'optional' => false]], 'fixed' => $fixed, 'subject_id' => $id, 'expected_id' => $id, 'expected_version' => 3];
+        $c = ['organization_id' => 'ORG', 'section' => 'invoice_variances', 'can_manage' => true, 'allowed_sections' => ['invoice_variances'], 'current_page' => 1, 'next_page_url' => null, 'forms' => [], 'data' => [['id' => $id, 'organization_id' => 'ORG', 'summary' => 'Periode asal harus diperiksa <script>bad</script>', 'forms' => [$form]]], 'filter_stores' => [], 'filter_materials' => []];
+        $sent = [];
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(function ($r) use ($c, $id, &$sent) {
+            if ($r->method() === 'GET') {
+                return Http::response($c);
+            }
+            $sent[] = $r->data();
+            $n = count($sent);
+
+            return Http::response($n < 3 ? ['message' => 'Unknown'] : ['data' => ['id' => $id, 'organization_id' => 'ORG', 'version' => 3, 'operation_id' => $r['operation_id']]], $n === 1 ? 503 : ($n === 2 ? 403 : 201));
+        });
+        $this->withSession(['api_token' => 'private', 'api_user' => ['id' => 1], 'api_expires_at' => time() + 1000])->get('/app/organizations/ORG/erp?section=invoice_variances')->assertOk()->assertSee('Pembukuan dan jurnal')->assertDontSee('<script>bad</script>', false);
+        $this->post('/app/organizations/ORG/erp/review', ['section' => 'invoice_variances', 'form_key' => $form['key'], 'fixed_json' => json_encode($fixed), 'values' => ['note' => 'Periode dan bukti asli diperiksa']])->assertRedirect();
+        $this->assertCount(0, $sent);
+        $this->post('/app/organizations/ORG/erp/confirm')->assertRedirect();
+        $this->post('/app/organizations/ORG/erp/retry')->assertRedirect();
+        $this->assertNotNull(session('erp_pending.ORG'));
+        $this->post('/app/organizations/ORG/erp/retry')->assertRedirect();
+        $this->assertSame($sent[0], $sent[1]);
+        $this->assertSame($sent[0], $sent[2]);
+        $this->assertSame($id, $sent[0]['id']);
+        $this->assertSame(2, $sent[0]['version']);
+        $this->assertNull(session('erp_pending.ORG'));
     }
 }

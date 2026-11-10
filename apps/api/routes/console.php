@@ -2,6 +2,7 @@
 
 use App\Models\User;
 use App\Modules\Accounting\Application\AutomaticPosting;
+use App\Modules\Accounting\Application\InvoiceValuation;
 use App\Modules\Commercial\CommercialServiceProvider;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
@@ -52,6 +53,19 @@ Artisan::command('accounting:post {--limit=100}', function () {
 
     return 0;
 })->purpose('Posting antrean sumber sekali, memakai pemetaan yang disetujui');
+Artisan::command('accounting:revalue {--limit=100}', function () {
+    $limit = filter_var($this->option('limit'), FILTER_VALIDATE_INT);
+    if (! $limit || $limit < 1 || $limit > 1000) {
+        $this->error('Limit1–1000.');
+
+        return 1;
+    }
+    $done = app(InvoiceValuation::class)->drain($limit);
+    $this->info('Penyesuaian diterapkan: '.$done);
+
+    return 0;
+})->purpose('Memproses ulang antrean biaya invoice tanpa menimpa histori');
+Schedule::command('accounting:revalue --limit=100')->everyMinute()->withoutOverlapping();
 Schedule::command('accounting:post --limit=100')->everyMinute()->withoutOverlapping();
 
 Schedule::command('reliability:deliver --limit=100')->everyMinute()->withoutOverlapping()->when(fn () => config('reliability.smtp_enabled') && config('mail.default') === 'smtp');

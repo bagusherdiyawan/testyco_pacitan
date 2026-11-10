@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Accounting\Application\GeneralLedger;
 use App\Modules\Accounting\Application\InventoryValuation;
+use App\Modules\Accounting\Application\InvoiceValuation;
 use App\Modules\Accounting\Application\WholesalePolicy;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Identity\Infrastructure\Organization;
@@ -36,6 +37,7 @@ final class ErpWorkflow
                 'material' => Material::create(['organization_id' => $org, 'code' => $v['code'], 'name' => $v['name'], 'unit' => $v['unit'], 'minimum_quantity' => Quantity::parse($v['minimum'], $v['unit'], true), 'expiry_required' => $v['expiry_required'], 'fefo_required' => $v['fefo_required'], 'active' => true, 'version' => 1])->toArray(),
                 'material_configure' => app(MaterialConfiguration::class)->update($org, $v),
                 'operator_grant' => app(OperatorPermissions::class)->set($u, $org, $v),
+                'invoice_revalue_retry' => app(InvoiceValuation::class)->retry($org, $v),
                 'wholesale_policy' => app(WholesalePolicy::class)->propose($u, $org, $v),
                 'posting_policy' => app(AutomaticPosting::class)->policy($u, $org, $v),
                 'posting_decide' => app(AutomaticPosting::class)->decide($u, $org, $v),

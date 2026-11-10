@@ -6,6 +6,7 @@ class ErpRepository {
   final ApiClient api;
   final String organization;
   static const financeSections = {
+    'invoice_variances',
     'distribution_costs',
     'accounts',
     'periods',
@@ -18,6 +19,7 @@ class ErpRepository {
     'cost_ledger',
   };
   static const sections = {
+    'invoice_variances': 'Penyesuaian biaya invoice',
     'distribution_costs': 'Biaya historis distribusi',
     'cost_ledger': 'Jejak nilai / HPP batch',
     'posting': 'Pemetaan jurnal otomatis',
@@ -42,6 +44,7 @@ class ErpRepository {
     'trace': 'Jejak bahan ke produksi',
   };
   static const actions = {
+    'invoice_revalue_retry',
     'wholesale_policy',
     'posting_policy',
     'posting_decide',
@@ -63,7 +66,8 @@ class ErpRepository {
     'purchase',
     'purchase_decide',
     'receive',
-    'payment_reverse','payment',
+    'payment_reverse',
+    'payment',
     'recipe',
     'production',
     'production_cancel',

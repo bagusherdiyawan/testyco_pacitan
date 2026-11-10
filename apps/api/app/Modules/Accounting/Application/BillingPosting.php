@@ -60,6 +60,9 @@ final class BillingPosting
                 $terms = [['purchase_clearing', 'trade_payable', $i->subtotal - $i->discount_amount], [$p->freight_treatment === 'expense' ? 'freight_expense' : 'purchase_clearing', 'trade_payable', $i->shipping_amount], [$p->tax_treatment === 'recoverable' ? 'input_tax' : 'purchase_clearing', 'trade_payable', $i->tax_amount]];
             }
             app(AutomaticPosting::class)->record($org, $actor, 'wholesale_invoice', $i->id, $i->decided_at->copy()->timezone('Asia/Jakarta')->format('Y-m-d'), $terms, $i->number, $receiptReason ?? $this->reason($i, null, true), $p->id);
+            if ($org === $i->partner_id && ! $receiptReason && ! $this->reason($i, null, true)) {
+                app(InvoiceValuation::class)->capture($i, $p, $actor);
+            }
         }
     }
 

@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\DB;
 
 final class AccountingReadModel
 {
-    public const SECTIONS = ['accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs'];
+    public const SECTIONS = ['accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs', 'invoice_variances'];
 
     private function options(string $table, string $org): array
     {
@@ -35,6 +35,9 @@ final class AccountingReadModel
         }
         if (in_array($section, ['posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs'], true)) {
             return app(PostingReadModel::class)->context($org, $section, $actor);
+        }
+        if ($section === 'invoice_variances') {
+            return app(InvoiceVarianceReadModel::class)->context($org);
         }
         $accounts = $this->options('accounting_accounts', $org);
         $periods = $this->options('accounting_periods', $org);

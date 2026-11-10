@@ -54,6 +54,11 @@ final class StockLedger
         if ($batch instanceof MaterialLot) {
             return app(MaterialLedger::class)->commit($batch, $actor, $changes, $valueDelta, $sourceType, $sourceId, $note ?? '');
         }
+        if ($valueDelta !== 0) {
+            abort_unless($sourceType === 'invoice_variance' && $changes === [], 422, 'Nilai produk hanya dapat dikoreksi melalui sumber invoice terverifikasi.');
+
+            return app(InventoryValuation::class)->invoiceValue($batch, $actor, $valueDelta, $sourceId);
+        }
         abort_unless($valueDelta === 0, 422, 'Nilai bahan tidak boleh diposting pada ledger biji.');
         $batch = InventoryBatch::lockForUpdate()->findOrFail($batch->id);
         $attributes = [];

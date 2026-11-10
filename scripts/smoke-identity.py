@@ -880,7 +880,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'GET',erp_path+'/context?section=productions&store_id='+source,token=operator_token,expected=403)
         cash_account=erp_post('account',{'code':'ERP-CASH','name':'Kas pengujian','kind':'asset','normal_balance':'debit'})
         capital_account=erp_post('account',{'code':'ERP-CAPITAL','name':'Modal pengujian','kind':'equity','normal_balance':'credit'})
-        period=erp_post('accounting_period',{'name':'Periode pengujian eksplisit','starts_on':erp_day,'ends_on':erp_day,'note':'No automatic calendar defaults'})
+        period=erp_post('accounting_period',{'name':'Periode pengujian eksplisit','starts_on':erp_day,'ends_on':(erp_today+timedelta(days=2)).isoformat(),'note':'No automatic calendar defaults'})
         journal=erp_post('journal',{'period_id':period['id'],'number':'GL-HTTP-1','posted_on':erp_day,'debits':{cash_account['id']:12345},'credits':{capital_account['id']:12345},'evidence':'Verified opening entry fixture','note':'Manual opening; not duplicate ERP posting'})
         decide={'operation_id':str(uuid.uuid4()),'id':journal['id'],'version':1,'decision':'post','note':'Independent review'}
         api(base,'POST',erp_path+'/journal_decide',decide,owner,expected=403)
@@ -946,7 +946,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         partner_review_token=api(base,'POST','auth/login',{'email':partner_reviewer['email'],'password':PASSWORD,'device_name':'partner-accounting-review'})['token']
         partner_erp=f'organizations/{org}/erp'
         def finance_post(path,action,body,actor):return api(base,'POST',path+'/'+action,{'operation_id':str(uuid.uuid4()),**body},actor,201)['data']
-        finance_post(partner_erp,'accounting_period',{'name':'Explicit buyer period','starts_on':erp_day,'ends_on':erp_day,'note':'Reviewed period'},lead_token)
+        finance_post(partner_erp,'accounting_period',{'name':'Explicit buyer period','starts_on':erp_day,'ends_on':(erp_today+timedelta(days=2)).isoformat(),'note':'Reviewed period'},lead_token)
         buyer_mapping={'note':'Buyer base accounts reviewed'}
         for role,(kind,normal) in roles.items():
             a=finance_post(partner_erp,'account',{'code':'BUY-'+role,'name':'Buyer '+role,'kind':kind,'normal_balance':normal},lead_token);buyer_mapping[role+'_account']=a['id']
@@ -980,6 +980,43 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert len(buyer_events)==5 and all(e['status']=='posted' for e in buyer_events)
         api(base,'GET',partner_erp+'/context?section=posting_events',token=owner,expected=403)
         print('PASS: real independently approved seller/buyer wholesale policies, explicit tax/freight, accepted invoice, collection/reversal, agreed credit, exact-once worker and private finance BFF',flush=True)
+        # Full-good receipt under an accepted buyout invoice, including a closed-period variance review.
+        var_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':'GL-VARIANCE-LOT','expires_on':'2030-01-01','quantity_packs':10,'note':'Dedicated value fixture'},owner,201)['data']
+        value_proposal=finance_post(erp_path,'value_propose',{'batch_id':var_stock['id'],'stock_revision':var_stock['stock_revision'],'amount':50000,'note':'Verified opening value for isolated fixture'},owner)
+        finance_post(erp_path,'value_decide',{'id':value_proposal['id'],'version':1,'decision':'approve','note':'Other manager checked opening proof'},reviewer_token)
+        var_order=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':ws['id'],'local_product_id':wl['id'],'quantity_packs':10}]},lead_token,201)['data']
+        var_order=api(base,'POST',f'orders/{var_order["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':var_order['version']},lead_token)['data']
+        var_order=api(base,'POST',f'orders/{var_order["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':var_order['version'],'source_store_id':source},owner)['data']
+        var_dispatch=api(base,'POST',f'orders/{var_order["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':var_order['version'],'handler':'Dedicated final-cost shipment','lines':[{'order_line_id':var_order['lines'][0]['id'],'allocations':[{'batch_id':var_stock['id'],'quantity_packs':10}]}]},owner,201)['data']
+        buyer_period=next(p for p in api(base,'GET',partner_erp+'/context?section=periods',token=lead_token)['data'] if p['starts_on']<=erp_day<=p['ends_on'])
+        finance_post(partner_erp,'period_status',{'id':buyer_period['id'],'version':buyer_period['version'],'decision':'close','note':'Explicit period hold in isolated fixture'},lead_token)
+        vp=f'orders/{var_order["id"]}/billing/invoices'
+        var_invoice=api(base,'POST',vp,{'operation_id':str(uuid.uuid4()),'mode':'buyout','basis':'dispatched','shipment_ids':[var_dispatch['shipment']['id']],'due_on':'2030-12-31','discount_amount':0,'shipping_amount':20000,'tax_basis_points':0,'rounding':'half_up','note':'Agreed quote plus explicit capitalized freight'},owner,201)['data']
+        api(base,'POST',vp+'/'+var_invoice['id']+'/accept',{'operation_id':str(uuid.uuid4()),'version':1,'consent':True,'reason':'Explicit buyout, including freight'},lead_token)
+        receipt_body={'operation_id':str(uuid.uuid4()),'version':var_dispatch['order']['version'],'lines':[{'shipment_line_id':var_dispatch['shipment']['lines'][0]['id'],'good_packs':10,'damaged_packs':0}]}
+        api(base,'POST',f'shipments/{var_dispatch["shipment"]["id"]}/receive',receipt_body,lead_token)
+        api(base,'POST',f'shipments/{var_dispatch["shipment"]["id"]}/receive',receipt_body,lead_token)
+        ledger_before+=1
+        valuation=next(v for v in api(base,'GET',partner_erp+'/context?section=invoice_variances',token=lead_token)['data'] if v['invoice_id']==var_invoice['id'])
+        assert valuation['status']=='review_required'
+        buyer_period=next(p for p in api(base,'GET',partner_erp+'/context?section=periods',token=lead_token)['data'] if p['id']==buyer_period['id'])
+        finance_post(partner_erp,'period_status',{'id':buyer_period['id'],'version':buyer_period['version'],'decision':'reopen','note':'Original period verified for final cost'},lead_token)
+        variance_web='/app/'+partner_erp
+        vh=opener.open(web+variance_web+'?section=invoice_variances').read().decode()
+        retry_fields=fields(vh,variance_web+'/review');retry_fields['values[note]']='Original source/period reviewed'
+        vh=opener.open(Request(web+variance_web+'/review',data=urlencode(retry_fields).encode())).read().decode()
+        assert 'Tinjauan sebelum dikirim' in vh
+        opener.open(Request(web+variance_web+'/confirm',data=urlencode(fields(vh,variance_web+'/confirm')).encode())).read()
+        assert 'Penyesuaian diterapkan: 1' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+        assert 'Penyesuaian diterapkan: 0' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+        valuation=next(v for v in api(base,'GET',partner_erp+'/context?section=invoice_variances',token=lead_token)['data'] if v['invoice_id']==var_invoice['id'])
+        assert valuation['status']=='applied' and valuation['stock_adjustment']==20000 and valuation['cogs_adjustment']==0
+        own_values=api(base,'GET',partner_erp+'/context?section=valuation_stock',token=lead_token)['data']
+        assert any('GL-VARIANCE-LOT' in v['summary'] and '120000' in v['summary'] for v in own_values)
+        assert 'Jurnal dibukukan: 6' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        api(base,'GET',partner_erp+'/context?section=invoice_variances',token=owner,expected=403)
+        print('PASS: real quoted full-good receipt, original batch COGS, final-cost review on closed period, BFF frozen retry, revalue worker1/0 and GL worker6/0, buyer value120000 and cross-tenant denial',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

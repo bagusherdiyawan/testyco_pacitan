@@ -104,7 +104,8 @@ final class FulfillmentWorkflow
                 $item = $order->lines->firstWhere('id', $line->supply_order_line_id);
                 $product = ['id' => $item->local_product_id, 'sku' => $item->local_sku, 'name' => $item->local_name, 'condition' => $item->condition, 'pack_size' => $line->pack_size];
                 $valuation = app(DistributionReceiptPosting::class);
-                $incomingValue = $valuation->value($order, $line, $good, $damaged, $item->unit_price);
+                $incoming = $valuation->quote($order, $line, $good, $damaged, $item->unit_price);
+                $incomingValue = $incoming['value'];
                 foreach (['usable' => $good, 'quarantined' => $damaged] as $bucket => $packs) {
                     if ($packs > 0) {
                         $this->stock->credit($order->organization_id, $order->store_id, $product, $line->batch_code, $line->expires_on->format('Y-m-d'), $packs, $user->id, 'shipment_receipt', $line->id, $bucket, $actual['condition_note'] ?? null, $bucket === 'usable' ? $incomingValue : null);
@@ -112,7 +113,7 @@ final class FulfillmentWorkflow
                 }
                 $line->fill(['good_packs' => $good, 'damaged_packs' => $damaged, 'condition_note' => $actual['condition_note'] ?? null]);
                 $line->save();
-                $valuation->received($order, $line, $user->id, $incomingValue);
+                $valuation->received($order, $line, $user->id, $incomingValue, $incoming['policy_id']);
             }
             $shipment->fill(['received_by' => $user->id, 'received_at' => now(), 'receipt_note' => $v['note'] ?? null]);
             $shipment->save();

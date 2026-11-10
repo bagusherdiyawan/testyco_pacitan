@@ -58,6 +58,24 @@ final class InventoryValuation
         }
     }
 
+    /** @internal Monetary-only writer called exclusively through StockLedger.apply. */
+    public function invoiceValue(InventoryBatch $batch, int $actor, int $delta, string $variance): InventoryBatch
+    {
+        abort_unless(DB::transactionLevel() > 0, 500);
+        $batch = InventoryBatch::lockForUpdate()->findOrFail($batch->id);
+        $proof = DB::table('inventory_invoice_variances')->where('organization_id', $batch->organization_id)->where('inventory_batch_id', $batch->id)->where('id', $variance)->firstOrFail();
+        $pool = DB::table('inventory_values')->where('organization_id', $batch->organization_id)->where('inventory_batch_id', $batch->id)->lockForUpdate()->firstOrFail();
+        abort_unless((int) $proof->stock_revision === $batch->stock_revision && (int) $proof->stock_adjustment === $delta && $pool->remaining_value !== null && (int) $proof->before_value === (int) $pool->remaining_value && (int) $pool->quantity === $this->quantity($batch), 409, 'Snapshot nilai persediaan berubah.');
+        $after = (int) $pool->remaining_value + $delta;
+        abort_unless($after >= 0 && $after <= Rupiah::LIMIT && $after === (int) $proof->after_value, 409, 'Nilai penyesuaian tidak sesuai bukti invoice.');
+        $batch->stock_revision++;
+        $batch->save();
+        DB::table('inventory_values')->where('inventory_batch_id', $batch->id)->update(['remaining_value' => $after, 'updated_at' => now()]);
+        DB::table('inventory_cost_entries')->insert(['id' => (string) Str::ulid(), 'organization_id' => $batch->organization_id, 'inventory_batch_id' => $batch->id, 'stock_revision' => $batch->stock_revision, 'source_type' => 'invoice_variance', 'source_id' => $variance, 'origin_id' => null, 'quantity_delta' => 0, 'value_delta' => $delta, 'created_at' => now()]);
+
+        return $batch;
+    }
+
     public function returned(string $org, string $allocation, int $pieces, ?int $offset = null): ?int
     {
         $sale = DB::table('inventory_cost_entries')->where('organization_id', $org)->where('source_type', 'pos_sale')->where('source_id', $allocation)->first();
@@ -70,7 +88,11 @@ final class InventoryValuation
         $start = $offset ?? $prior;
         abort_unless($start >= 0 && $start + $pieces <= $total, 409);
 
-        return Proportion::floor(-(int) $sale->value_delta, $start + $pieces, $total) - Proportion::floor(-(int) $sale->value_delta, $start, $total);
+        $adjustment = (int) DB::table('inventory_invoice_sale_adjustments')->where('organization_id', $org)->where('cost_entry_id', $sale->id)->sum('cost_delta');
+        $corrected = -(int) $sale->value_delta + $adjustment;
+        abort_unless($corrected >= 0, 409, 'Biaya retur perlu rekonsiliasi.');
+
+        return Proportion::floor($corrected, $start + $pieces, $total) - Proportion::floor($corrected, $start, $total);
     }
 
     public function propose(User $u, string $org, array $v): array

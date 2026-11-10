@@ -34,7 +34,7 @@ final class ErpController
             'posting_policy' => [...array_fill_keys(array_map(fn ($role) => $role.'_account', array_keys(AutomaticPosting::ROLES)), 'required|ulid'), ...$note],
             'posting_decide', 'value_decide' => [...$key, 'decision' => 'required|in:approve,reject', ...$note],
             'posting_reconcile' => [...$key, 'journal_id' => 'required|ulid', ...$note],
-            'posting_suspend', 'posting_retry' => [...$key, ...$note],
+            'posting_suspend', 'posting_retry', 'invoice_revalue_retry' => [...$key, ...$note],
             'value_propose' => ['batch_id' => 'required|ulid', 'stock_revision' => 'required|integer|min:0', 'amount' => 'required|integer|min:0|max:1000000000000', ...$note],
             'account' => ['code' => 'required|string|max:40', 'name' => 'required|string|max:160', 'kind' => 'required|in:asset,liability,equity,revenue,expense', 'normal_balance' => 'required|in:debit,credit'],
             'accounting_period' => ['name' => 'required|string|max:120', 'starts_on' => 'required|date_format:Y-m-d', 'ends_on' => 'required|date_format:Y-m-d|after_or_equal:starts_on', ...$note],

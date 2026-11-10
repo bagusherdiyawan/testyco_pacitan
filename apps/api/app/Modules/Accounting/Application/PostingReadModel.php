@@ -15,7 +15,8 @@ final class PostingReadModel
             $rows = [];
             foreach ($page->items() as $entry) {
                 $r = (array) $entry;
-                $rows[] = [...$r, 'summary' => 'Sumber: '.$r['source_type'].' · '.$r['source_id']."\nBatch: ".$r['inventory_batch_id'].' · revisi '.$r['stock_revision']."\nKeluar: ".(-$r['quantity_delta']).' biji · biaya historis Rp'.($r['value_delta'] === null ? 'belum diketahui' : -$r['value_delta'])."\nBiaya fisik kiriman; pengakuan HPP dan kepemilikan masih perlu rekonsiliasi.", 'forms' => []];
+                $recognition = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'distribution_cogs')->where('source_id', $r['source_id'])->value('status');
+                $rows[] = [...$r, 'summary' => 'Sumber: '.$r['source_type'].' · '.$r['source_id']."\nBatch: ".$r['inventory_batch_id'].' · revisi '.$r['stock_revision']."\nKeluar: ".(-$r['quantity_delta']).' biji · biaya historis Rp'.($r['value_delta'] === null ? 'belum diketahui' : -$r['value_delta'])."\nStatus HPP distribusi: ".($recognition ?? 'belum otomatis; perlu rekonsiliasi'), 'forms' => []];
             }
 
             return [...$page->toArray(), 'data' => $rows, 'forms' => [], 'filter_stores' => [], 'filter_materials' => [], 'filter_periods' => [], 'notice' => 'Biaya berasal pergerakan batch aktual, bukan harga invoice. Unknown tidak dianggap nol. Laporan ini tidak membuat jurnal atau menilai ulang stok pembeli.'];
@@ -71,7 +72,7 @@ final class PostingReadModel
                 $settings = DB::table('accounting_wholesale_policies')->where('policy_id', $r['id'])->where('organization_id', $org)->first();
                 if ($settings) {
                     if ($settings->ownership_basis !== null) {
-                        $text[] = 'Aturan distribusi disepakati: kepemilikan saat penerimaan dikonfirmasi; biaya sementara dari pesanan disetujui; selisih invoice dialokasikan ke stok tersisa/HPP historis. Snapshot aturan ini belum mengaktifkan posting distribusi otomatis.';
+                        $text[] = 'Aturan distribusi disepakati: kepemilikan saat penerimaan dikonfirmasi; biaya sementara dari pesanan disetujui; selisih invoice dialokasikan ke stok tersisa/HPP historis. Penerimaan baik penuh memakai biaya pesanan dan HPP batch otomatis; selisih/kerusakan, konsinyasi dan penyesuaian invoice masih memerlukan rekonsiliasi.';
                     }
                     $text[] = 'Aturan: pembayaran yang diverifikasi penjual mencatat kas/bank sesuai metode pada kedua buku. Cocokkan bukti dengan rekening organisasi sendiri. Pembelian memakai penampung biaya sebelum rekonsiliasi persediaan.';
                     $text[] = 'Cakupan wholesale · pajak pembelian: '.($settings->tax_treatment === 'recoverable' ? 'dapat dikreditkan' : 'masuk penampung biaya').' · ongkir: '.($settings->freight_treatment === 'expense' ? 'beban periode' : 'masuk penampung biaya').' · dasar: '.$settings->base_policy_id.' versi'.$settings->base_policy_version;

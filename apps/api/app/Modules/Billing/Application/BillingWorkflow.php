@@ -258,6 +258,7 @@ final class BillingWorkflow
     public function report(User $u, string $order, array $v): array
     {
         return $this->run($u, $order, $v, 'consignment', 'target', function ($o) use ($u, $v) {
+            abort_if(DB::table('accounting_events')->whereIn('source_type', ['distribution_receipt', 'distribution_cogs'])->whereIn('source_id', DB::table('shipment_lines')->join('shipments', 'shipments.id', '=', 'shipment_lines.shipment_id')->where('shipments.supply_order_id', $o->id)->select('shipment_lines.id'))->exists(), 409, 'Penerimaan putus beli sudah dibukukan; rekonsiliasi dahulu sebelum mengganti menjadi konsinyasi.');
             abort_if(DB::table('commercial_agreements')->where('active_order_id', $o->id)->exists(), 409, 'Pesanan memakai perjanjian otomatis.');
             abort_if(Invoice::where('supply_order_id', $o->id)->where('mode', 'buyout')->whereIn('status', ['pending', 'accepted'])->exists(), 409, 'Pesanan sudah dalam putus beli.');
             $contract = PartnershipContract::where('organization_id', $o->supplier_organization_id)->where('partner_id', $o->organization_id)->where('status', 'accepted')->where('mode', 'consignment')->lockForUpdate()->findOrFail($v['contract_id']);

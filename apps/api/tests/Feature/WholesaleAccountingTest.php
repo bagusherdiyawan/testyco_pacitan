@@ -449,4 +449,29 @@ class WholesaleAccountingTest extends TestCase
         $this->assertDatabaseCount('inventory_cost_entries', $before);
         $this->assertDatabaseCount('accounting_events', 0);
     }
+
+    public function test_full_good_receipt_values_buyer_at_order_quote_and_posts_actual_seller_batch_cost(): void
+    {
+        [$order,$batch] = $this->ready();
+        DB::table('inventory_values')->where('inventory_batch_id', $batch['id'])->update(['remaining_value' => 10001]);
+        $this->configure($this->center, $this->owner);
+        $buyer = $this->configure($this->partner, $this->lead);
+        $d = $this->dispatch($order, $batch);
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => $d['order']['version'], 'note' => 'Full good receipt', 'lines' => [['shipment_line_id' => $d['shipment']['lines'][0]['id'], 'good_packs' => 20, 'damaged_packs' => 0]]];
+        $url = '/api/v1/shipments/'.$d['shipment']['id'].'/receive';
+        $received = $this->act($this->lead)->postJson($url, $v)->assertOk()->json('data');
+        $this->postJson($url, $v)->assertOk();
+        $target = DB::table('inventory_batches')->where('store_id', $this->target->id)->firstOrFail();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $target->id, 'quantity' => 160, 'remaining_value' => 360000]);
+        $source = $d['shipment']['lines'][0]['id'];
+        $this->assertSame([['cogs', 'finished', 10001]], $this->terms($this->event($this->center->id, 'distribution_cogs', $source)));
+        $this->assertSame([['finished', 'purchase_clearing', 360000]], $this->terms($this->event($this->partner->id, 'distribution_receipt', $source)));
+        $new = $this->erp($this->partner, 'wholesale_policy', [...$buyer['body'], 'base_policy_id' => $buyer['policy']['id'], 'base_policy_version' => 2, 'tax_treatment' => 'clearing'], $this->lead);
+        $this->erp($this->partner, 'posting_decide', ['id' => $new['id'], 'version' => 1, 'decision' => 'approve', 'note' => 'New treatment for future receipts'], $buyer['reviewer']);
+        $invoice = $this->accepted($received);
+        $this->assertSame($buyer['policy']['id'], $this->event($this->partner->id, 'wholesale_invoice', $invoice['id'])->policy_id);
+        $this->act($this->lead)->postJson($this->billing($received).'/reports', ['operation_id' => (string) Str::uuid(), 'contract_id' => (string) Str::ulid(), 'period_start' => '2026-11-01', 'period_end' => '2026-11-09', 'note' => 'Cannot silently change ownership', 'lines' => [['order_line_id' => $received['order']['lines'][0]['id'], 'quantity_pieces' => 1]]])->assertConflict();
+        $this->assertSame(4, app(AutomaticPosting::class)->drain());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
 }

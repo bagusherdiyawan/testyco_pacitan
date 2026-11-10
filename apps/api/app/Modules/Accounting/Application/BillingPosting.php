@@ -43,12 +43,23 @@ final class BillingPosting
             if (! $p) {
                 continue;
             }
+            $receiptReason = null;
+            if ($org === $i->partner_id && $i->mode === 'buyout') {
+                $ids = array_column($i->lines, 'shipment_line_id');
+                $receipts = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'distribution_receipt')->whereIn('source_id', $ids)->get();
+                $policies = $receipts->pluck('policy_id')->unique();
+                if ($policies->count() === 1) {
+                    $p = $this->policy($org, $receipts->first()) ?? $p;
+                } elseif ($policies->count() > 1) {
+                    $receiptReason = 'Invoice mencakup penerimaan dengan pemetaan berbeda; rekonsiliasi akun penampung diperlukan.';
+                }
+            }
             if ($org === $i->organization_id) {
                 $terms = [['trade_receivable', 'wholesale_sales', $i->subtotal - $i->discount_amount], ['wholesale_discount', 'wholesale_sales', $i->discount_amount], ['trade_receivable', 'shipping_revenue', $i->shipping_amount], ['trade_receivable', 'output_tax', $i->tax_amount]];
             } else {
                 $terms = [['purchase_clearing', 'trade_payable', $i->subtotal - $i->discount_amount], [$p->freight_treatment === 'expense' ? 'freight_expense' : 'purchase_clearing', 'trade_payable', $i->shipping_amount], [$p->tax_treatment === 'recoverable' ? 'input_tax' : 'purchase_clearing', 'trade_payable', $i->tax_amount]];
             }
-            app(AutomaticPosting::class)->record($org, $actor, 'wholesale_invoice', $i->id, $i->decided_at->copy()->timezone('Asia/Jakarta')->format('Y-m-d'), $terms, $i->number, $this->reason($i, null, true), $p->id);
+            app(AutomaticPosting::class)->record($org, $actor, 'wholesale_invoice', $i->id, $i->decided_at->copy()->timezone('Asia/Jakarta')->format('Y-m-d'), $terms, $i->number, $receiptReason ?? $this->reason($i, null, true), $p->id);
         }
     }
 

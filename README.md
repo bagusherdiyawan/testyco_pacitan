@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.36.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.37.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -153,3 +153,5 @@ Printer struk Flutter kini mengutamakan **Bluetooth Classic/SPP Android** dengan
 [Operator ERP dan buku besar manual](docs/accounting-and-operator-permissions.md) kini tersedia di web/Flutter: grant produksi per pengguna/gudang, QC tetap owner/admin, akun/periode/jurnal berimbang dengan review pengelola lain, pembalikan terhubung dan neraca saldo dan ringkasan akun dari jurnal posted. Tidak otomatis membukukan ulang transaksi ERP/POS atau menetapkan akun/pajak perusahaan.
 
 [Closing formal dan laporan keuangan](docs/financial-closing.md) serta [GL hak bagi hasil/sponsor](docs/commercial-accounting.md) tersedia melalui API/web/Flutter dengan policy eksplisit dan review independen. Koreksi biaya invoice mencakup retur POS sebelum finalisasi dan susut berbukti; costing lintas batch/pengganti/konsinyasi tetap mengikuti batas ownership pada panduan.
+
+[Koreksi invoice pada batch campuran](docs/invoice-valuation.md) kini mengikuti sumber full-good receipt masing-masing, termasuk invoice berurutan, beberapa tanggal penerimaan dan existing refund/HPP layers. Riwayat biaya asli dipertahankan.

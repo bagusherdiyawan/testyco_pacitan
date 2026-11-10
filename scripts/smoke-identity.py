@@ -1084,6 +1084,42 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert 'Jurnal dibukukan: 1' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         print('PASS: own internal transfer carries actual33333IDR at zero commercial price, scoped receipt/replay and no extra revenue/COGS journal',flush=True)
+        # Restock a previously revalued batch, sell from the weighted pool, then finalize its next invoice.
+        mixed_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':'GL-VARIANCE-LOT','expires_on':'2030-01-01','quantity_packs':10,'note':'Second actual receipt source for same batch'},owner,201)['data']
+        mixed_opening=finance_post(erp_path,'value_propose',{'batch_id':mixed_stock['id'],'stock_revision':mixed_stock['stock_revision'],'amount':50000,'note':'Verified new source stock value'},owner)
+        finance_post(erp_path,'value_decide',{'id':mixed_opening['id'],'version':1,'decision':'approve','note':'Independent opening evidence'},reviewer_token)
+        mixed_order=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':ws['id'],'local_product_id':wl['id'],'quantity_packs':10}]},lead_token,201)['data']
+        mixed_order=api(base,'POST',f'orders/{mixed_order["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':mixed_order['version']},lead_token)['data']
+        mixed_order=api(base,'POST',f'orders/{mixed_order["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':mixed_order['version'],'source_store_id':source},owner)['data']
+        mixed_sent=api(base,'POST',f'orders/{mixed_order["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':mixed_order['version'],'handler':'Actual mixed-batch restock','lines':[{'order_line_id':mixed_order['lines'][0]['id'],'allocations':[{'batch_id':mixed_stock['id'],'quantity_packs':10}]}]},owner,201)['data']
+        mixed_period=next(p for p in api(base,'GET',partner_erp+'/context?section=periods',token=lead_token)['data'] if p['starts_on']<=erp_day<=p['ends_on'])
+        finance_post(partner_erp,'period_status',{'id':mixed_period['id'],'version':mixed_period['version'],'decision':'close','note':'Hold original period while mixed receipt invoice is reviewed'},lead_token)
+        mixed_path=f'orders/{mixed_order["id"]}/billing/invoices'
+        mixed_invoice=api(base,'POST',mixed_path,{'operation_id':str(uuid.uuid4()),'mode':'buyout','basis':'dispatched','shipment_ids':[mixed_sent['shipment']['id']],'due_on':'2030-12-31','discount_amount':0,'shipping_amount':20000,'tax_basis_points':0,'rounding':'half_up','note':'Next invoice capitalizes its own freight only'},owner,201)['data']
+        mixed_accept={'operation_id':str(uuid.uuid4()),'version':1,'consent':True,'reason':'Second-source final price approved'}
+        api(base,'POST',mixed_path+'/'+mixed_invoice['id']+'/accept',mixed_accept,lead_token)
+        api(base,'POST',mixed_path+'/'+mixed_invoice['id']+'/accept',mixed_accept,lead_token)
+        mixed_receive={'operation_id':str(uuid.uuid4()),'version':mixed_sent['order']['version'],'lines':[{'shipment_line_id':mixed_sent['shipment']['lines'][0]['id'],'good_packs':10,'damaged_packs':0}]}
+        api(base,'POST',f'shipments/{mixed_sent["shipment"]["id"]}/receive',mixed_receive,lead_token)
+        api(base,'POST',f'shipments/{mixed_sent["shipment"]["id"]}/receive',mixed_receive,lead_token)
+        mixed_intent=api(base,'POST',f'stores/{store}/sales/intents',{'operation_id':str(uuid.uuid4()),'shift_id':sponsor_shift['id'],'lines':[{'product_id':wl['id'],'unit':'pack','quantity':2,'allocations':[{'batch_id':var_batch['id'],'bucket':'usable','quantity':2}]}]},cashier_token,201)['data']
+        api(base,'POST',f'sales/intents/{mixed_intent["id"]}/pay',{'operation_id':str(uuid.uuid4()),'payment_method':'cash','cash_received':mixed_intent['total_amount']},cashier_token)
+        mixed_period=next(p for p in api(base,'GET',partner_erp+'/context?section=periods',token=lead_token)['data'] if p['id']==mixed_period['id'])
+        finance_post(partner_erp,'period_status',{'id':mixed_period['id'],'version':mixed_period['version'],'decision':'reopen','note':'Original period and mixed-source invoice checked'},lead_token)
+        mixed_pending=next(v for v in api(base,'GET',partner_erp+'/context?section=invoice_variances',token=lead_token)['data'] if v['invoice_id']==mixed_invoice['id']);assert mixed_pending['status']=='review_required'
+        finance_post(partner_erp,'invoice_revalue_retry',{'id':mixed_pending['id'],'version':mixed_pending['version'],'note':'Original mixed-source evidence checked'},lead_token)
+        assert 'Penyesuaian diterapkan: 1' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+        assert 'Penyesuaian diterapkan: 0' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+        mixed_state=next(v for v in api(base,'GET',partner_erp+'/context?section=invoice_variances',token=lead_token)['data'] if v['invoice_id']==mixed_invoice['id'])
+        assert mixed_state['status']=='applied' and mixed_state['stock_adjustment']==17894 and mixed_state['cogs_adjustment']==2106
+        assert len(mixed_state['receipt_adjustments'])==1 and mixed_state['receipt_adjustments'][0]['value_delta']==20000
+        assert any('GL-VARIANCE-LOT' in v['summary'] and '204000' in v['summary'] for v in api(base,'GET',partner_erp+'/context?section=valuation_stock',token=lead_token)['data'])
+        mixed_html=opener.open(web+variance_web+'?section=invoice_variances').read().decode();assert 'Sumber penerimaan' in mixed_html and mixed_sent['shipment']['lines'][0]['id'] in mixed_html
+        assert 'Jurnal dibukukan: 7' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        ledger_before+=2
+        api(base,'GET',partner_erp+'/context?section=invoice_variances',token=owner,expected=403)
+        print('PASS: same-batch restock after prior valuation, weighted sale, second invoice/replay, immutable receipt proof, buyer stock204000/cogs correction2106 and real worker7/0',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

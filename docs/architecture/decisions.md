@@ -405,3 +405,10 @@ FinancialBooks menjadi kalkulator bounded untuk laba rugi/posisi keuangan dan ba
 ## ADR056 — Outbox hak kontraktual komersial per organisasi (10November2026)
 
 CommercialPolicy memperluas baseline aktif secara prospektif dengan independent approval,10akun terpisah dan tax treatment eksplisit; extension wholesale lama dipertahankan dan tidak boleh hilang diam-diam. CommercialJournal/payments menulis event hak share/sponsor signed secara atomik; own position mengikat original policy untuk koreksi. Source sale/refund/payment dates tetap, cutover/mixed dates/policies direview. POS owned-stock bersponsor dapat membukukan discount/HPP biasa dan recovery terpisah; konsinyasi physical COGS tidak ditebak dari formula share. Detail dan batas: [commercial accounting](../commercial-accounting.md).
+
+
+## ADR057 — Pool batch dengan bukti harga per penerimaan dan koreksi incremental (10November2026)
+
+Invoice final dapat mengoreksi full-good buyout receipts yang berbagi batch. Migration34 menyimpan immutable receipt value layers; ReceiptValueHistory membaca current prices dan bukti legacy dedicated tanpa migrasi histori. InvoiceCostReplay memvalidasi biaya asli + existing sale/refund/loss layers, incoming provenance/policy dan monetary variance proofs. Final price diterapkan hanya pada receipt invoice bersangkutan; semua delta terkonservasi dan satu batch hanya mendapat satu StockLedger monetary write per invoice.
+
+Receipt dengan tanggal efektif berbeda dalam satu batch menghasilkan komponen incremental per hari, dengan expense depletion pada tanggal sumber. Empty-net GL groups dilewati. Seluruh planning/bounds/locks/revision/audit/source outbox tetap atomik; failure atau bukti rusak tidak membuat partial correction. Reader own-org memperlihatkan receipt evidence yang sama pada web/native. Scope dan angka contoh ada di [panduan](../invoice-valuation.md); actual partial/damage/missing/replacement/transfer dan physical consignor costing tidak otomatis diaktifkan oleh generalisasi pool ini.

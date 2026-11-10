@@ -7,11 +7,11 @@ Ringkasan ERP tambahan per10November2026 (terpisah dari DL baseline):
 | Cakupan pembukuan tambahan | Status development |
 | --- | --- |
 | Bahan → produksi/QC → biaya produk → POS/HPP | Tersedia |
-| Financial wholesale dan receipt provisional/final dedicated batch | Tersedia; prior POS returns dan susut berbukti sudah didukung |
+| Financial wholesale dan receipt provisional/final dengan pool campuran terbukti | Tersedia; invoice berurutan, tanggal receipt berbeda, prior POS returns dan susut berbukti sudah didukung |
 | Transfer internal full-good, biaya aktual tanpa omzet | Tersedia |
 | GL hak share/sponsor dan verified payments | Tersedia dengan policy prospektif per organisasi |
 | Closing formal, laba ditahan, reopening, laba rugi/posisi keuangan | Tersedia API/web/Flutter |
-| Costing receipt campuran/partial/damage/replacement/distribution return dan physical consignor COGS | Masih review/rekonsiliasi; belum otomatis |
+| Costing receipt tanpa bukti/actual partial/damage/replacement/distribution return dan physical consignor COGS | Masih review/rekonsiliasi; belum otomatis |
 
 | ID | Paket dengan batas yang dapat diuji | Status sekarang |
 | --- | --- | --- |
@@ -69,3 +69,5 @@ Lanjutan ADR054: invoice final kini menyesuaikan dedicated full-good receipt sto
 Lanjutan10November2026: [closing formal/laporan](../financial-closing.md) kini tersedia API/web/Flutter dengan snapshot dan reviewer berbeda, jurnal laba ditahan, reopening berjejak, laba rugi yang tetap benar setelah closing, serta posisi keuangan. [GL hak bagi hasil/sponsor](../commercial-accounting.md) kini opt-in per organisasi dengan akun eksplisit, original-policy corrections, tax split dan verified payment. Invoice variance diperluas untuk prior POS returns dan susut berbukti. Ini menutup bagian closing formal, contractual settlement GL dan prior-return/waste yang sebelumnya disebut belum; **bukan** klaim costing mixed receipt/transfer/replacement/credit sesudah variance atau physical consignor COGS telah otomatis.
 
 Pemeriksaan lanjutan10November2026 juga menutup kehilangan HPP pada full-good transfer internal pusat: biaya dispatch aktual dibawa ke pool tujuan meskipun commercial total nol; tidak membuat revenue/COGS. Unknown dan policy akun yang berbeda tetap review. Lihat aturan pada [automatic accounting](../automatic-accounting.md).
+
+Lanjutan ADR057 menutup costing campuran **full-good receipts yang terbukti** dalam satu batch: invoice multi-kiriman atau berurutan, existing correction layers, source dates dan future refunds. Dispatch parsial dapat berbagi batch ketika masing-masing diterima baik penuh. Actual shortage/damage/replacement/distribution-return dan physical consignment costing tetap dibedakan, bukan dilabeli selesai.

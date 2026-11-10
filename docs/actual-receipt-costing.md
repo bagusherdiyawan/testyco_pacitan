@@ -12,4 +12,14 @@ Rekonsiliasi invoice membagi nilai final ke entri baik/karantina berdasarkan bij
 
 Web/Flutter menampilkan bukti penerimaan di ringkasan antrean invoice. Pembacaan tetap keuangan organisasi sendiri. Periode tertutup, sumber yang belum cocok dan lineage tanpa bukti tetap memerlukan pemeriksaan; retry tidak mengubah sumber atau menerobos periode.
 
-Batas tersisa: penyelesaian finansial barang hilang, valuasi barang pengganti/retur distribusi, transfer internal parsial/rusak dan physical consignor COGS belum otomatis. Aturan biaya pengganti masih memerlukan jawaban pengguna; jangan menganggap penggantian tanpa tagihan berarti biaya pemasok/pembeli tertentu. Persetujuan kasus operasional pemasok→pimpinan mitra tetap berlaku terpisah.
+Batas tersisa: penyelesaian finansial barang hilang, valuasi barang pengganti/retur distribusi dan physical consignor COGS belum otomatis. Aturan biaya pengganti masih memerlukan jawaban pengguna; jangan menganggap penggantian tanpa tagihan berarti biaya pemasok/pembeli tertentu. Persetujuan kasus operasional pemasok→pimpinan mitra tetap berlaku terpisah.
+
+## Transfer internal parsial/rusak — ADR059
+
+Transfer antara toko dalam organisasi yang sama kini membawa biaya dispatch asli untuk jumlah yang benar-benar diterima, baik maupun karantina. Harga komersial tetap nol. Tidak terbentuk invoice, omzet, utang atau HPP penjualan. Tidak memerlukan aktivasi wholesale; penutupan review otomatis tetap memerlukan base policy aktif dengan akun persediaan yang sama seperti sumber dispatch dan sumber berstatus review_required.
+
+Nilai total diterima adalah floor(biaya dispatch × kemasan diterima / kemasan dikirim). Bagian baik memakai floor(biaya dispatch × kemasan baik / kemasan dikirim); karantina menerima selisih pembulatan terhadap total diterima. Contoh dispatch3kemasan Rp100001: diterima1baik+1karantina bernilai Rp33333+Rp33334, total Rp66667. Sisa satu kemasan Rp33334 tetap review sumber, tidak menjadi aset tujuan atau kerugian otomatis. Jika seluruh3kemasan diterima, seluruh Rp100001 tetap terkonservasi. Karantina tetap tidak saleable.
+
+Penerimaan nol tidak membuat cost entry atau aset tujuan fiktif. Known0 tetap0; unknown tetapnull dan review. Bukti cost entry sumber dan kedua bagian receipt diperiksa sebelum penutupan review. Sumber sebelum aktivasi, sudah direkonsiliasi manual, policy/account berubah atau tidak aktif tidak boleh ditutup diam-diam. Nilai fisik yang terbukti tetap dibawa, sedangkan penyesuaian buku diperiksa terpisah. Seluruh pencatatan fisik/nilai/review berada dalam satu transaksi dan UUID replay tidak menambah pergerakan atau menaikkan versi review lagi.
+
+Antrean jurnal sumber pada web dan Flutter menampilkan kemasan diterima, bagian baik/karantina, biaya dibawa, jumlah belum diterima serta nilai residual. Penyelesaian finansial residual hilang tetap memerlukan kewenangan/bukti tersendiri. Ini tidak memperluas valuasi replacement/retur distribusi atau mengubah kepemilikan lintas organisasi.

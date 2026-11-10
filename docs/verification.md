@@ -1,5 +1,16 @@
 # Bukti implementasi dan pengujian
 
+## Transfer internal aktual — 10 November 2026
+
+**810 tes lulus:** API374/8429 assertions, web161/1417, Flutter275. Flutter analyzer bersih; Composer strict kedua aplikasi, Pint296files, OpenAPI0.39.0 local refs/path/operation uniqueness, sintaks Python dan git diff --check lulus. Pemeriksaan ekuivalen scripts/check menggunakan Composer terkunci dan SDK Flutter3.35.7/Dart3.9.2 pada host karena Docker VFS; dependensi/lockfile tetap.
+
+Sepuluh tes API baru membuktikan konservasi Rp100001 pada receipt baik/karantina, short receipt Rp66667 dengan residual Rp33334, all-quarantine, none-received, unknown versus proven0, penolakan foreign/unassigned actor, private financial read, manual reconciliation, inventory account change, pre-activation source serta atomic rollback/recovery/replay saat penyimpanan review gagal. Tidak membuat invoice, omzet atau HPP penjualan.
+
+Seluruh isolated scripts/smoke-identity.py lulus sampai logout/MFA: skenario internal baru membawa Rp100001 ke good/quarantine, short receipt Rp66667 dengan residual Rp33334 terlihat melalui BFF pusat, foreign receipt403 dan worker1/0 per sumber. Seluruh skenario lama, mixed invoice, actual wholesale receipt, closing dan finansial komersial tetap lulus.
+
+Skrip HTTP sekarang memakai CACHE_STORE=database khusus API uji dan DB SQLite sementara agar rate-limit/cache tidak bercampur dengan development/run lain; batas request tetap aktif. Pemeriksaan BFF memakai sesi pusat dan route /app/ yang sama seperti alur ERP lainnya. Data/policy/consent development tidak diisi fixture dan tidak ada migrasi baru. Normal API/BFF smoke lulus; API/web/scheduler tetap healthy. Valuasi replacement, penyelesaian finansial barang hilang, distribusi retur dan physical consignor COGS tetap memerlukan aturan/bukti tersendiri. Device/PostgreSQL/UAT tetap release gates.
+
+
 ## Penerimaan aktual dan karantina — 10 November 2026
 
 **800 tes lulus:** API364/7960 assertions, web161/1417, Flutter275; analyzer bersih. Composer strict kedua aplikasi, Pint296files dan git diff --check lulus. Pemeriksaan ekuivalen scripts/check memakai Composer terkunci dan SDK Flutter3.35.7/Dart3.9.2 terverifikasi pada host karena Docker VFS. Tidak ada perubahan dependensi/lockfile.

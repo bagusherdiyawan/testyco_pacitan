@@ -72,7 +72,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
 ''')
         common = ['--user', f'{os.getuid()}:{os.getgid()}', '--network', NAME, '-p', '127.0.0.1::8000', '-v', f'{ROOT}:/app', '-e', 'APP_ENV=testing', '-e', 'PRIVATE_STORAGE_PATH=/tmp/private-assets', '-e', 'APP_DEBUG=false', '-e', 'NO_PROXY=api,localhost,127.0.0.1', '-e', 'no_proxy=api,localhost,127.0.0.1']
         api_name = NAME + '-api'
-        docker('run', '-d', '--name', api_name, '--network-alias', 'api', *common, '-e', 'DB_DATABASE=/tmp/smoke.sqlite', '-e', 'TEST_PASSWORD', '-v', directory + ':/fixtures:ro', '-w', '/app/apps/api', IMAGE, 'sh', '-c', 'touch /tmp/smoke.sqlite && php artisan migrate --force --no-interaction && php /fixtures/seed.php && php artisan serve --host=0.0.0.0 --port=8000 --no-reload')
+        docker('run', '-d', '--name', api_name, '--network-alias', 'api', *common, '-e', 'DB_DATABASE=/tmp/smoke.sqlite', '-e', 'CACHE_STORE=database', '-e', 'TEST_PASSWORD', '-v', directory + ':/fixtures:ro', '-w', '/app/apps/api', IMAGE, 'sh', '-c', 'touch /tmp/smoke.sqlite && php artisan migrate --force --no-interaction && php /fixtures/seed.php && php artisan serve --host=0.0.0.0 --port=8000 --no-reload')
         created.append(api_name)
         base = 'http://127.0.0.1:' + str(port(api_name))
         ready(base)
@@ -1084,6 +1084,34 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert 'Jurnal dibukukan: 1' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         print('PASS: own internal transfer carries actual33333IDR at zero commercial price, scoped receipt/replay and no extra revenue/COGS journal',flush=True)
+        # Actual internal receipts conserve dispatch cost without commercial journals.
+        for internal_code,internal_good,internal_bad,internal_value in [('GL-INTERNAL-DAMAGED',1,2,100001),('GL-INTERNAL-SHORT',1,1,66667)]:
+            internal_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':internal_code,'expires_on':'2030-01-01','quantity_packs':3,'note':'Actual internal receipt fixture'},owner,201)['data']
+            internal_opening=finance_post(erp_path,'value_propose',{'batch_id':internal_stock['id'],'stock_revision':internal_stock['stock_revision'],'amount':100001,'note':'Independently verified physical source cost'},owner)
+            finance_post(erp_path,'value_decide',{'id':internal_opening['id'],'version':1,'decision':'approve','note':'Independent source value proof'},reviewer_token)
+            internal_order=api(base,'POST',f'stores/{own_store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':ws['id'],'local_product_id':ws['id'],'quantity_packs':3}]},owner,201)['data']
+            assert internal_order['kind']=='internal_transfer' and internal_order['total_amount']==0
+            internal_order=api(base,'POST',f'orders/{internal_order["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':internal_order['version']},owner)['data']
+            internal_order=api(base,'POST',f'orders/{internal_order["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':internal_order['version'],'source_store_id':source},owner)['data']
+            internal_dispatch=api(base,'POST',f'orders/{internal_order["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':internal_order['version'],'handler':'Own actual transfer','lines':[{'order_line_id':internal_order['lines'][0]['id'],'allocations':[{'batch_id':internal_stock['id'],'quantity_packs':3}]}]},owner,201)['data']
+            internal_line=internal_dispatch['shipment']['lines'][0]['id']
+            internal_request={'operation_id':str(uuid.uuid4()),'version':internal_dispatch['order']['version'],'note':'Actual physical check','lines':[{'shipment_line_id':internal_line,'good_packs':internal_good,'damaged_packs':internal_bad,'condition_note':'Damage and shortage explicitly counted'}]}
+            internal_url=f'shipments/{internal_dispatch["shipment"]["id"]}/receive'
+            api(base,'POST',internal_url,internal_request,lead_token,expected=403)
+            api(base,'POST',internal_url,internal_request,owner);api(base,'POST',internal_url,internal_request,owner)
+            internal_values=api(base,'GET',erp_path+'/context?section=valuation_stock',token=owner)['data']
+            assert any(internal_code in row['summary'] and str(internal_value) in row['summary'] and str(8*(internal_good+internal_bad))+'biji' in row['summary'] for row in internal_values)
+            internal_books=api(base,'GET',erp_path+'/context?section=posting_events',token=owner)['data']
+            source_reviews=[row for row in internal_books if row['source_type']=='stock_review' and internal_line in row['summary'] and row['status']=='review_required']
+            if internal_bad==1:
+                assert len(source_reviews)==1 and 'sisa nilai Rp33334' in source_reviews[0]['summary']
+            else:
+                assert not source_reviews
+            assert 'Jurnal dibukukan: 1' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+            assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        internal_html=central_browser.open(web+erp_web+'?section=posting_events').read().decode()
+        assert 'sisa nilai Rp33334' in internal_html
+        print('PASS: actual internal good/quarantine cost100001, short received66667/residual33334 review, private BFF, no fictitious destination stock and worker1/0 per source',flush=True)
         # Restock a previously revalued batch, sell from the weighted pool, then finalize its next invoice.
         mixed_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':'GL-VARIANCE-LOT','expires_on':'2030-01-01','quantity_packs':10,'note':'Second actual receipt source for same batch'},owner,201)['data']
         mixed_opening=finance_post(erp_path,'value_propose',{'batch_id':mixed_stock['id'],'stock_revision':mixed_stock['stock_revision'],'amount':50000,'note':'Verified new source stock value'},owner)

@@ -504,6 +504,181 @@ class InvoiceValuationTest extends TestCase
         $this->assertDatabaseCount('invoices', 0);
     }
 
+    private function internalCostFixture(?int $amount = 100001): array
+    {
+        $config = $this->configure($this->center, $this->owner, wholesale: false);
+        $target = Store::create(['organization_id' => $this->center->id, 'name' => 'Own retail']);
+        $intake = $this->act($this->owner)->postJson('/api/v1/stores/'.$this->source->id.'/inventory/intakes', ['operation_id' => (string) Str::uuid(), 'product_id' => $this->supplierProduct->id, 'batch_code' => 'INTERNAL-ACTUAL', 'expires_on' => '2030-01-01', 'quantity_packs' => 3, 'note' => 'Physical inventory'])->assertCreated()->json('data');
+        if ($amount !== null) {
+            $proposal = $this->erp($this->center, 'value_propose', ['batch_id' => $intake['id'], 'stock_revision' => $intake['stock_revision'], 'amount' => $amount, 'note' => 'Opening proof'], $this->owner);
+            $this->erp($this->center, 'value_decide', ['id' => $proposal['id'], 'version' => 1, 'decision' => 'approve', 'note' => 'Independent proof checked'], $config['reviewer']);
+        }
+        $order = $this->act($this->owner)->postJson('/api/v1/stores/'.$target->id.'/orders', ['operation_id' => (string) Str::uuid(), 'delivery_mode' => 'pickup', 'lines' => [['supplier_product_id' => $this->supplierProduct->id, 'local_product_id' => $this->supplierProduct->id, 'quantity_packs' => 3]]])->assertCreated()->json('data');
+        $order = $this->transition($order, 'approve', $this->owner);
+        $order = $this->transition($order, 'process', $this->owner, ['source_store_id' => $this->source->id]);
+
+        return [$config, $target, $intake, $this->dispatch($order, $intake, 3)];
+    }
+
+    private function internalActual(array $sent, int $good, int $bad): array
+    {
+        $request = ['operation_id' => (string) Str::uuid(), 'version' => $sent['order']['version'], 'note' => 'Physical count', 'lines' => [['shipment_line_id' => $sent['shipment']['lines'][0]['id'], 'good_packs' => $good, 'damaged_packs' => $bad, 'condition_note' => 'Actual discrepancy verified']]];
+        $url = '/api/v1/shipments/'.$sent['shipment']['id'].'/receive';
+        $this->act($this->lead)->postJson($url, $request)->assertForbidden();
+        $this->act($this->warehouse)->postJson($url, $request)->assertForbidden();
+        $result = $this->act($this->owner)->postJson($url, $request)->assertOk()->json('data');
+        $this->postJson($url, $request)->assertOk();
+        $this->assertSame(0, DB::table('accounting_events')->whereIn('source_type', ['distribution_cogs', 'distribution_receipt'])->count());
+        $this->assertDatabaseCount('invoices', 0);
+        $this->assertDatabaseCount('accounting_receipt_costs', 0);
+
+        return $result;
+    }
+
+    public function test_internal_damaged_receipt_preserves_every_rupiah_and_quarantine_and_replays_once(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture();
+        $this->internalActual($sent, 1, 2);
+        $batch = InventoryBatch::where('store_id', $target->id)->firstOrFail();
+        $this->assertSame(8, $batch->usable_pieces);
+        $this->assertSame(16, $batch->quarantined_pieces);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 24, 'remaining_value' => 100001]);
+        $parts = DB::table('inventory_cost_entries')->where('source_type', 'shipment_receipt')->where('source_id', $sent['shipment']['lines'][0]['id'])->orderBy('stock_revision')->get();
+        $this->assertSame([33333, 66668], $parts->pluck('value_delta')->all());
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $source['id'], 'quantity' => 0, 'remaining_value' => 0]);
+        $this->assertSame(0, DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->count());
+        $this->assertSame(1, app(AutomaticPosting::class)->drain());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
+
+    public function test_internal_short_receipt_carries_only_received_value_and_retains_exact_missing_residual(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture();
+        $this->internalActual($sent, 1, 1);
+        $batch = InventoryBatch::where('store_id', $target->id)->firstOrFail();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 16, 'remaining_value' => 66667]);
+        $parts = DB::table('inventory_cost_entries')->where('source_type', 'shipment_receipt')->where('source_id', $sent['shipment']['lines'][0]['id'])->orderBy('stock_revision')->get();
+        $this->assertSame([33333, 33334], $parts->pluck('value_delta')->all());
+        $pending = DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->get();
+        $this->assertCount(1, $pending);
+        $this->assertStringContainsString('sisa nilai Rp33334', $pending[0]->reason);
+        $this->assertStringContainsString('belum diterima 1 kemasan', $pending[0]->reason);
+        $this->assertSame(2, $pending[0]->version);
+        $this->act($this->owner)->getJson('/api/v1/organizations/'.$this->center->id.'/erp/context?section=posting_events')->assertOk()->assertSee('sisa nilai Rp33334');
+        $this->act($this->lead)->getJson('/api/v1/organizations/'.$this->center->id.'/erp/context?section=posting_events')->assertForbidden();
+        $this->assertSame(1, app(AutomaticPosting::class)->drain());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+        $this->assertDatabaseHas('inventory_cost_entries', ['inventory_batch_id' => $source['id'], 'source_type' => 'shipment_dispatch', 'quantity_delta' => -24, 'value_delta' => -100001]);
+    }
+
+    public function test_internal_all_quarantine_receipt_has_actual_cost_without_releasing_saleable_stock(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture();
+        $this->internalActual($sent, 0, 2);
+        $batch = InventoryBatch::where('store_id', $target->id)->firstOrFail();
+        $this->assertSame(0, $batch->usable_pieces);
+        $this->assertSame(16, $batch->quarantined_pieces);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 16, 'remaining_value' => 66667]);
+        $this->assertSame(1, DB::table('inventory_cost_entries')->where('source_type', 'shipment_receipt')->count());
+        $this->assertSame(1, DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->count());
+    }
+
+    public function test_internal_nothing_received_creates_no_destination_asset_and_keeps_whole_source_review(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture();
+        $this->internalActual($sent, 0, 0);
+        $this->assertSame(0, DB::table('inventory_cost_entries')->where('source_type', 'shipment_receipt')->count());
+        $this->assertSame(0, (int) DB::table('inventory_values')->join('inventory_batches', 'inventory_batches.id', '=', 'inventory_values.inventory_batch_id')->where('inventory_batches.store_id', $target->id)->sum('inventory_values.quantity'));
+        $pending = DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->sole();
+        $this->assertStringContainsString('sisa nilai Rp100001', $pending->reason);
+        $this->assertStringContainsString('belum diterima 3 kemasan', $pending->reason);
+    }
+
+    public function test_internal_unknown_source_is_not_free_and_keeps_both_receipt_buckets_in_review(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture(null);
+        $this->internalActual($sent, 1, 1);
+        $batch = InventoryBatch::where('store_id', $target->id)->firstOrFail();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 16, 'remaining_value' => null]);
+        $this->assertSame(2, DB::table('inventory_cost_entries')->where('source_type', 'shipment_receipt')->whereNull('value_delta')->count());
+        $this->assertSame(3, DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->count());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
+
+    public function test_internal_proven_zero_source_keeps_actual_zero_and_no_nominal_journal(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture(0);
+        $this->internalActual($sent, 1, 1);
+        $batch = InventoryBatch::where('store_id', $target->id)->firstOrFail();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 16, 'remaining_value' => 0]);
+        $this->assertSame(0, DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->count());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
+
+    public function test_internal_manually_reconciled_source_does_not_silently_clear_receipt_review(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture();
+        $entry = DB::table('inventory_cost_entries')->where('source_type', 'shipment_dispatch')->sole();
+        DB::table('accounting_events')->where('source_type', 'stock_review')->where('source_id', $entry->id)->update(['status' => 'reconciled', 'reason' => 'Previously reviewed manual accounting']);
+        $this->internalActual($sent, 1, 2);
+        $batch = InventoryBatch::where('store_id', $target->id)->firstOrFail();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 24, 'remaining_value' => 100001]);
+        $this->assertSame(2, DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->count());
+        $this->assertDatabaseHas('accounting_events', ['source_id' => $entry->id, 'reason' => 'Previously reviewed manual accounting']);
+    }
+
+    public function test_internal_changed_inventory_account_does_not_clear_original_or_receipt_reviews(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture();
+        $mapping = json_decode(DB::table('accounting_policies')->where('id', $config['base']['id'])->value('mapping'), true);
+        $replacement = $this->erp($this->center, 'account', ['code' => 'NEW-FINISHED', 'name' => 'New finished inventory', 'kind' => 'asset', 'normal_balance' => 'debit'], $this->owner);
+        $body = ['note' => 'New independently approved inventory account'];
+        foreach ($mapping as $role => $account) {
+            $body[$role.'_account'] = $role === 'finished' ? $replacement['id'] : $account['account_id'];
+        }
+        $policy = $this->erp($this->center, 'posting_policy', $body, $this->owner);
+        $this->erp($this->center, 'posting_decide', ['id' => $policy['id'], 'version' => 1, 'decision' => 'approve', 'note' => 'Independent account change review'], $config['reviewer']);
+        $this->internalActual($sent, 1, 2);
+        $this->assertSame(3, DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->count());
+    }
+
+    public function test_internal_review_failure_rolls_back_actual_receipt_and_same_operation_recovers_once(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture();
+        $entry = DB::table('inventory_cost_entries')->where('source_type', 'shipment_dispatch')->sole();
+        $event = $this->event($this->center->id, 'stock_review', $entry->id);
+        DB::unprepared("CREATE TRIGGER fail_internal_review BEFORE UPDATE ON accounting_events WHEN OLD.id = '".$event->id."' BEGIN SELECT RAISE(FAIL, 'receipt review persistence failure'); END");
+        $request = ['operation_id' => (string) Str::uuid(), 'version' => $sent['order']['version'], 'note' => 'Actual physical count', 'lines' => [['shipment_line_id' => $sent['shipment']['lines'][0]['id'], 'good_packs' => 1, 'damaged_packs' => 1, 'condition_note' => 'Verified shortage and damage']]];
+        $url = '/api/v1/shipments/'.$sent['shipment']['id'].'/receive';
+        $this->act($this->owner)->postJson($url, $request)->assertStatus(500);
+        $this->assertDatabaseHas('shipments', ['id' => $sent['shipment']['id'], 'received_at' => null]);
+        $this->assertSame(0, InventoryBatch::where('store_id', $target->id)->count());
+        $this->assertSame(0, DB::table('inventory_cost_entries')->where('source_type', 'shipment_receipt')->count());
+        $this->assertDatabaseHas('accounting_events', ['id' => $event->id, 'status' => 'review_required', 'version' => 1, 'reason' => $event->reason]);
+        DB::unprepared('DROP TRIGGER fail_internal_review');
+        $this->postJson($url, $request)->assertOk();
+        $this->postJson($url, $request)->assertOk();
+        $batch = InventoryBatch::where('store_id', $target->id)->sole();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 16, 'remaining_value' => 66667]);
+        $this->assertSame(2, DB::table('inventory_cost_entries')->where('source_type', 'shipment_receipt')->count());
+        $this->assertDatabaseHas('accounting_events', ['id' => $event->id, 'status' => 'review_required', 'version' => 2]);
+        $this->assertSame(1, app(AutomaticPosting::class)->drain());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
+
+    public function test_internal_pre_activation_source_preserves_known_physical_cost_but_keeps_receipt_review(): void
+    {
+        [$config,$target,$source,$sent] = $this->internalCostFixture();
+        $entry = DB::table('inventory_cost_entries')->where('source_type', 'shipment_dispatch')->sole();
+        // Simulate an immutable dispatch cost written before financial activation.
+        DB::table('accounting_events')->where('source_type', 'stock_review')->where('source_id', $entry->id)->delete();
+        $this->internalActual($sent, 1, 2);
+        $batch = InventoryBatch::where('store_id', $target->id)->sole();
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $batch->id, 'quantity' => 24, 'remaining_value' => 100001]);
+        $this->assertSame(2, DB::table('accounting_events')->where('source_type', 'stock_review')->where('status', 'review_required')->count());
+        $this->assertDatabaseMissing('accounting_events', ['source_type' => 'stock_review', 'source_id' => $entry->id]);
+    }
+
     private function restockSameBatch(): array
     {
         [$order,$source] = $this->ready(100, 100);

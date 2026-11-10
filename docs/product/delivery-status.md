@@ -8,7 +8,7 @@ Ringkasan ERP tambahan per10November2026 (terpisah dari DL baseline):
 | --- | --- |
 | Bahan → produksi/QC → biaya produk → POS/HPP | Tersedia |
 | Financial wholesale dan receipt provisional/final dengan pool campuran terbukti | Tersedia; termasuk penerimaan aktual baik/karantina, invoice berurutan, prior POS returns dan susut berbukti. Kuantitas invoice wajib cocok dengan barang aktual. |
-| Transfer internal full-good, biaya aktual tanpa omzet | Tersedia |
+| Transfer internal penerimaan aktual baik/karantina, biaya aktual tanpa omzet | Tersedia; biaya barang belum diterima tetap review sumber |
 | GL hak share/sponsor dan verified payments | Tersedia dengan policy prospektif per organisasi |
 | Closing formal, laba ditahan, reopening, laba rugi/posisi keuangan | Tersedia API/web/Flutter |
 | Costing receipt tanpa bukti, sisa barang hilang, replacement/distribution return dan physical consignor COGS | Masih review/rekonsiliasi; belum otomatis |
@@ -71,3 +71,5 @@ Lanjutan10November2026: [closing formal/laporan](../financial-closing.md) kini t
 Pemeriksaan lanjutan10November2026 juga menutup kehilangan HPP pada full-good transfer internal pusat: biaya dispatch aktual dibawa ke pool tujuan meskipun commercial total nol; tidak membuat revenue/COGS. Unknown dan policy akun yang berbeda tetap review. Lihat aturan pada [automatic accounting](../automatic-accounting.md).
 
 Lanjutan ADR057 menutup costing campuran **full-good receipts yang terbukti** dalam satu batch: invoice multi-kiriman atau berurutan, existing correction layers, source dates dan future refunds. Dispatch parsial dapat berbagi batch ketika masing-masing diterima baik penuh. Actual shortage/damage/replacement/distribution-return dan physical consignment costing tetap dibedakan, bukan dilabeli selesai.
+
+Lanjutan ADR059: transfer internal satu organisasi kini mencakup penerimaan aktual parsial/rusak dengan pembagian biaya dispatch, karantina dan residual missing review. Tidak membuat omzet/HPP penjualan atau aset untuk barang yang belum diterima. Sumber sudah direkonsiliasi/account berubah/unknown tetap review.

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Commercial\Application;
 
+use App\Modules\Accounting\Application\ReceiptCostEvidence;
 use App\Modules\Commercial\CommercialServiceProvider;
 use App\Modules\Commercial\Infrastructure\CommercialAgreement;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
@@ -50,7 +51,7 @@ final class ConsignmentAutomation
 
     public function assertFreshOrder(string $order): void
     {
-        abort_if(DB::table('accounting_events')->whereIn('source_type', ['distribution_receipt', 'distribution_cogs'])->whereIn('source_id', DB::table('shipment_lines')->join('shipments', 'shipments.id', '=', 'shipment_lines.shipment_id')->where('shipments.supply_order_id', $order)->select('shipment_lines.id'))->exists(), 409, 'Penerimaan putus beli sudah dibukukan; rekonsiliasi kepemilikan sebelum mengaktifkan konsinyasi.');
+        abort_if(app(ReceiptCostEvidence::class)->hasOwnedReceipt($order) || DB::table('accounting_events')->whereIn('source_type', ['distribution_receipt', 'distribution_cogs'])->whereIn('source_id', DB::table('shipment_lines')->join('shipments', 'shipments.id', '=', 'shipment_lines.shipment_id')->where('shipments.supply_order_id', $order)->select('shipment_lines.id'))->exists(), 409, 'Penerimaan putus beli sudah dibukukan; rekonsiliasi kepemilikan sebelum mengaktifkan konsinyasi.');
         $batches = DB::table('stock_entries as e')->join('shipment_lines as l', 'l.id', '=', 'e.source_id')->join('shipments as sh', 'sh.id', '=', 'l.shipment_id')->where('e.source_type', 'shipment_receipt')->where('sh.supply_order_id', $order)->where('e.quantity_pieces', '>', 0)->pluck('e.inventory_batch_id');
         $extra = DB::table('stock_entries as e')->join('replacement_lines as l', 'l.id', '=', 'e.source_id')->join('shipment_lines as original', 'original.id', '=', 'l.original_shipment_line_id')->join('shipments as sh', 'sh.id', '=', 'original.shipment_id')->where('e.source_type', 'replacement_receipt')->where('sh.supply_order_id', $order)->where('e.quantity_pieces', '>', 0)->pluck('e.inventory_batch_id');
         $batches = $batches->merge($extra)->unique();

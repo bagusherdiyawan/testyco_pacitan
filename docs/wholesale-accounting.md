@@ -1,5 +1,7 @@
 # Integrasi keuangan wholesale — ADR053
 
+Pembaruan10November2026: [penerimaan aktual baik/karantina dan kekurangan kiriman](actual-receipt-costing.md), ADR058, memperluas batas full-good di panduan ini. Pengganti/retur distribusi dan nilai consignor belum otomatis.
+
 Lanjutan paket1,9 November2026. Menghubungkan invoice wholesale, penerimaan/pembayaran terverifikasi, pembalikan dan nota kredit ke event GL ADR052. Tidak mengubah harga, persetujuan dua pihak, batas kredit, stok fisik, laci POS atau kewenangan partner yang sudah ada.
 
 ## Mengaktifkan melalui web atau Flutter

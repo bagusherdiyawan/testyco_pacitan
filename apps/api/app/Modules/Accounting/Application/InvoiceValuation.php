@@ -50,7 +50,7 @@ final class InvoiceValuation
             return;
         }
         $ids = array_column($invoice->lines, 'shipment_line_id');
-        $receiptEvents = DB::table('accounting_events')->where('organization_id', $invoice->partner_id)->where('source_type', 'distribution_receipt')->whereIn('source_id', $ids)->get();
+        $receiptEvents = collect(app(ReceiptCostEvidence::class)->read($invoice->partner_id, $ids)['origins']);
         if ($receiptEvents->isEmpty()) {
             return;
         }
@@ -75,6 +75,9 @@ final class InvoiceValuation
             $origin = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'wholesale_invoice')->where('source_id', $invoice->id)->first();
             if (! $origin && $this->freeInvoice($invoice)) {
                 $origin = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'distribution_receipt')->where('source_id', $line)->first();
+            }
+            if (! $origin) {
+                $origin = app(ReceiptCostEvidence::class)->read($org, [$line])['origins'][$line] ?? null;
             }
             if ($origin) {
                 $this->capture($invoice, (object) ['id' => $origin->policy_id], $actor);
@@ -202,9 +205,17 @@ final class InvoiceValuation
         if ($settings->tax_treatment === 'clearing') {
             $capital = Rupiah::add($capital, $invoice->tax_amount);
         }
-        $this->require(count($invoice->lines) <= 100 && $invoice->subtotal > 0, 'Alokasi invoice maksimal100baris dan subtotal positif.');
+        $this->require(count($invoice->lines) <= 100 && $invoice->subtotal >= 0, 'Alokasi invoice maksimal100baris dan subtotal positif.');
         $receiptIds = array_column($invoice->lines, 'shipment_line_id');
-        $receiptRows = DB::table('inventory_cost_entries')->where('organization_id', $org)->where('source_type', 'shipment_receipt')->whereIn('source_id', $receiptIds)->where('quantity_delta', '>', 0)->limit(101)->get();
+        $receiptRows = DB::table('inventory_cost_entries')->where('organization_id', $org)->where('source_type', 'shipment_receipt')->whereIn('source_id', $receiptIds)->where('quantity_delta', '>', 0)->limit(201)->get();
+        $receiptEvidence = app(ReceiptCostEvidence::class)->read($org, $receiptIds);
+        foreach ($invoice->lines as $line) {
+            if ((int) $line['line_total'] !== 0) {
+                continue;
+            }
+            $rr = $receiptRows->where('source_id', $line['shipment_line_id']);
+            $this->require(! $rr->contains(fn ($r) => $r->value_delta === null) && (int) $rr->sum('quantity_delta') === (int) $line['quantity_pieces'] && (int) $rr->sum('value_delta') === 0, 'Baris invoice nol berbeda dari nilai/jumlah penerimaan; selesaikan kesepakatan barang karantina sebelum koreksi.');
+        }
         if ($capital === $invoice->subtotal) {
             $unchanged = true;
             foreach ($invoice->lines as $line) {
@@ -212,8 +223,8 @@ final class InvoiceValuation
                     continue;
                 }
                 $rr = $receiptRows->where('source_id', $line['shipment_line_id']);
-                $re = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'distribution_receipt')->where('source_id', $line['shipment_line_id'])->first();
-                if ($rr->count() !== 1 || ! $re || $re->policy_id !== $s->policy_id || in_array($re->status, ['reconciled', 'review_required'], true) || (int) $rr->first()->quantity_delta !== (int) $line['quantity_pieces'] || $rr->first()->value_delta === null || (int) $rr->first()->value_delta !== (int) $line['line_total']) {
+                $re = $receiptEvidence['origins'][$line['shipment_line_id']] ?? null;
+                if ($rr->isEmpty() || $rr->count() > 2 || ! $re || $re->policy_id !== $s->policy_id || ! $re->trusted || (int) $rr->sum('quantity_delta') !== (int) $line['quantity_pieces'] || $rr->contains(fn ($r) => $r->value_delta === null) || (int) $rr->sum('value_delta') !== (int) $line['line_total']) {
                     $unchanged = false;
                     break;
                 }
@@ -222,6 +233,7 @@ final class InvoiceValuation
                 return [];
             }
         }
+        $this->require($invoice->subtotal > 0, 'Invoice tanpa dasar harga barang memerlukan kesepakatan alokasi biaya tambahan.');
         $this->open($org, $s->event_on);
 
         $batchIds = $receiptRows->pluck('inventory_batch_id')->unique()->sort()->values()->all();
@@ -233,7 +245,7 @@ final class InvoiceValuation
         $gross = 0;
         $laterGross = [];
         $entryCount = 0;
-        $entryBytes = 0;
+        $entryBytes = $receiptEvidence['evidence_bytes'];
         $checkedDays = [$s->event_on => true];
         $checkDay = function (string $day) use ($org, &$checkedDays): void {
             if (! isset($checkedDays[$day])) {
@@ -249,13 +261,13 @@ final class InvoiceValuation
             $next = Proportion::floor($capital, $weight, $invoice->subtotal);
             $final = $next - $allocated;
             $allocated = $next;
-            $receipts = $receiptRows->where('source_id', $line['shipment_line_id']);
-            $this->require($receipts->count() === 1, 'Dasar nilai penerimaan belum lengkap atau memiliki beberapa bucket/sumber; perlu alokasi terperinci.');
+            $receipts = $receiptRows->where('source_id', $line['shipment_line_id'])->sortBy('stock_revision')->values();
+            $this->require($receipts->count() >= 1 && $receipts->count() <= 2 && $receipts->pluck('inventory_batch_id')->unique()->count() === 1, 'Dasar penerimaan belum lengkap atau beberapa batch; perlu alokasi terperinci.');
             $receipt = $receipts->first();
             $batch = $batches[$receipt->inventory_batch_id] ?? null;
-            $this->require($batch && $receipt->value_delta !== null && (int) $receipt->quantity_delta === (int) $line['quantity_pieces'], 'Batch campuran atau jumlah invoice berbeda dari penerimaan; perlu rekonsiliasi.');
-            $receiptEvent = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'distribution_receipt')->where('source_id', $line['shipment_line_id'])->first();
-            $this->require($receiptEvent && $receiptEvent->policy_id === $s->policy_id && ! in_array($receiptEvent->status, ['reconciled', 'review_required'], true), 'Pemetaan/jurnal penerimaan asal berbeda atau perlu ditinjau.');
+            $this->require($batch && ! $receipts->contains(fn ($r) => $r->value_delta === null) && (int) $receipts->sum('quantity_delta') === (int) $line['quantity_pieces'], 'Jumlah invoice berbeda dari barang yang benar-benar diterima; selesaikan basis/kredit sebelum rekonsiliasi biaya.');
+            $receiptEvent = $receiptEvidence['origins'][$line['shipment_line_id']] ?? null;
+            $this->require($receiptEvent && $receiptEvent->policy_id === $s->policy_id && $receiptEvent->trusted, 'Pemetaan/jurnal penerimaan asal berbeda atau perlu ditinjau.');
             $checkDay($receiptEvent->event_on);
             $effectiveDay = max($this->day($invoice->decided_at), $receiptEvent->event_on);
             $checkDay($effectiveDay);
@@ -263,10 +275,17 @@ final class InvoiceValuation
                 $groups[$batch->id] = ['batch' => $batch, 'day' => $effectiveDay, 'line' => $line['shipment_line_id'], 'targets' => [], 'lines' => [], 'days' => []];
             }
             $groups[$batch->id]['day'] = min($groups[$batch->id]['day'], $effectiveDay);
-            $groups[$batch->id]['days'][$receipt->id] = $effectiveDay;
-            $this->require(! array_key_exists($receipt->id, $groups[$batch->id]['targets']), 'Sumber penerimaan diulang dalam invoice.');
-            $groups[$batch->id]['targets'][$receipt->id] = $final;
-            $groups[$batch->id]['lines'][$receipt->id] = $line['shipment_line_id'];
+            $receivedQuantity = 0;
+            $assignedValue = 0;
+            foreach ($receipts as $part) {
+                $groups[$batch->id]['days'][$part->id] = $effectiveDay;
+                $this->require(! array_key_exists($part->id, $groups[$batch->id]['targets']), 'Sumber penerimaan diulang dalam invoice.');
+                $receivedQuantity += (int) $part->quantity_delta;
+                $nextValue = Proportion::floor($final, $receivedQuantity, (int) $line['quantity_pieces']);
+                $groups[$batch->id]['targets'][$part->id] = $nextValue - $assignedValue;
+                $groups[$batch->id]['lines'][$part->id] = $line['shipment_line_id'];
+                $assignedValue = $nextValue;
+            }
         }
         foreach ($groups as $group) {
             $batch = $group['batch'];

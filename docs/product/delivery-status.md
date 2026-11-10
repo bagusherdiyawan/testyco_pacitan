@@ -7,11 +7,11 @@ Ringkasan ERP tambahan per10November2026 (terpisah dari DL baseline):
 | Cakupan pembukuan tambahan | Status development |
 | --- | --- |
 | Bahan → produksi/QC → biaya produk → POS/HPP | Tersedia |
-| Financial wholesale dan receipt provisional/final dengan pool campuran terbukti | Tersedia; invoice berurutan, tanggal receipt berbeda, prior POS returns dan susut berbukti sudah didukung |
+| Financial wholesale dan receipt provisional/final dengan pool campuran terbukti | Tersedia; termasuk penerimaan aktual baik/karantina, invoice berurutan, prior POS returns dan susut berbukti. Kuantitas invoice wajib cocok dengan barang aktual. |
 | Transfer internal full-good, biaya aktual tanpa omzet | Tersedia |
 | GL hak share/sponsor dan verified payments | Tersedia dengan policy prospektif per organisasi |
 | Closing formal, laba ditahan, reopening, laba rugi/posisi keuangan | Tersedia API/web/Flutter |
-| Costing receipt tanpa bukti/actual partial/damage/replacement/distribution return dan physical consignor COGS | Masih review/rekonsiliasi; belum otomatis |
+| Costing receipt tanpa bukti, sisa barang hilang, replacement/distribution return dan physical consignor COGS | Masih review/rekonsiliasi; belum otomatis |
 
 | ID | Paket dengan batas yang dapat diuji | Status sekarang |
 | --- | --- | --- |

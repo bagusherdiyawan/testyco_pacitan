@@ -4,8 +4,10 @@ namespace App\Modules\Accounting\Application;
 
 use App\Modules\Fulfillment\Infrastructure\ShipmentLine;
 use App\Modules\Ordering\Infrastructure\SupplyOrder;
+use App\Shared\Domain\Proportion;
 use App\Shared\Domain\Rupiah;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 final class DistributionReceiptPosting
 {
@@ -13,12 +15,12 @@ final class DistributionReceiptPosting
     {
         $q = DB::table('accounting_policies as p')->join('accounting_wholesale_policies as w', 'w.policy_id', '=', 'p.id')->where('p.organization_id', $org)->where('w.organization_id', $org)->where('w.ownership_basis', 'receipt_confirmed')->where('w.provisional_basis', 'approved_order')->whereNotNull('p.activated_at');
 
-        return ($policyId ? $q->where('p.id', $policyId) : $q->where('p.status', 'active'))->select('p.id')->first();
+        return ($policyId ? $q->where('p.id', $policyId) : $q->where('p.status', 'active'))->select('p.id', 'p.mapping')->first();
     }
 
     public function eligible(SupplyOrder $order, ShipmentLine $line, int $good, int $damaged): bool
     {
-        if ($order->kind !== 'wholesale' || $good !== $line->quantity_packs || $damaged !== 0) {
+        if ($order->kind !== 'wholesale' || $good < 0 || $damaged < 0 || $good + $damaged > $line->quantity_packs) {
             return false;
         }
         if (DB::table('commercial_agreements')->where('active_order_id', $order->id)->exists() || DB::table('consignment_reports')->where('supply_order_id', $order->id)->whereIn('status', ['pending', 'accepted'])->exists()) {
@@ -29,15 +31,17 @@ final class DistributionReceiptPosting
         return $buyout || ! DB::table('partnership_contracts')->where('organization_id', $order->supplier_organization_id)->where('partner_id', $order->organization_id)->where('mode', 'consignment')->where('status', 'accepted')->exists();
     }
 
-    /** @return array{value:?int,policy_id:?string} */
+    /** @return array{value:?int,policy_id:?string,bucket_values:array} */
     public function quote(SupplyOrder $order, ShipmentLine $line, int $good, int $damaged, int $unitPrice): array
     {
-        $none = ['value' => null, 'policy_id' => null];
+        $none = ['value' => null, 'policy_id' => null, 'bucket_values' => ['usable' => null, 'quarantined' => null]];
         if ($order->kind === 'internal_transfer' && $order->supplier_organization_id === $order->organization_id && $good === $line->quantity_packs && $damaged === 0) {
             $cost = DB::table('inventory_cost_entries')->where('organization_id', $order->organization_id)->where('source_type', 'shipment_dispatch')->where('source_id', $line->id)->first();
             $known = $cost && $cost->value_delta !== null && -(int) $cost->quantity_delta === $good * $line->pack_size;
 
-            return ['value' => $known ? -(int) $cost->value_delta : null, 'policy_id' => null];
+            $value = $known ? -(int) $cost->value_delta : null;
+
+            return ['value' => $value, 'policy_id' => null, 'bucket_values' => ['usable' => $value, 'quarantined' => null]];
         }
         if (! $this->eligible($order, $line, $good, $damaged)) {
             return $none;
@@ -60,7 +64,13 @@ final class DistributionReceiptPosting
         }
         $p = $this->policy($order->organization_id, $origins->first());
 
-        return $p ? ['value' => Rupiah::multiply($unitPrice, $good), 'policy_id' => $p->id] : $none;
+        if (! $p) {
+            return $none;
+        }
+        $received = $good + $damaged;
+        $value = $received === 0 ? 0 : Rupiah::multiply($unitPrice, $received);
+
+        return ['value' => $value, 'policy_id' => $p->id, 'bucket_values' => ['usable' => $good === 0 ? 0 : Rupiah::multiply($unitPrice, $good), 'quarantined' => $damaged === 0 ? 0 : Rupiah::multiply($unitPrice, $damaged)]];
     }
 
     public function value(SupplyOrder $order, ShipmentLine $line, int $good, int $damaged, int $unitPrice): ?int
@@ -91,6 +101,9 @@ final class DistributionReceiptPosting
         if ($value !== null) {
             $buyer = $this->policy($order->organization_id, $policyId);
             abort_unless($buyer, 409, 'Konfigurasi penerimaan berubah; tinjau ulang.');
+            $parts = DB::table('inventory_cost_entries')->where('organization_id', $order->organization_id)->where('source_type', 'shipment_receipt')->where('source_id', $line->id)->where('quantity_delta', '>', 0)->limit(3)->get();
+            abort_unless($parts->count() <= 2 && ! $parts->contains(fn ($p) => $p->value_delta === null) && (int) $parts->sum('quantity_delta') === ($line->good_packs + $line->damaged_packs) * $line->pack_size && (int) $parts->sum('value_delta') === $value, 409, 'Bukti nilai penerimaan tidak sesuai ledger aktual.');
+            DB::table('accounting_receipt_costs')->insert(['id' => (string) Str::ulid(), 'organization_id' => $order->organization_id, 'shipment_line_id' => $line->id, 'policy_id' => $buyer->id, 'actor_id' => $actor, 'received_on' => $day, 'good_pieces' => $line->good_packs * $line->pack_size, 'quarantined_pieces' => $line->damaged_packs * $line->pack_size, 'missing_pieces' => ($line->quantity_packs - $line->good_packs - $line->damaged_packs) * $line->pack_size, 'quoted_value' => $value, 'created_at' => now()]);
             app(AutomaticPosting::class)->record($order->organization_id, $actor, 'distribution_receipt', $line->id, $day, [['finished', 'purchase_clearing', $value]], 'Pesanan disetujui '.$order->id, null, $buyer->id);
             $this->covered($order->organization_id, 'shipment_receipt', $line->id);
             app(InvoiceValuation::class)->captureReceived($order->organization_id, $line->id, $actor);
@@ -98,9 +111,29 @@ final class DistributionReceiptPosting
         if ($seller = $this->policy($order->supplier_organization_id)) {
             $cost = DB::table('inventory_cost_entries')->where('organization_id', $order->supplier_organization_id)->where('source_type', 'shipment_dispatch')->where('source_id', $line->id)->first();
             $known = $cost && $cost->value_delta !== null && -(int) $cost->quantity_delta === $line->quantity_packs * $line->pack_size;
-            app(AutomaticPosting::class)->record($order->supplier_organization_id, $actor, 'distribution_cogs', $line->id, $day, [['cogs', 'finished', $known ? -(int) $cost->value_delta : null]], 'Penerimaan dikonfirmasi '.$order->id, null, $seller->id);
-            if ($known) {
+            $received = $line->good_packs + $line->damaged_packs;
+            $recognized = $known ? Proportion::floor(-(int) $cost->value_delta, $received, $line->quantity_packs) : null;
+            $origin = $cost ? DB::table('accounting_events')->where('organization_id', $order->supplier_organization_id)->where('source_type', 'stock_review')->where('source_id', $cost->id)->lockForUpdate()->first() : null;
+            $reason = null;
+            if (! $known || -(int) $cost->value_delta > 0) {
+                if (! $origin) {
+                    $reason = 'Dispatch asal sebelum aktivasi atau tidak mempunyai bukti buku; rekonsiliasi cutover diperlukan.';
+                } elseif ($origin->status !== 'review_required') {
+                    $reason = 'Dispatch asal sudah direkonsiliasi; jangan menggandakan HPP tanpa pemeriksaan sumber.';
+                } else {
+                    $original = DB::table('accounting_policies')->where('organization_id', $order->supplier_organization_id)->where('id', $origin->policy_id)->first();
+                    if (! $original || json_decode($original->mapping, true)['finished']['account_id'] !== json_decode($seller->mapping, true)['finished']['account_id']) {
+                        $reason = 'Akun persediaan sumber berubah; rekonsiliasi pemetaan diperlukan.';
+                    }
+                }
+            }
+            if ($received > 0 || $reason) {
+                app(AutomaticPosting::class)->record($order->supplier_organization_id, $actor, 'distribution_cogs', $line->id, $day, [['cogs', 'finished', $recognized]], 'Penerimaan '.$received.'/'.$line->quantity_packs.' kemasan dikonfirmasi '.$order->id, $reason, $seller->id);
+            }
+            if ($known && ! $reason && ($received === $line->quantity_packs || (int) $cost->value_delta === 0)) {
                 $this->covered($order->supplier_organization_id, 'shipment_dispatch', $line->id);
+            } elseif ($known && ! $reason && $origin && $received < $line->quantity_packs) {
+                DB::table('accounting_events')->where('id', $origin->id)->where('status', 'review_required')->update(['reason' => 'Selisih fisik '.($line->quantity_packs - $received).' kemasan: HPP penerimaan Rp'.$recognized.' dari biaya dispatch Rp'.(-(int) $cost->value_delta).'; sisa nilai Rp'.(-(int) $cost->value_delta - $recognized).' memerlukan penyelesaian berizin, bukan barang diterima fiktif.', 'version' => $origin->version + 1, 'updated_at' => now()]);
             }
         }
     }

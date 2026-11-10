@@ -108,7 +108,7 @@ final class FulfillmentWorkflow
                 $incomingValue = $incoming['value'];
                 foreach (['usable' => $good, 'quarantined' => $damaged] as $bucket => $packs) {
                     if ($packs > 0) {
-                        $this->stock->credit($order->organization_id, $order->store_id, $product, $line->batch_code, $line->expires_on->format('Y-m-d'), $packs, $user->id, 'shipment_receipt', $line->id, $bucket, $actual['condition_note'] ?? null, $bucket === 'usable' ? $incomingValue : null);
+                        $this->stock->credit($order->organization_id, $order->store_id, $product, $line->batch_code, $line->expires_on->format('Y-m-d'), $packs, $user->id, 'shipment_receipt', $line->id, $bucket, $actual['condition_note'] ?? null, $incoming['bucket_values'][$bucket]);
                     }
                 }
                 $line->fill(['good_packs' => $good, 'damaged_packs' => $damaged, 'condition_note' => $actual['condition_note'] ?? null]);

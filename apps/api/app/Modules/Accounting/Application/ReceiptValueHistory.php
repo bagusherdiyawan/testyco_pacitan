@@ -12,17 +12,24 @@ final class ReceiptValueHistory
     public function read(string $org, string $batch, Collection $entries, array $mapping): array
     {
         $receipts = $entries->where('source_type', 'shipment_receipt')->where('quantity_delta', '>', 0)->keyBy('id');
-        $events = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'distribution_receipt')->whereIn('source_id', $receipts->pluck('source_id')->all())->limit(10001)->get()->keyBy('source_id');
+        $evidence = app(ReceiptCostEvidence::class)->read($org, $receipts->pluck('source_id')->all());
+        $events = collect($evidence['origins']);
         $policies = DB::table('accounting_policies')->where('organization_id', $org)->whereIn('id', $events->pluck('policy_id')->unique()->all())->limit(1001)->get()->keyBy('id');
         $variances = DB::table('inventory_invoice_variances as v')->join('accounting_invoice_revaluations as r', 'r.id', '=', 'v.revaluation_id')->where('v.organization_id', $org)->where('r.organization_id', $org)->where('v.inventory_batch_id', $batch)->where('r.status', 'applied')->orderBy('v.stock_revision')->orderBy('v.id')->limit(10001)->get(['v.*']);
         $layers = DB::table('inventory_invoice_receipt_adjustments')->where('organization_id', $org)->whereIn('variance_id', $variances->pluck('id')->all())->orderBy('id')->limit(10001)->get();
-        $bytes = strlen(json_encode([$events, $policies, $variances, $layers]));
+        $bytes = $evidence['evidence_bytes'] + strlen(json_encode([$policies, $variances, $layers]));
         $this->require($events->count() <= 10000 && $policies->count() <= 1000 && $variances->count() <= 10000 && $layers->count() <= 10000 && $bytes <= 8 * 1024 * 1024, 'Bukti nilai penerimaan melampaui batas; perlu rekonsiliasi terperinci.');
         $prices = [];
+        foreach ($receipts->groupBy('source_id') as $source => $parts) {
+            $proof = $evidence['proofs']->get($source);
+            if ($proof) {
+                $this->require((int) $proof->good_pieces >= 0 && (int) $proof->quarantined_pieces >= 0 && (int) $proof->missing_pieces >= 0 && ! $parts->contains(fn ($e) => $e->value_delta === null) && (int) $parts->sum('quantity_delta') === (int) $proof->good_pieces + (int) $proof->quarantined_pieces && (int) $parts->sum('value_delta') === (int) $proof->quoted_value, 'Bukti nilai/jumlah penerimaan aktual tidak cocok dengan ledger.');
+            }
+        }
         foreach ($receipts as $e) {
             $event = $events->get($e->source_id);
             $policy = $event ? $policies->get($event->policy_id) : null;
-            $this->require($e->value_delta !== null && (int) $e->value_delta >= 0 && $event && in_array($event->status, ['pending', 'posted'], true) && $policy && $policy->activated_at, 'Penerimaan campuran tidak mempunyai bukti putus beli/nilai/pemetaan yang sah.');
+            $this->require($e->value_delta !== null && (int) $e->value_delta >= 0 && $event && $event->trusted && $policy && $policy->activated_at, 'Penerimaan campuran tidak mempunyai bukti putus beli/nilai/pemetaan yang sah.');
             $m = json_decode($policy->mapping, true);
             foreach (['finished', 'cogs', 'loss'] as $role) {
                 $this->require(isset($m[$role], $mapping[$role]) && $m[$role]['account_id'] === $mapping[$role]['account_id'], 'Akun biaya penerimaan campuran berbeda; perlu rekonsiliasi pemetaan.');

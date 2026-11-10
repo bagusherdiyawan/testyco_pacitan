@@ -15,8 +15,8 @@ final class PostingReadModel
             $rows = [];
             foreach ($page->items() as $entry) {
                 $r = (array) $entry;
-                $recognition = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'distribution_cogs')->where('source_id', $r['source_id'])->value('status');
-                $rows[] = [...$r, 'summary' => 'Sumber: '.$r['source_type'].' · '.$r['source_id']."\nBatch: ".$r['inventory_batch_id'].' · revisi '.$r['stock_revision']."\nKeluar: ".(-$r['quantity_delta']).' biji · biaya historis Rp'.($r['value_delta'] === null ? 'belum diketahui' : -$r['value_delta'])."\nStatus HPP distribusi: ".($recognition ?? 'belum otomatis; perlu rekonsiliasi'), 'forms' => []];
+                $recognition = DB::table('accounting_events')->where('organization_id', $org)->where('source_type', 'distribution_cogs')->where('source_id', $r['source_id'])->first(['status', 'evidence']);
+                $rows[] = [...$r, 'summary' => 'Sumber: '.$r['source_type'].' · '.$r['source_id']."\nBatch: ".$r['inventory_batch_id'].' · revisi '.$r['stock_revision']."\nKeluar: ".(-$r['quantity_delta']).' biji · biaya historis Rp'.($r['value_delta'] === null ? 'belum diketahui' : -$r['value_delta'])."\nStatus HPP distribusi: ".($recognition?->status ?? 'belum otomatis; perlu rekonsiliasi').($recognition ? "\nBukti pengakuan: ".$recognition->evidence : ''), 'forms' => []];
             }
 
             return [...$page->toArray(), 'data' => $rows, 'forms' => [], 'filter_stores' => [], 'filter_materials' => [], 'filter_periods' => [], 'notice' => 'Biaya berasal pergerakan batch aktual, bukan harga invoice. Unknown tidak dianggap nol. Laporan ini tidak membuat jurnal atau menilai ulang stok pembeli.'];

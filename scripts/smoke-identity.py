@@ -1120,6 +1120,55 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         ledger_before+=2
         api(base,'GET',partner_erp+'/context?section=invoice_variances',token=owner,expected=403)
         print('PASS: same-batch restock after prior valuation, weighted sale, second invoice/replay, immutable receipt proof, buyer stock204000/cogs correction2106 and real worker7/0',flush=True)
+        # Full physical receipt split between usable/quarantine, then a genuinely short receipt.
+        partial_fixtures=[]
+        for code,good,damaged in [('GL-ACTUAL-DAMAGE',8,2),('GL-ACTUAL-SHORT',9,0)]:
+            stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':code,'expires_on':'2030-01-01','quantity_packs':10,'note':'Actual good/quarantine/shortage fixture'},owner,201)['data']
+            opening=finance_post(erp_path,'value_propose',{'batch_id':stock['id'],'stock_revision':stock['stock_revision'],'amount':50000,'note':'Verified independent source-cost proof'},owner)
+            finance_post(erp_path,'value_decide',{'id':opening['id'],'version':1,'decision':'approve','note':'Opening proof checked independently'},reviewer_token)
+            actual_order=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':ws['id'],'local_product_id':wl['id'],'quantity_packs':10}]},lead_token,201)['data']
+            actual_order=api(base,'POST',f'orders/{actual_order["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':actual_order['version']},lead_token)['data']
+            actual_order=api(base,'POST',f'orders/{actual_order["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':actual_order['version'],'source_store_id':source},owner)['data']
+            actual_sent=api(base,'POST',f'orders/{actual_order["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':actual_order['version'],'handler':'Actual physical receipt fixture','lines':[{'order_line_id':actual_order['lines'][0]['id'],'allocations':[{'batch_id':stock['id'],'quantity_packs':10}]}]},owner,201)['data']
+            actual_path=f'orders/{actual_order["id"]}/billing/invoices'
+            if damaged:
+                held=next(p for p in api(base,'GET',partner_erp+'/context?section=periods',token=lead_token)['data'] if p['starts_on']<=erp_day<=p['ends_on'])
+                finance_post(partner_erp,'period_status',{'id':held['id'],'version':held['version'],'decision':'close','note':'Explicit original-period review before final damaged-stock costing'},lead_token)
+            actual_invoice=api(base,'POST',actual_path,{'operation_id':str(uuid.uuid4()),'mode':'buyout','basis':'dispatched','shipment_ids':[actual_sent['shipment']['id']],'due_on':'2030-12-31','discount_amount':0,'shipping_amount':20000,'tax_basis_points':0,'rounding':'half_up','note':'Explicit buyout, stock only for actual received goods'},owner,201)['data']
+            api(base,'POST',actual_path+'/'+actual_invoice['id']+'/accept',{'operation_id':str(uuid.uuid4()),'version':1,'consent':True,'reason':'Explicit buyout terms confirmed'},lead_token)
+            actual_receive={'operation_id':str(uuid.uuid4()),'version':actual_sent['order']['version'],'lines':[{'shipment_line_id':actual_sent['shipment']['lines'][0]['id'],'good_packs':good,'damaged_packs':damaged,'condition_note':'Actual physical count with damage or shortage'}]}
+            actual_url=f'shipments/{actual_sent["shipment"]["id"]}/receive'
+            api(base,'POST',actual_url,actual_receive,lead_token);api(base,'POST',actual_url,actual_receive,lead_token)
+            actual_batch=next(b for b in api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data'] if b['batch_code']==code)
+            assert actual_batch['usable_pieces']==good*8 and actual_batch['quarantined_pieces']==damaged*8
+            state=next(v for v in api(base,'GET',partner_erp+'/context?section=invoice_variances',token=lead_token)['data'] if v['invoice_id']==actual_invoice['id'])
+            assert state['status']=='review_required' and state['receipt_evidence'][0]['missing_pieces']==(10-good-damaged)*8
+            if damaged:
+                intent=api(base,'POST',f'stores/{store}/sales/intents',{'operation_id':str(uuid.uuid4()),'shift_id':sponsor_shift['id'],'lines':[{'product_id':wl['id'],'unit':'pack','quantity':1,'allocations':[{'batch_id':actual_batch['id'],'bucket':'usable','quantity':1}]}]},cashier_token,201)['data']
+                api(base,'POST',f'sales/intents/{intent["id"]}/pay',{'operation_id':str(uuid.uuid4()),'payment_method':'cash','cash_received':intent['total_amount']},cashier_token)
+                held=next(p for p in api(base,'GET',partner_erp+'/context?section=periods',token=lead_token)['data'] if p['id']==held['id'])
+                finance_post(partner_erp,'period_status',{'id':held['id'],'version':held['version'],'decision':'reopen','note':'Original period verified for actual received stock'},lead_token)
+                finance_post(partner_erp,'invoice_revalue_retry',{'id':state['id'],'version':state['version'],'note':'Good and quarantined quantity reconciled'},lead_token)
+                assert 'Penyesuaian diterapkan: 1' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+                assert 'Penyesuaian diterapkan: 0' in docker('exec',api_name,'php','artisan','accounting:revalue','--limit=100')
+                state=next(v for v in api(base,'GET',partner_erp+'/context?section=invoice_variances',token=lead_token)['data'] if v['invoice_id']==actual_invoice['id'])
+                assert state['status']=='applied' and state['stock_adjustment']==18000 and state['cogs_adjustment']==2000
+                assert sorted(p['after_value'] for p in state['receipt_adjustments'])==[24000,96000]
+                assert any(code in v['summary'] and '108000' in v['summary'] for v in api(base,'GET',partner_erp+'/context?section=valuation_stock',token=lead_token)['data'])
+                assert 'Jurnal dibukukan: 7' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+                ledger_before+=3
+            else:
+                assert state['receipt_evidence'][0]['quoted_value']==90000
+                seller_cost=next(e for e in api(base,'GET',erp_path+'/context?section=posting_events',token=owner)['data'] if e['source_type']=='distribution_cogs' and e['source_id']==actual_sent['shipment']['lines'][0]['id'])
+                assert seller_cost['status']=='pending' and json.loads(seller_cost['terms'])==[['cogs','finished',45000]]
+                assert any(e['source_type']=='stock_review' and 'sisa nilai Rp5000' in (e['reason'] or '') for e in api(base,'GET',erp_path+'/context?section=posting_events',token=owner)['data'])
+                assert 'Jurnal dibukukan: 5' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+                ledger_before+=1
+            assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+            partial_fixtures.append(actual_invoice['id'])
+        actual_html=opener.open(web+variance_web+'?section=invoice_variances').read().decode();assert 'karantina 16' in actual_html and 'belum diterima 8 biji' in actual_html
+        api(base,'GET',partner_erp+'/context?section=invoice_variances',token=owner,expected=403)
+        print('PASS: actual good/quarantine receipt costs, split final invoice and POS COGS, missing goods excluded, seller proportional45000/residual5000 review, BFF evidence and revalue/GL replay',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

@@ -12,6 +12,7 @@ use App\Modules\Identity\Infrastructure\Organization;
 use App\Modules\Identity\Infrastructure\Store;
 use App\Modules\Inventory\Application\StockLedger;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
+use App\Modules\Partnership\Infrastructure\PartnershipContract;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
@@ -671,5 +672,155 @@ class InvoiceValuationTest extends TestCase
         $this->assertSame(0, DB::table('accounting_events')->where('organization_id', $this->partner->id)->where('source_type', 'invoice_variance_depletion')->count());
         $this->assertGreaterThan(0, app(AutomaticPosting::class)->drain());
         $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
+
+    private function actualReceipt(int $good, int $damaged, int $price = 2000, bool $manualDispatch = false, bool $proofFailure = false, int $sourceValue = 100001): array
+    {
+        $this->supplierProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => $price]);
+        $this->localProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => $price]);
+        [$order,$source] = $this->ready(100, 100);
+        DB::table('inventory_values')->where('inventory_batch_id', $source['id'])->update(['remaining_value' => $sourceValue]);
+        $this->configure($this->center, $this->owner);
+        $buyer = $this->configure($this->partner, $this->lead, 'recoverable', 'clearing');
+        $d = $this->dispatch($order, $source, 100);
+        if ($manualDispatch) {
+            DB::table('accounting_events')->where('organization_id', $this->center->id)->where('source_type', 'stock_review')->update(['status' => 'reconciled', 'reason' => 'Fixture manually reconciled dispatch']);
+        }
+        $v = ['operation_id' => (string) Str::uuid(), 'version' => $d['order']['version'], 'lines' => [['shipment_line_id' => $d['shipment']['lines'][0]['id'], 'good_packs' => $good, 'damaged_packs' => $damaged, 'condition_note' => 'Actual physical discrepancy inspected']]];
+        $url = '/api/v1/shipments/'.$d['shipment']['id'].'/receive';
+        if ($proofFailure) {
+            DB::unprepared("CREATE TRIGGER fail_actual_receipt_proof BEFORE INSERT ON accounting_receipt_costs BEGIN SELECT RAISE(ABORT, 'fixture failure'); END");
+            $this->act($this->lead)->postJson($url, $v)->assertStatus(500);
+            $this->assertSame(0, InventoryBatch::where('store_id', $this->target->id)->count());
+            $this->assertDatabaseHas('shipments', ['id' => $d['shipment']['id'], 'received_at' => null]);
+            $this->assertDatabaseCount('accounting_receipt_costs', 0);
+            DB::unprepared('DROP TRIGGER fail_actual_receipt_proof');
+        }
+        $received = $this->act($this->lead)->postJson($url, $v)->assertOk()->json('data');
+        $this->postJson($url, $v)->assertOk();
+
+        return [$received, $buyer, InventoryBatch::where('store_id', $this->target->id)->first(), $source];
+    }
+
+    public function test_damaged_goods_have_known_quarantined_value_and_final_cost_allocation_per_bucket(): void
+    {
+        [$d,$buyer,$b] = $this->actualReceipt(80, 20);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 100, 'remaining_value' => 200000]);
+        $this->assertDatabaseHas('inventory_batches', ['id' => $b->id, 'usable_pieces' => 80, 'quarantined_pieces' => 20]);
+        $this->assertDatabaseHas('accounting_receipt_costs', ['organization_id' => $this->partner->id, 'good_pieces' => 80, 'quarantined_pieces' => 20, 'missing_pieces' => 0, 'quoted_value' => 200000]);
+        $this->sell($b, 40);
+        $i = $this->finalInvoice($d);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'applied', 'stock_adjustment' => 12000, 'cogs_adjustment' => 8000]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 60, 'remaining_value' => 132000]);
+        $this->assertSame([176000, 44000], DB::table('inventory_invoice_receipt_adjustments')->orderBy('id')->pluck('after_value')->all());
+        $this->getJson('/api/v1/organizations/'.$this->partner->id.'/erp/context?section=invoice_variances')->assertOk()->assertJsonPath('data.0.receipt_evidence.0.quarantined_pieces', 20)->assertSee('karantina 20');
+        $this->act($this->owner)->getJson('/api/v1/organizations/'.$this->partner->id.'/erp/context?section=invoice_variances')->assertForbidden();
+    }
+
+    public function test_short_receipt_values_only_actual_goods_and_received_basis_invoice_reconciles_them(): void
+    {
+        [$d,$buyer,$b] = $this->actualReceipt(90, 0);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 90, 'remaining_value' => 180000]);
+        $this->assertDatabaseHas('accounting_receipt_costs', ['organization_id' => $this->partner->id, 'good_pieces' => 90, 'quarantined_pieces' => 0, 'missing_pieces' => 10, 'quoted_value' => 180000]);
+        $this->assertSame([['cogs', 'finished', 90000]], $this->terms($this->event($this->center->id, 'distribution_cogs', $d['shipment']['lines'][0]['id'])));
+        $review = DB::table('accounting_events')->where('organization_id', $this->center->id)->where('source_type', 'stock_review')->firstOrFail();
+        $this->assertSame('review_required', $review->status);
+        $this->assertStringContainsString('sisa nilai Rp10001', $review->reason);
+        $this->sell($b, 40);
+        $i = $this->act($this->owner)->postJson($this->billing($d).'/invoices', [...$this->invoiceBody($d, 'good_received'), 'shipping_amount' => 18000, 'tax_basis_points' => 0])->assertCreated()->json('data');
+        $this->acceptInvoice($d, $i);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'applied', 'stock_adjustment' => 10000, 'cogs_adjustment' => 8000]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 50, 'remaining_value' => 110000]);
+    }
+
+    public function test_dispatched_invoice_quantity_does_not_spread_missing_goods_cost_into_actual_stock(): void
+    {
+        [$d,$buyer,$b] = $this->actualReceipt(80, 10);
+        $i = $this->finalInvoice($d);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'review_required']);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 90, 'remaining_value' => 180000]);
+        $this->assertDatabaseCount('inventory_invoice_variances', 0);
+        $this->assertDatabaseCount('inventory_invoice_receipt_adjustments', 0);
+    }
+
+    public function test_damaged_stock_loss_before_invoice_retains_original_loss_and_splits_final_variance(): void
+    {
+        [$d,$buyer,$b] = $this->actualReceipt(80, 20);
+        DB::transaction(fn () => app(StockLedger::class)->apply($b->fresh(), $this->lead->id, ['quarantined' => -20, 'waste' => 20], 'fixture_reviewed_damage_loss', (string) Str::ulid(), 'Documented physical damaged-goods disposal'));
+        $this->sell($b, 40);
+        $i = $this->finalInvoice($d);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'applied', 'stock_adjustment' => 8000, 'cogs_adjustment' => 8000, 'loss_adjustment' => 4000]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 40, 'remaining_value' => 88000]);
+        $this->assertDatabaseHas('inventory_cost_entries', ['inventory_batch_id' => $b->id, 'source_type' => 'fixture_reviewed_damage_loss', 'quantity_delta' => -20, 'value_delta' => -40000]);
+    }
+
+    public function test_zero_good_received_invoice_line_cannot_silently_ignore_positive_quarantine_value(): void
+    {
+        $this->supplierProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        $this->localProduct->update(['pack_size' => 1, 'portion_size' => 1, 'wholesale_price' => 2000]);
+        [$order,$source] = $this->ready(100, 100);
+        DB::table('inventory_values')->where('inventory_batch_id', $source['id'])->update(['remaining_value' => 100001]);
+        $this->configure($this->center, $this->owner);
+        $this->configure($this->partner, $this->lead, 'recoverable', 'clearing');
+        $a = $this->dispatch($order, $source, 50);
+        $c = $this->dispatch($a['order'], $source, 50);
+        $first = $this->act($this->lead)->postJson('/api/v1/shipments/'.$a['shipment']['id'].'/receive', ['operation_id' => (string) Str::uuid(), 'version' => $c['order']['version'], 'lines' => [['shipment_line_id' => $a['shipment']['lines'][0]['id'], 'good_packs' => 0, 'damaged_packs' => 10, 'condition_note' => 'Ten damaged, forty missing']]])->assertOk()->json('data');
+        $this->postJson('/api/v1/shipments/'.$c['shipment']['id'].'/receive', ['operation_id' => (string) Str::uuid(), 'version' => $first['order']['version'], 'lines' => [['shipment_line_id' => $c['shipment']['lines'][0]['id'], 'good_packs' => 50, 'damaged_packs' => 0]]])->assertOk();
+        $i = $this->act($this->owner)->postJson($this->billing($a).'/invoices', [...$this->invoiceBody($a, 'good_received'), 'shipment_ids' => [$a['shipment']['id'], $c['shipment']['id']], 'shipping_amount' => 0, 'tax_basis_points' => 0])->assertCreated()->json('data');
+        $this->acceptInvoice($a, $i);
+        $b = InventoryBatch::where('store_id', $this->target->id)->firstOrFail();
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'review_required']);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 60, 'remaining_value' => 120000]);
+        $this->assertDatabaseCount('inventory_invoice_variances', 0);
+    }
+
+    public function test_known_free_receipt_preserves_zero_cost_evidence_and_participates_in_later_mixed_invoice(): void
+    {
+        [$d,$buyer,$b] = $this->actualReceipt(100, 0, 0);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 100, 'remaining_value' => 0]);
+        $this->assertDatabaseHas('accounting_receipt_costs', ['organization_id' => $this->partner->id, 'quoted_value' => 0, 'good_pieces' => 100]);
+        $this->assertSame(0, DB::table('accounting_events')->where('organization_id', $this->partner->id)->where('source_type', 'distribution_receipt')->count());
+        $this->supplierProduct->update(['wholesale_price' => 2000]);
+        $this->localProduct->update(['wholesale_price' => 2000]);
+        $second = $this->restockSameBatch();
+        $this->sell($b, 100);
+        $i = $this->finalInvoice($second);
+        $this->assertDatabaseHas('accounting_invoice_revaluations', ['invoice_id' => $i['id'], 'status' => 'applied', 'stock_adjustment' => 10000, 'cogs_adjustment' => 10000]);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 100, 'remaining_value' => 110000]);
+    }
+
+    public function test_manually_reconciled_dispatch_is_not_automatically_expensed_a_second_time(): void
+    {
+        [$d,$buyer,$b] = $this->actualReceipt(90, 0, manualDispatch: true);
+        $event = $this->event($this->center->id, 'distribution_cogs', $d['shipment']['lines'][0]['id']);
+        $this->assertSame('review_required', $event->status);
+        $this->assertStringContainsString('sudah direkonsiliasi', $event->reason);
+        app(AutomaticPosting::class)->drain();
+        $this->assertSame(0, DB::table('accounting_journals')->where('organization_id', $this->center->id)->count());
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'remaining_value' => 180000]);
+    }
+
+    public function test_receipt_cost_evidence_failure_rolls_back_both_buckets_then_original_uuid_recovers_once(): void
+    {
+        [$d,$buyer,$b] = $this->actualReceipt(80, 20, proofFailure: true);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 100, 'remaining_value' => 200000]);
+        $this->assertDatabaseCount('accounting_receipt_costs', 1);
+        $this->assertSame(1, DB::table('accounting_events')->where('organization_id', $this->partner->id)->where('source_type', 'distribution_receipt')->count());
+        $this->assertSame(2, app(AutomaticPosting::class)->drain());
+        $this->assertSame(0, app(AutomaticPosting::class)->drain());
+    }
+
+    public function test_zero_value_owned_receipt_cannot_be_converted_to_manual_or_automatic_consignment(): void
+    {
+        [$d,$buyer,$b] = $this->actualReceipt(100, 0, 0, sourceValue: 0);
+        $this->assertSame(0, DB::table('accounting_events')->whereIn('source_type', ['distribution_receipt', 'distribution_cogs'])->count());
+        $contract = PartnershipContract::create(['organization_id' => $this->center->id, 'partner_id' => $this->partner->id, 'created_by' => $this->owner->id, 'title' => 'New consignment contract', 'mode' => 'consignment', 'status' => 'accepted', 'version' => 3, 'starts_on' => '2026-01-01', 'ends_on' => '2026-12-31', 'terms' => 'Both parties must reconcile previous ownership', 'brand_terms' => 'Brand', 'data_scope' => 'Agreed addenda', 'facilities' => 'None']);
+        $this->act($this->lead)->postJson($this->billing($d).'/reports', ['operation_id' => (string) Str::uuid(), 'contract_id' => $contract->id, 'period_start' => '2026-11-01', 'period_end' => '2026-11-09', 'note' => 'Must not replace owned-zero receipt', 'lines' => [['order_line_id' => $d['order']['lines'][0]['id'], 'quantity_pieces' => 10]]])->assertConflict();
+        $terms = ['basis' => 'net_sales', 'supplier_basis_points' => 3000, 'tax_basis_points' => 0, 'loss_policy' => 'zero_floor', 'bundle_basis' => 'reject', 'costs' => [], 'rounding' => 'floor_magnitude_per_line', 'refund_policy' => 'reverse_proportionally', 'movement_policy' => 'original_receipt_store_only', 'frequency' => 'continuous', 'data_scope' => 'allocated_receipt_totals'];
+        $g = $this->act($this->owner)->postJson('/api/v1/organizations/'.$this->center->id.'/commercial-agreements', ['operation_id' => (string) Str::uuid(), 'kind' => 'consignment', 'contract_id' => $contract->id, 'order_id' => $d['order']['id'], 'starts_on' => '2026-11-09', 'ends_on' => '2026-12-31', 'reference' => 'Requires ownership reconciliation', 'terms' => $terms])->assertCreated()->json('data');
+        $this->act($this->lead)->postJson('/api/v1/organizations/'.$this->partner->id.'/commercial-agreements/'.$g['id'].'/accept', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'reason' => 'Must reconcile ownership first', 'consent' => true, 'sharing_consented' => true])->assertConflict();
+        $this->assertDatabaseHas('commercial_agreements', ['id' => $g['id'], 'status' => 'pending']);
+        $this->assertDatabaseHas('inventory_values', ['inventory_batch_id' => $b->id, 'quantity' => 100, 'remaining_value' => 0]);
+        $this->assertDatabaseCount('consignment_reports', 0);
     }
 }

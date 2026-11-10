@@ -1,5 +1,16 @@
 # Bukti implementasi dan pengujian
 
+## Penerimaan aktual dan karantina — 10 November 2026
+
+**800 tes lulus:** API364/7960 assertions, web161/1417, Flutter275; analyzer bersih. Composer strict kedua aplikasi, Pint296files dan git diff --check lulus. Pemeriksaan ekuivalen scripts/check memakai Composer terkunci dan SDK Flutter3.35.7/Dart3.9.2 terverifikasi pada host karena Docker VFS. Tidak ada perubahan dependensi/lockfile.
+
+Sembilan tes API baru mencakup dua bucket bernilai, koreksi stok/HPP/susut setelah invoice, kekurangan kiriman dan residual HPP pemasok, mismatch quantity, baris invoice nol dengan karantina, proven-zero mixed receipts, perlindungan sumber sudah direkonsiliasi, rollback penyimpanan bukti serta penolakan konversi known-zero owned stock menjadi konsinyasi. Semua histori asli tetap immutable; retry tidak menggandakan bukti/jurnal.
+
+Seluruh isolated scripts/smoke-identity.py lulus termasuk skenario baru: actual64good/16quarantine, periode tertutup/reopen/retry, invoice120000 dengan stock correction18000/COGS2000, worker7/0; short72pieces, seller COGS45000/residual5000review, invoice mismatch tetap review, worker5/0. BFF menampilkan karantina/kekurangan dan menolak keuangan organisasi lain. Seluruh skenario lama termasuk receipt replacement operasional tetap lulus; ini bukan bukti valuasi replacement otomatis.
+
+Migrasi35 diterapkan tanpa reset data normal; normal smoke API/BFF lulus. Fixture/policy/financial consent hanya pada DB/container uji sementara. OpenAPI0.38.0:192operasi unik/245schemas; local refs, parameter path, required schema baru dan sintaks Python valid. Aturan biaya replacement masih menunggu jawaban pengguna. Uji printer/perangkat fisik, PostgreSQL dan UAT tetap release gates.
+
+
 ## Status terkini — printer dan otomatisasi lintas organisasi, 4 November 2026
 
 **634 tes lulus:** API260/3086 assertions, web146/1276, Flutter228. Ini mencakup22 tes tambahan di atas baseline612. Pemeriksaan ekuivalen scripts/check menggunakan Composer terkunci dan SDK Flutter3.35.7/Dart3.9.2 terverifikasi pada host karena batas VFS cloud; analyzer bersih. PHP Pint, Blade cache, Composer strict dan sintaks JS struk lulus. Tidak ada perubahan dependensi atau lockfile pada delivery tambahan ini.

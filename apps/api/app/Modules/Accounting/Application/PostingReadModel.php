@@ -136,7 +136,7 @@ final class PostingReadModel
                 if (! $pool || $pool->remaining_value === null) {
                     $actions[] = $make('value_propose', 'Ajukan nilai saldo awal batch', [$field('amount', 'Nilai total stok tersisa (Rp)', 'integer'), $note], ['batch_id' => $b->id, 'stock_revision' => $b->stock_revision]);
                 }
-                $rows[] = ['id' => $b->id, 'organization_id' => $org, 'summary' => $b->name.' · '.$b->batch_code.' · '.$qty.'biji milik organisasi · titipan retur '.(int) DB::table('accounting_return_costs')->where('inventory_batch_id', $b->id)->where('status', 'held')->sum('received_pieces').'biji · nilai tersisa Rp'.($pool?->remaining_value ?? 'belum diketahui').' · revisi'.$b->stock_revision, 'forms' => $actions];
+                $rows[] = ['id' => $b->id, 'organization_id' => $org, 'summary' => $b->name.' · '.$b->batch_code.' · '.$qty.'biji milik organisasi · titipan retur '.(int) DB::table('accounting_return_costs')->where('inventory_batch_id', $b->id)->where('status', 'held')->sum('received_pieces').'biji · konsinyasi milik pemasok '.app(ConsignorCosting::class)->held($b->id).'biji · nilai tersisa Rp'.($pool?->remaining_value ?? 'belum diketahui').' · revisi'.$b->stock_revision, 'forms' => $actions];
             }
             $page = $batches;
         }

@@ -4,6 +4,7 @@ namespace App\Modules\Commercial\Application;
 
 use App\Models\User;
 use App\Modules\Accounting\Application\CommercialPosting;
+use App\Modules\Accounting\Application\ConsignorCosting;
 use App\Modules\Commercial\Infrastructure\CommercialAgreement;
 use App\Modules\Identity\Application\Access;
 use App\Modules\Identity\Application\Audit;
@@ -157,6 +158,9 @@ final class AgreementWorkflow
             $g->decision_reason = $v['reason'];
             $g->version++;
             $g->save();
+            if ($action === 'accept') {
+                app(ConsignorCosting::class)->automatic($g, $u->id);
+            }
             $this->audit($u, $g, $action);
 
             return $g->toArray();

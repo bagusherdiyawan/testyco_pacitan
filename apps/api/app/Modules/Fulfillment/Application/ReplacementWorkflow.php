@@ -3,6 +3,7 @@
 namespace App\Modules\Fulfillment\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\ConsignorCosting;
 use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Fulfillment\Infrastructure\ReplacementLine;
 use App\Modules\Fulfillment\Infrastructure\ReplacementShipment;
@@ -157,6 +158,7 @@ final class ReplacementWorkflow
                 $line = new ReplacementLine(['replacement_shipment_id' => $shipment->id, 'original_shipment_line_id' => $q['shipment_line_id'], 'inventory_batch_id' => $w['batch_id'], 'local_product_id' => $item->local_product_id, 'sku' => $q['sku'], 'name' => $q['name'], 'local_sku' => $q['local_sku'], 'local_name' => $q['local_name'], 'condition' => $item->condition, 'batch_code' => $batch['batch_code'], 'expires_on' => $batch['expires_on'], 'pack_size' => $q['pack_size'], 'quantity_packs' => (int) $w['quantity_packs']]);
                 $line->id = $lineId;
                 $line->save();
+                app(ConsignorCosting::class)->dispatched($order, 'replacement_dispatch', $line->id, $item->id);
             }
             $case->increment('version');
             $shipment->load('lines');
@@ -196,6 +198,7 @@ final class ReplacementWorkflow
                 }
                 $line->update(['good_packs' => $good, 'damaged_packs' => $damage, 'condition_note' => $a['condition_note'] ?? null]);
                 app(DistributionCosting::class)->replacementReceived($order, $line, $user->id);
+                app(ConsignorCosting::class)->received($order, 'replacement_dispatch', $line->id, ($good + $damage) * $line->pack_size, $user->id);
             }
             $shipment->update(['received_at' => now(), 'received_by' => $user->id, 'receipt_note' => $v['note'] ?? null]);
             $case->increment('version');

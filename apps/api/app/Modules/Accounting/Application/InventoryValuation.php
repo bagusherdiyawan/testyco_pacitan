@@ -13,16 +13,30 @@ final class InventoryValuation
 {
     public function quantity(InventoryBatch $b): int
     {
-        return $b->usable_pieces + $b->opened_pieces + $b->ready_pieces + $b->quarantined_pieces - (int) DB::table('accounting_return_costs')->where('inventory_batch_id', $b->id)->where('status', 'held')->sum('received_pieces');
+        return $b->usable_pieces + $b->opened_pieces + $b->ready_pieces + $b->quarantined_pieces - (int) DB::table('accounting_return_costs')->where('inventory_batch_id', $b->id)->where('status', 'held')->sum('received_pieces') - app(ConsignorCosting::class)->held($b->id);
     }
 
-    public function movement(InventoryBatch $before, array $changes, string $type, string $source, int $actor, ?int $incoming = null, ?string $origin = null): void
+    public function movement(InventoryBatch $before, array $changes, string $type, string $source, int $actor, ?int $incoming = null, ?string $origin = null, ?int $offset = null): void
     {
+        $consignor = app(ConsignorCosting::class);
+        try {
+            if ($consignor->movement($before, $changes, $type, $source, $actor, $origin, $offset)) {
+                return;
+            }
+        } catch (\DomainException $e) {
+            abort(409, $e->getMessage());
+        }
         $quantity = $this->quantity($before);
         $delta = 0;
         foreach ($changes as $bucket => $n) {
             if ($bucket !== 'waste') {
                 $delta += $n;
+            }
+        }
+        if ($type === 'return_receipt') {
+            $returned = $consignor->returnIncoming($before, $source, $delta);
+            if ($returned['handled']) {
+                $incoming = $returned['value'];
             }
         }
         if ($type === 'return_receipt' && app(DistributionCosting::class)->custody($before, $source, $delta)) {
@@ -81,6 +95,9 @@ final class InventoryValuation
 
     public function returned(string $org, string $allocation, int $pieces, ?int $offset = null): ?int
     {
+        if (DB::table('consignor_cost_entries as e')->join('consignor_pools as p', 'p.id', '=', 'e.pool_id')->where('p.partner_id', $org)->where('e.source_type', 'pos_sale')->where('e.source_id', $allocation)->exists()) {
+            return 0;
+        }
         $sale = DB::table('inventory_cost_entries')->where('organization_id', $org)->where('source_type', 'pos_sale')->where('source_id', $allocation)->first();
         if (! $sale || $sale->value_delta === null) {
             return null;

@@ -2,7 +2,7 @@
 
 Tanggal baseline:3 November2026; pembaruan DL-18–DL-20:4 November2026. Ini daftar paket delivery untuk memantau perubahan yang nyata, bukan persentase kelengkapan seluruh BRD. ID tetap; pekerjaan baru ditambahkan, bukan mengganti arti/status item lama. **Selesai** berarti implementasi development dan tes dalam cakupan yang disebutkan; tidak berarti siap produksi. Detail kebutuhan tetap di [requirements](requirements.md), release gate di [roadmap](roadmap.md).
 
-Ringkasan ERP tambahan per10November2026 (terpisah dari DL baseline):
+Ringkasan ERP tambahan per11November2026 (terpisah dari DL baseline):
 
 | Cakupan pembukuan tambahan | Status development |
 | --- | --- |
@@ -11,7 +11,9 @@ Ringkasan ERP tambahan per10November2026 (terpisah dari DL baseline):
 | Transfer internal penerimaan aktual baik/karantina, biaya aktual tanpa omzet | Tersedia; biaya barang belum diterima tetap review sumber |
 | GL hak share/sponsor dan verified payments | Tersedia dengan policy prospektif per organisasi |
 | Closing formal, laba ditahan, reopening, laba rugi/posisi keuangan | Tersedia API/web/Flutter |
-| Valuasi pengganti, kesepakatan biaya hilang dan ownership retur buyout terbukti | Tersedia API/web/Flutter sesuai ADR060; sumber tanpa bukti/lineage ambigu dan physical consignor COGS tetap review |
+| Valuasi pengganti, kesepakatan biaya hilang dan ownership retur buyout terbukti | Tersedia API/web/Flutter sesuai ADR060; sumber tanpa bukti/lineage ambigu tetap review |
+
+| Valuasi fisik aset pemasok dalam konsinyasi dan HPP aktual | Tersedia API/web/Flutter sesuai [ADR061](../consignor-inventory.md); custody/transit, penjualan/refund fisik, retur karantina, susut reviewed dan bilateral loss. Legacy/ownership ambigu tetap review |
 
 | ID | Paket dengan batas yang dapat diuji | Status sekarang |
 | --- | --- | --- |

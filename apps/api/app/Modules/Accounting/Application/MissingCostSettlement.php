@@ -22,8 +22,8 @@ final class MissingCostSettlement
         abort_unless($r->version === $v['version'], 409, 'Versi kesepakatan biaya hilang berubah.');
         abort_unless(DB::table('shipment_discrepancies')->where('supply_order_id', $order->id)->where('shipment_id', $r->shipment_id)->exists(), 409, 'Laporkan kasus selisih dahulu sebelum menyepakati biaya hilang.');
         $costing = app(DistributionCosting::class);
-        $source = DB::table('inventory_cost_entries')->where('organization_id', $r->owner_organization_id)->where('id', $r->source_entry_id)->firstOrFail();
-        $event = $costing->review($source);
+        $source = $r->consignor_entry_id ? DB::table('consignor_cost_entries')->where('organization_id', $r->owner_organization_id)->where('id', $r->consignor_entry_id)->firstOrFail() : DB::table('inventory_cost_entries')->where('organization_id', $r->owner_organization_id)->where('id', $r->source_entry_id)->firstOrFail();
+        $event = $r->review_event_id ? DB::table('accounting_events')->where('organization_id', $r->owner_organization_id)->where('id', $r->review_event_id)->where('source_type', 'consignor_shortage')->lockForUpdate()->firstOrFail() : $costing->review($source);
         abort_unless($event && $event->status === 'review_required' && $source->value_delta !== null && -(int) $source->quantity_delta === (int) $r->sent_pieces && -(int) $source->value_delta - Proportion::floor(-(int) $source->value_delta, (int) $r->received_pieces, (int) $r->sent_pieces) === (int) $r->missing_value, 409, 'Bukti sumber hilang berubah/sudah direkonsiliasi; tidak boleh dibebankan dua kali.');
         if ($action === 'missing_propose') {
             abort_unless($org === $order->supplier_organization_id, 403, 'Hanya owner/admin pemasok yang mengusulkan kesepakatan.');
@@ -65,7 +65,10 @@ final class MissingCostSettlement
         }
         DB::table('accounting_missing_costs')->where('id', $r->id)->update($new);
         if ($new['status'] === 'approved') {
-            $costing->maybeCover($source);
+            if (! $r->consignor_entry_id) {
+                $costing->maybeCover($source);
+            }
+            app(ConsignorCosting::class)->missingSettled($r);
             $costing->wake($order->id, 'Barang retur tidak diterima');
         }
         $result = ['id' => $r->id, 'organization_id' => $org, 'version' => $new['version'], 'status' => $new['status'], 'missing_value' => (int) $r->missing_value, 'owner_share_basis_points' => $new['owner_share_basis_points'] ?? $r->owner_share_basis_points];

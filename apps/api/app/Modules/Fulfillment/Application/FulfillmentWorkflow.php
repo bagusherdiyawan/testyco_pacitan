@@ -3,6 +3,7 @@
 namespace App\Modules\Fulfillment\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\ConsignorCosting;
 use App\Modules\Accounting\Application\DistributionReceiptPosting;
 use App\Modules\Fulfillment\Infrastructure\Shipment;
 use App\Modules\Fulfillment\Infrastructure\ShipmentLine;
@@ -69,6 +70,7 @@ final class FulfillmentWorkflow
                 $shipmentLine = new ShipmentLine(['shipment_id' => $shipment->id, 'supply_order_line_id' => $line->id, 'inventory_batch_id' => $item['batch_id'], 'batch_code' => $batch['batch_code'], 'expires_on' => $batch['expires_on'], 'pack_size' => $line->pack_size, 'quantity_packs' => $item['packs']]);
                 $shipmentLine->id = $shipmentLineId;
                 $shipmentLine->save();
+                app(ConsignorCosting::class)->dispatched($order, 'shipment_dispatch', $shipmentLine->id, $line->id);
             }
             $hadReceipts = Shipment::where('supply_order_id', $id)->whereNotNull('received_at')->exists();
             $this->book->fulfillmentState($user, $order, $hadReceipts ? 'partially_received' : 'dispatched');
@@ -114,6 +116,7 @@ final class FulfillmentWorkflow
                 $line->fill(['good_packs' => $good, 'damaged_packs' => $damaged, 'condition_note' => $actual['condition_note'] ?? null]);
                 $line->save();
                 $valuation->received($order, $line, $user->id, $incomingValue, $incoming['policy_id']);
+                app(ConsignorCosting::class)->received($order, 'shipment_dispatch', $line->id, ($good + $damaged) * $line->pack_size, $user->id);
             }
             $shipment->fill(['received_by' => $user->id, 'received_at' => now(), 'receipt_note' => $v['note'] ?? null]);
             $shipment->save();

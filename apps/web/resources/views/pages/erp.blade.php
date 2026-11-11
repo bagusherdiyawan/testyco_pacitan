@@ -1,5 +1,5 @@
 <x-templates.console>
-@php($finance=in_array($context['section']??$q['section']??'materials',['closings','income_statement','balance_sheet','invoice_variances','distribution_settlements','distribution_costs','accounts','periods','journals','trial_balance','posting','posting_events','valuations','valuation_stock','cost_ledger']))
+@php($finance=in_array($context['section']??$q['section']??'materials',['closings','income_statement','balance_sheet','invoice_variances','distribution_settlements','consignor_values','consignor_ledger','distribution_costs','accounts','periods','journals','trial_balance','posting','posting_events','valuations','valuation_stock','cost_ledger']))
 <a href="/app/organizations/{{ $organization }}">← Organisasi</a><h1>{{ $finance?'Pembukuan dan jurnal':'Bahan baku, pembelian dan produksi' }}</h1>
 @if($finance)<p>Pemetaan akun disetujui pengelola lain. Periksa antrean dan tanggal sumber sebelum menutup periode. Pembelian wholesale ditampung sebelum rekonsiliasi persediaan.</p>@else
 <p>Hasil produksi masuk karantina sampai owner/admin pusat menyelesaikan pemeriksaan. Jumlah bahan menggunakan satuan yang tercantum; harga dan biaya dalam rupiah. Tidak ada resep, biaya, atau masa simpan bawaan.</p>

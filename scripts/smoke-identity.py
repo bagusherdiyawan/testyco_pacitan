@@ -1281,6 +1281,49 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert 'Biaya asal dipulihkan' in central_browser.open(web+erp_web+'?section=distribution_settlements').read().decode()
         ledger_before+=3
         print('PASS: replacement preserves buyer108000/current88pieces and supplier expense10001; real bilateral BFF missing5000 split/claim and shortage credit/freight reconciliation; return custody excluded until accepted credit then supplier original cost10000; private books, real workers and replay',flush=True)
+        print('Pacing physical consignor valuation HTTP checks for the next rate-limit window.',flush=True);time.sleep(60)
+        cs=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':ws['id'],'batch_code':'GL-CONSIGNOR-ACTUAL','expires_on':'2030-01-01','quantity_packs':10,'note':'Actual supplier-owned consignment source'},owner,201)['data']
+        cv=finance_post(erp_path,'value_propose',{'batch_id':cs['id'],'stock_revision':cs['stock_revision'],'amount':100001,'note':'Actual owner cost independent of share formula'},owner)
+        finance_post(erp_path,'value_decide',{'id':cv['id'],'version':1,'decision':'approve','note':'Owner second manager verifies actual opening'},reviewer_token)
+        co=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':ws['id'],'local_product_id':wl['id'],'quantity_packs':10}]},lead_token,201)['data']
+        co=api(base,'POST',f'orders/{co["id"]}/approve',{'operation_id':str(uuid.uuid4()),'version':co['version']},lead_token)['data']
+        co=api(base,'POST',f'orders/{co["id"]}/process',{'operation_id':str(uuid.uuid4()),'version':co['version'],'source_store_id':source},owner)['data']
+        cd=api(base,'POST',f'orders/{co["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':co['version'],'handler':'Consignor actual source','lines':[{'order_line_id':co['lines'][0]['id'],'allocations':[{'batch_id':cs['id'],'quantity_packs':10}]}]},owner,201)['data']
+        api(base,'POST',f'shipments/{cd["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':cd['order']['version'],'lines':[{'shipment_line_id':cd['shipment']['lines'][0]['id'],'good_packs':10,'damaged_packs':0}]},lead_token)
+        cterms={'basis':'margin','supplier_basis_points':3000,'tax_basis_points':0,'loss_policy':'zero_floor','bundle_basis':'reject','costs':[{'order_line_id':co['lines'][0]['id'],'cost_per_piece':700,'evidence_reference':'Contract formula deliberately distinct from actual cost'}],'rounding':'floor_magnitude_per_line','refund_policy':'reverse_proportionally','movement_policy':'original_receipt_store_only','frequency':'continuous','data_scope':'allocated_receipt_totals'}
+        cg=api(base,'POST',f'organizations/{center}/commercial-agreements',{'operation_id':str(uuid.uuid4()),'kind':'consignment','contract_id':cc['id'],'order_id':co['id'],'starts_on':datetime.now(timezone(timedelta(hours=7))).date().isoformat(),'ends_on':'2030-12-31','reference':'Supplier retains ownership and both parties authorize standing share','terms':cterms},owner,201)['data']
+        cb={'operation_id':str(uuid.uuid4()),'version':1,'reason':'Partner confirms ownership, formula and scoped sharing','consent':True,'sharing_consented':True}
+        cu=f'organizations/{org}/commercial-agreements/{cg["id"]}/accept';api(base,'POST',cu,cb,lead_token);api(base,'POST',cu,cb,lead_token)
+        values=api(base,'GET',erp_path+'/context?section=consignor_values',token=owner)['data'];cr=next(r for r in values if r['order_id']==co['id'])
+        assert cr['status']=='active' and cr['held_quantity']==80 and cr['held_value']==100001 and cr['transit_value']==0
+        peer=next(r for r in api(base,'GET',partner_erp+'/context?section=consignor_values',token=lead_token)['data'] if r['order_id']==co['id'])
+        assert peer['owned_value']==0 and 'held_value' not in peer and '100001' not in peer['summary']
+        api(base,'GET',erp_path+'/context?section=consignor_ledger',token=lead_token,expected=403)
+        assert 'Jurnal dibukukan: 1' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        c_batch=next(b for b in api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data'] if b['batch_code']=='GL-CONSIGNOR-ACTUAL')
+        ci=api(base,'POST',f'stores/{store}/sales/intents',{'operation_id':str(uuid.uuid4()),'shift_id':sponsor_shift['id'],'lines':[{'product_id':wl['id'],'unit':'pack','quantity':2,'allocations':[{'batch_id':c_batch['id'],'bucket':'usable','quantity':2}]}]},cashier_token,201)['data']
+        pay={'operation_id':str(uuid.uuid4()),'payment_method':'cash','cash_received':ci['total_amount']}
+        c_sale=api(base,'POST',f'sales/intents/{ci["id"]}/pay',pay,cashier_token)['data'];api(base,'POST',f'sales/intents/{ci["id"]}/pay',pay,cashier_token)
+        docker('exec',api_name,'php','artisan','commercial:accrue','--limit=100')
+        cr=next(r for r in api(base,'GET',erp_path+'/context?section=consignor_values',token=owner)['data'] if r['order_id']==co['id'])
+        assert cr['held_quantity']==64 and cr['held_value']==80001
+        costs=api(base,'GET',erp_path+'/context?section=posting_events',token=owner)['data']
+        assert any(e['source_type']=='consignor_cogs' and json.loads(e['terms'])==[['cogs','finished',20000]] for e in costs)
+        assert 'Jurnal dibukukan: 3' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        shift=api(base,'GET',f'shifts/{c_sale["cash_shift_id"]}',token=cashier_token)['data']
+        rb={'version':c_sale['version'],'shift_id':shift['id'],'shift_version':shift['version'],'stock_disposition':'quarantine','reference':'CONSIGNOR-PHYSICAL-REFUND','reason':'One original consigned pack actually returned','lines':[{'sale_line_id':c_sale['lines'][0]['id'],'quantity':1}]}
+        rq=api(base,'POST',f'sales/{c_sale["id"]}/refunds/preview',rb,lead_token)['data'];rb.update({'operation_id':str(uuid.uuid4()),'verified':True,'review_hash':rq['review_hash']})
+        api(base,'POST',f'sales/{c_sale["id"]}/refunds',rb,lead_token,201);api(base,'POST',f'sales/{c_sale["id"]}/refunds',rb,lead_token,201)
+        docker('exec',api_name,'php','artisan','commercial:accrue','--limit=100')
+        cr=next(r for r in api(base,'GET',erp_path+'/context?section=consignor_values',token=owner)['data'] if r['order_id']==co['id'])
+        assert cr['held_quantity']==72 and cr['held_value']==90001
+        assert 'Jurnal dibukukan: 3' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
+        assert '90001' in central_browser.open(web+erp_web+'?section=consignor_values').read().decode()
+        peer_html=opener.open(web+partner_cost_web+'?section=consignor_values').read().decode();assert '90001' not in peer_html and 'milik pemasok' in peer_html
+        ledger_before+=3
+        print('PASS: actual consignor asset100001 retained offsite, holder owned-value0/private cost denial, POS COGS20000 versus distinct margin formula, physical refund restores10000/remaining90001, real BFF, worker1/3/3 and replay0',flush=True)
         # Native password change uses the existing authenticated endpoint: revoke every token.
         other_cashier_token=api(base,'POST','auth/login',{'email':cashier['email'],'password':PASSWORD,'device_name':'second-session'})['token']
         new_password=secrets.token_urlsafe(24)+'Aa7'

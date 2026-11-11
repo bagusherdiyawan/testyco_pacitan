@@ -3,6 +3,7 @@
 namespace App\Modules\Fulfillment\Application;
 
 use App\Models\User;
+use App\Modules\Accounting\Application\ConsignorCosting;
 use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Fulfillment\Infrastructure\ReturnLine;
 use App\Modules\Fulfillment\Infrastructure\ReturnShipment;
@@ -167,6 +168,7 @@ final class ReturnWorkflow
                     $this->stock->credit($o->supplier_organization_id, $o->source_store_id, ['id' => $l->supplier_product_id, 'sku' => $l->sku, 'name' => $l->name, 'condition' => $l->condition, 'pack_size' => $l->pack_size], $l->batch_code, $l->expires_on->format('Y-m-d'), (int) $a['received_packs'], $u->id, 'return_receipt', $l->id, 'quarantined', $a['condition_note'] ?? null);
                 }$l->update(['received_packs' => (int) $a['received_packs'], 'condition_note' => $a['condition_note'] ?? null]);
                 app(DistributionCosting::class)->returnReceived($o, $l, $u->id);
+                app(ConsignorCosting::class)->returnReceived($o, $l, $u->id);
             }
             $s->update(['received_by' => $u->id, 'received_at' => now(), 'receipt_note' => $v['note'] ?? null]);
             $case->increment('version');

@@ -21,7 +21,7 @@ use Illuminate\Support\Facades\DB;
 
 final class ErpReadModel
 {
-    public const SECTIONS = ['materials', 'suppliers', 'purchases', 'lots', 'recipes', 'productions', 'counts', 'ledger', 'planning', 'report', 'trace', 'operators', 'accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs', 'invoice_variances', 'distribution_settlements', 'closings', 'income_statement', 'balance_sheet'];
+    public const SECTIONS = ['materials', 'suppliers', 'purchases', 'lots', 'recipes', 'productions', 'counts', 'ledger', 'planning', 'report', 'trace', 'operators', 'accounts', 'periods', 'journals', 'trial_balance', 'posting', 'posting_events', 'valuations', 'valuation_stock', 'cost_ledger', 'distribution_costs', 'invoice_variances', 'distribution_settlements', 'consignor_values', 'consignor_ledger', 'closings', 'income_statement', 'balance_sheet'];
 
     public function __construct(private ErpAccess $access) {}
 

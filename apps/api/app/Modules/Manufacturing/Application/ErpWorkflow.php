@@ -5,6 +5,7 @@ namespace App\Modules\Manufacturing\Application;
 use App\Models\User;
 use App\Modules\Accounting\Application\AutomaticPosting;
 use App\Modules\Accounting\Application\CommercialPolicy;
+use App\Modules\Accounting\Application\ConsignorCosting;
 use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Accounting\Application\GeneralLedger;
 use App\Modules\Accounting\Application\InventoryValuation;
@@ -32,6 +33,9 @@ final class ErpWorkflow
         $this->access->command($u, $org, $action, $v);
 
         return $this->ops->run($org, $u->id, $v['operation_id'], 'erp.'.$action.':'.$org, $v, function () use ($u, $org, $action, $v) {
+            if (in_array($action, ['consignor_enable', 'consignor_retry', 'consignor_dispose'], true)) {
+                return [...app(ConsignorCosting::class)->command($u, $org, $action, $v), 'operation_id' => $v['operation_id']];
+            }
             if (in_array($action, ['missing_propose', 'missing_decide'], true)) {
                 return [...app(MissingCostSettlement::class)->command($u, $org, $action, $v), 'operation_id' => $v['operation_id']];
             }

@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Application;
 
+use App\Modules\Accounting\Application\ConsignorCosting;
 use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use Carbon\CarbonImmutable;
@@ -32,6 +33,9 @@ final class FoodSafety
 
     public function eligible(InventoryBatch $b, string $bucket): bool
     {
+        if (app(ConsignorCosting::class)->blocked($b->organization_id, $b->id)) {
+            return false;
+        }
         if (app(DistributionCosting::class)->blocked($b->organization_id, $b->id)) {
             return false;
         }

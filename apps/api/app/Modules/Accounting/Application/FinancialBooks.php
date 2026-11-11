@@ -81,6 +81,7 @@ final class FinancialBooks
     {
         return [
             'source_events' => DB::table('accounting_events')->where('organization_id', $org)->where('event_on', '<=', $period->ends_on)->whereNotIn('status', ['posted', 'reconciled'])->count(),
+            'consignor_valuations' => DB::table('consignor_valuations')->where('organization_id', $org)->where('activated_on', '<=', $period->ends_on)->where('status', '!=', 'active')->count(),
             'distribution_revaluations' => DB::table('accounting_distribution_jobs')->where('organization_id', $org)->where('event_on', '<=', $period->ends_on)->where('status', '!=', 'applied')->count(),
             'missing_agreements' => DB::table('accounting_missing_costs')->where(fn ($q) => $q->where('owner_organization_id', $org)->orWhere('counterparty_organization_id', $org))->where('event_on', '<=', $period->ends_on)->where('status', '!=', 'approved')->count(),
             'invoice_revaluations' => DB::table('accounting_invoice_revaluations')->where('organization_id', $org)->where('event_on', '<=', $period->ends_on)->where('status', '!=', 'applied')->count(),

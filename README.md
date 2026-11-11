@@ -10,7 +10,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
-| `contracts/openapi.yaml` | Kontrak API 0.40.0 (JSON valid YAML, OpenAPI 3.1) |
+| `contracts/openapi.yaml` | Kontrak API 0.41.0 (JSON valid YAML, OpenAPI 3.1) |
 | `docs/product` | Kebutuhan, keputusan terbuka dan roadmap |
 | `docs/reference/Markdown` | Dokumen sumber dari lampiran ZIP |
 
@@ -19,6 +19,8 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 [Pembukuan otomatis ERP/POS](docs/automatic-accounting.md) dan [keuangan wholesale](docs/wholesale-accounting.md) tersedia setelah pemetaan akun disetujui pengelola berbeda pada organisasi masing-masing. Nilai/HPP distribusi dan komersial mengikuti batas rekonsiliasi yang dijelaskan di panduan.
 
 [Biaya pengganti, barang hilang dan retur](docs/distribution-cost-settlement.md) kini mengikuti persetujuan dua pihak, sisa nilai stok pembeli, beban pengganti pemasok dan custody retur sampai nota kredit disetujui. Layar administrasi tersedia melalui web dan Flutter; sumber tanpa bukti tetap review.
+
+[Valuasi fisik konsinyasi dan HPP pemasok](docs/consignor-inventory.md) kini otomatis untuk bukti prospektif: aset titipan/perjalanan tetap pada pemasok, penjualan dan refund fisik memakai biaya batch aktual, serta mitra tidak menerima biaya privat pemasok.
 
 ## Setup dan akun pertama
 

@@ -31,6 +31,8 @@ final class ErpController
             'material' => ['code' => 'required|string|max:60', 'name' => 'required|string|max:120', 'unit' => 'required|in:g,kg,ml,l,pcs', 'minimum' => 'required|string|max:20', 'expiry_required' => 'required|boolean', 'fefo_required' => 'required|boolean'],
             'material_configure' => [...$key, 'name' => 'required|string|max:120', 'minimum' => 'required|string|max:20', 'expiry_required' => 'required|boolean', 'fefo_required' => 'required|boolean', 'active' => 'required|boolean'],
             'operator_grant' => ['assignment' => 'required|string|regex:/^[1-9][0-9]*:[0-9A-Z]{26}$/i', 'grant_versions' => 'present|array|max:1000', 'grant_versions.*' => 'required|integer|min:1', 'enabled' => 'required|boolean', ...$note],
+            'consignor_enable' => ['agreement_id' => 'required|ulid', ...$note],
+            'consignor_retry', 'consignor_dispose' => [...$key, ...$note],
             'missing_propose' => [...$key, 'owner_share_basis_points' => 'required|integer|min:0|max:10000', ...$note],
             'missing_decide' => [...$key, 'decision' => 'required|in:approve,reject', 'consent' => 'required|accepted', ...$note],
             'distribution_retry' => [...$key, ...$note],

@@ -6,6 +6,8 @@ class ErpRepository {
   final ApiClient api;
   final String organization;
   static const financeSections = {
+    'consignor_values',
+    'consignor_ledger',
     'distribution_settlements',
     'closings',
     'income_statement',
@@ -23,6 +25,8 @@ class ErpRepository {
     'cost_ledger',
   };
   static const sections = {
+    'consignor_values': 'Stok konsinyasi milik pemasok',
+    'consignor_ledger': 'Jejak HPP aktual konsinyasi',
     'distribution_settlements': 'Biaya pengganti, hilang dan retur',
     'closings': 'Penutupan buku formal',
     'income_statement': 'Laporan laba rugi',
@@ -52,6 +56,9 @@ class ErpRepository {
     'trace': 'Jejak bahan ke produksi',
   };
   static const actions = {
+    'consignor_enable',
+    'consignor_retry',
+    'consignor_dispose',
     'missing_propose',
     'missing_decide',
     'distribution_retry',

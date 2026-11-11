@@ -2,6 +2,7 @@
 
 namespace App\Modules\Inventory\Application;
 
+use App\Modules\Accounting\Application\ConsignorCosting;
 use App\Modules\Accounting\Application\DistributionCosting;
 use App\Modules\Accounting\Application\DistributionValueWriter;
 use App\Modules\Accounting\Application\InventoryValuation;
@@ -50,11 +51,14 @@ final class StockLedger
         return $batch->fresh()->toArray();
     }
 
-    public function apply(InventoryBatch|MaterialLot $batch, int $actor, array $changes, string $sourceType, string $sourceId, ?string $note = null, int $valueDelta = 0, ?int $inventoryValue = null, ?string $costOrigin = null): InventoryBatch|MaterialLot
+    public function apply(InventoryBatch|MaterialLot $batch, int $actor, array $changes, string $sourceType, string $sourceId, ?string $note = null, int $valueDelta = 0, ?int $inventoryValue = null, ?string $costOrigin = null, ?int $costOffset = null): InventoryBatch|MaterialLot
     {
         abort_unless(DB::transactionLevel() > 0, 500, 'Pergerakan stok harus dalam transaksi.');
         if ($batch instanceof MaterialLot) {
             return app(MaterialLedger::class)->commit($batch, $actor, $changes, $valueDelta, $sourceType, $sourceId, $note ?? '');
+        }
+        if ($sourceType === 'consignment_bind' && $changes === []) {
+            return app(ConsignorCosting::class)->bind($batch, $sourceId);
         }
         if ($sourceType === 'distribution_value' && $changes === []) {
             return app(DistributionValueWriter::class)->write($batch, $sourceId, $valueDelta);
@@ -91,7 +95,7 @@ final class StockLedger
             $deltas[$key] = $delta;
         }
         if ($deltas) {
-            app(InventoryValuation::class)->movement(clone $batch, $deltas, $sourceType, $sourceId, $actor, $inventoryValue, $costOrigin);
+            app(InventoryValuation::class)->movement(clone $batch, $deltas, $sourceType, $sourceId, $actor, $inventoryValue, $costOrigin, $costOffset);
             if (isset($attributes['ready_pieces']) && $attributes['ready_pieces'] === 0) {
                 $attributes['ready_expires_at'] = null;
             }

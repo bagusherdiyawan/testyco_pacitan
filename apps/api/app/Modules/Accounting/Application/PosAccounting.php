@@ -10,6 +10,7 @@ final class PosAccounting
 {
     public function sale(Sale $s): void
     {
+        app(ConsignorCosting::class)->sale($s);
         $allocations = DB::table('sale_allocations')->join('sale_lines', 'sale_lines.id', '=', 'sale_allocations.sale_line_id')->where('sale_lines.sale_id', $s->id)->select('sale_allocations.*')->get();
         $terms = [[$s->payment_method === 'cash' ? 'cash' : 'bank', 'sales', $s->total_amount], ['discount', 'sales', $s->discount_amount]];
         $reason = null;
@@ -32,6 +33,7 @@ final class PosAccounting
 
     public function refund(Sale $s, SaleRefund $refund, array $sourceIds): void
     {
+        app(ConsignorCosting::class)->refund($refund, $sourceIds);
         $terms = [['refund', $s->payment_method === 'cash' ? 'cash' : 'bank', $refund->amount]];
         foreach ($sourceIds as $id) {
             $c = DB::table('inventory_cost_entries')->where('organization_id', $s->organization_id)->where('source_type', 'sale_refund')->where('source_id', $id)->first();

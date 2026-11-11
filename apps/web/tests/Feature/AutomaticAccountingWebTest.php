@@ -193,4 +193,50 @@ class AutomaticAccountingWebTest extends TestCase
             $this->get('/app/organizations/ORG/erp?section='.$section.'&period_id='.$periodId)->assertStatus(503);
         }
     }
+
+    public function test_consignor_retry_preserves_source_id_version_and_note_through_unknown_and_denial(): void
+    {
+        $id = (string) Str::ulid();
+        $fixed = ['id' => $id, 'version' => 2];
+        $form = ['key' => 'consignor_retry-'.$id, 'operation' => 'consignor_retry', 'label' => 'Periksa ulang aktivasi konsinyasi', 'fields' => [['key' => 'note', 'label' => 'Bukti pemeriksaan', 'kind' => 'text', 'options' => [], 'optional' => false]], 'fixed' => $fixed, 'subject_id' => $id, 'expected_id' => $id, 'expected_version' => 3];
+        $c = ['organization_id' => 'ORG', 'section' => 'consignor_values', 'can_manage' => true, 'allowed_sections' => ['consignor_values'], 'current_page' => 1, 'next_page_url' => null, 'forms' => [], 'data' => [['id' => $id, 'organization_id' => 'ORG', 'summary' => 'Periode asal harus diperiksa <script>bad</script>', 'forms' => [$form]]], 'filter_stores' => [], 'filter_materials' => []];
+        $sent = [];
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(function ($r) use ($c, $id, &$sent) {
+            if ($r->method() === 'GET') {
+                return Http::response($c);
+            }
+            $sent[] = $r->data();
+            $n = count($sent);
+
+            return Http::response($n < 3 ? ['message' => 'Unknown'] : ['data' => ['id' => $id, 'organization_id' => 'ORG', 'version' => 3, 'operation_id' => $r['operation_id']]], $n === 1 ? 503 : ($n === 2 ? 403 : 201));
+        });
+        $this->withSession(['api_token' => 'private', 'api_user' => ['id' => 1], 'api_expires_at' => time() + 1000])->get('/app/organizations/ORG/erp?section=consignor_values')->assertOk()->assertSee('Pembukuan dan jurnal')->assertDontSee('<script>bad</script>', false);
+        $this->post('/app/organizations/ORG/erp/review', ['section' => 'consignor_values', 'form_key' => $form['key'], 'fixed_json' => json_encode($fixed), 'values' => ['note' => 'Periode dan bukti asli diperiksa']])->assertRedirect();
+        $this->assertCount(0, $sent);
+        $this->post('/app/organizations/ORG/erp/confirm')->assertRedirect();
+        $this->post('/app/organizations/ORG/erp/retry')->assertRedirect();
+        $this->assertNotNull(session('erp_pending.ORG'));
+        $this->post('/app/organizations/ORG/erp/retry')->assertRedirect();
+        $this->assertSame($sent[0], $sent[1]);
+        $this->assertSame($sent[0], $sent[2]);
+        $this->assertSame($id, $sent[0]['id']);
+        $this->assertSame(2, $sent[0]['version']);
+        $this->assertNull(session('erp_pending.ORG'));
+    }
+
+    public function test_consignor_queue_escapes_evidence_and_rejects_foreign_rows(): void
+    {
+        $c = ['organization_id' => 'ORG', 'section' => 'consignor_values', 'can_manage' => true, 'current_page' => 1, 'next_page_url' => null, 'data' => [['id' => 'E', 'organization_id' => 'ORG', 'summary' => 'Biaya belum diketahui <script>bad</script>', 'forms' => []]], 'forms' => [], 'filter_stores' => [], 'filter_materials' => []];
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response($c)]);
+        $this->withSession(['api_token' => 'private', 'api_user' => ['id' => 1], 'api_expires_at' => time() + 1000])->get('/app/organizations/ORG/erp?section=consignor_values')->assertOk()->assertDontSee('<script>bad</script>', false);
+        $c['data'][0]['organization_id'] = 'OTHER';
+        Http::swap(new Factory);
+        Http::preventStrayRequests();
+        Http::fake(['*' => Http::response($c)]);
+        $this->get('/app/organizations/ORG/erp?section=consignor_values')->assertStatus(503);
+    }
 }

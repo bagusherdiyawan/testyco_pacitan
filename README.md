@@ -7,7 +7,7 @@ Monorepo Laravel API, Laravel web terpisah dan Flutter mobile/tablet untuk jarin
 | Direktori | Isi |
 | --- | --- |
 | `apps/api` | Laravel 12 + Sanctum, provider Identity, Catalog, Partnership, Ordering, Inventory, Fulfillment, Shifts, Promotions, Sales, Billing, Reporting, Assets dan Reliability, persistence SQLite untuk development |
-| `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form |
+| `apps/web` | Laravel 12 + Blade, frontend/BFF melalui HTTP; token di session server, CSRF pada form. Konsol memakai aset [Soft UI Dashboard](docs/web-console-ui.md) (MIT) dengan dashboard grafik penjualan |
 | `apps/pos` | Flutter 3.35.7, login, toko, katalog, stok, pesanan dan POS tunai/shift mobile/tablet |
 | `packages/design-tokens` | Token visual bersama; komponen atomic design native tiap framework |
 | `contracts/openapi.yaml` | Kontrak API 0.43.0 (JSON valid YAML, OpenAPI 3.1) |

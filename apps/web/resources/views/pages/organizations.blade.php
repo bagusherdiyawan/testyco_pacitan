@@ -1,5 +1,10 @@
 <x-templates.console>
-    <h1>Workspace organisasi</h1>
+    @if($dashboard)
+        <x-organisms.sales-dashboard :dashboard="$dashboard" />
+        <h2 class="mt-4">Workspace organisasi</h2>
+    @else
+        <h1>Workspace organisasi</h1>
+    @endif
     <section class="module-grid">
         @foreach($organizations as $org)
             <article class="module-card">

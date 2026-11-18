@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.42.0",
+    "version": "0.43.0",
     "description": "Authenticated, modular organization/store-scoped operations. Explicit per-document wholesale invoice basis, discounts/shipping/tax/rounding/due date and partner consent; verified manual partial collections, reversals, customer-credit liability, bounded two-party credits and signed-contract/manual consignment reports. Confirmed physical returns move damaged goods from partner quarantine to original center quarantine, never usable. Online POS supports cash and explicitly verified QRIS/transfer, own-issuer-funded store/product vouchers and reviewed manager refunds using historical discounted prices and actual component allocations. No payment-provider calls, automatic profit sharing, automatic offline noncash settlement. Cash-sales reports retain original cash-sale scope and exclude noncash/B2B and refund deduction; refunds are separately recorded. Immutable UUID retries, parent/version locks, private files and scoped audit remain mandatory. Development SQLite only; PostgreSQL concurrency, production tax/legal acceptance, device/printer and UAT are not verified. DL18–20: SMTP/inbox (push deferred), explicit organization-leader SOP/recall/FEFO, encrypted MFA/reset and device sessions, durable encrypted cash-only offline queue with review conflicts, contract-backed asset lifecycle and bounded commercial cohort reports with evidenced net costs. External SMTP delivery and real device Keystore/release remain unverified. Explicit bilateral standing consignment/profit-sharing and sponsored promotions now accrue immutable settlement deltas with historical refund reversals and hard sponsor budgets, separate from manual invoices. Coordinated recalls follow real receipt provenance and recipient-leader hold/release. Native ESC/POS TCP LAN58/80mm and browser/system printing are client integrations; transport send is not physical print acknowledgement. Push and payment gateways remain deferred. ERP manufacturing: own active center owner/admin only. Exact kg/g/l/ml/whole-pcs material ledgers dispatch through StockLedger.apply; explicit opening values, approved supplier purchases/partial receipts/verified payments and supplier refunds. Immutable recipe versions may output a finished product or an intermediate material. Production consumes actual eligible reviewed lot revisions atomically with quarantined output and lot-derived costs; owner/admin must inspect before release. Explicit FEFO and minimum settings, independent material counts, internal transfers, bounded planning/HPP and transitive material trace. No invented recipe, yield, lifetime, tax, cost or auto bank/recall policy. Web and native Flutter use scoped declarative forms and immutable UUID retry. Explicit per-user/per-assigned-store production grants now allow warehouse/store managers to plan and record production including process cost; supplier finance and mandatory QC remain owner/admin only. Manual double-entry accounting includes explicit chart/normal balances, independent draft review, exact linked reversals, activity-versioned open/closed periods and bounded opening/movement/closing trial balance with period account net movements and as-of categories. No automatic ERP/POS historical posting or chart/tax mapping is implied. ADR060 adds source-proven replacement costing, bilateral missing-cost agreements and return custody/ownership. Only remaining buyer stock value is redistributed, including quarantine, preserving historical COGS; supplier replacement expense covers actual received dispatch cost. Pending replacement valuation blocks depletion. Missing burden is explicitly proposed by center then approved by partner leader; exact loss/claim journals do not transfer funds. Supplier return custody is excluded from owned inventory quantity/value and disposal until physical receipt and accepted credit coverage; supplier recovery uses original dispatch cost. Own-org section distribution_settlements supports missing_propose(id,version,owner_share_basis_points,note), missing_decide(id,version,decision,consent,note), distribution_retry(id,version,note), all with operation_id. Pure shortage credits can reconcile actual invoice quantity/capital; ambiguous mixed damage/shortage remains reviewed. Unknown/cutover/manual-reconciled/mixed lineage never becomes guessed zero. See docs/distribution-cost-settlement.md."
   },
   "security": [
@@ -22441,6 +22441,113 @@
           }
         }
       }
+    },
+    "/api/v1/organizations/{organization}/reports/sales-trend": {
+      "get": {
+        "operationId": "readSalesTrend",
+        "summary": "Read daily sales for dashboards: all confirmed payment methods, Asia/Jakarta calendar days, refunds on their own day, top products",
+        "description": "Read daily sales for dashboards: all confirmed payment methods, Asia/Jakarta calendar days, refunds on their own day, top products. Same period rules (at most 31 days, explicit offsets) and store scoping as the cash sales report. Read only. Development SQLite; the PostgreSQL date expression and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            },
+            "description": "Optional authorized store; omission aggregates only stores currently authorized in this organization."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SalesTrend"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization role or store filter outside authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid period/filter or export exceeds 10000 transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -37704,6 +37811,148 @@
           "lines"
         ],
         "additionalProperties": false
+      },
+      "SalesTrend": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "object"
+          },
+          "available_stores": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "IDR"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "server_confirmed_sales_all_payment_methods"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Asia/Jakarta calendar day"
+                },
+                "transactions": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cash": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "noncash": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Verified bank transfer and manual QRIS"
+                },
+                "refunds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Refunds made on this day, not netted into the sale day"
+                }
+              },
+              "required": [
+                "date",
+                "transactions",
+                "cash",
+                "noncash",
+                "refunds"
+              ]
+            }
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "transactions": {
+                "type": "integer"
+              },
+              "cash": {
+                "type": "integer"
+              },
+              "noncash": {
+                "type": "integer"
+              },
+              "refunds": {
+                "type": "integer"
+              },
+              "revenue": {
+                "type": "integer"
+              },
+              "net_revenue": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "transactions",
+              "cash",
+              "noncash",
+              "refunds",
+              "revenue",
+              "net_revenue"
+            ]
+          },
+          "top_products": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "sku": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "sold_pieces": {
+                  "type": "integer"
+                },
+                "gross_sales": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "sku",
+                "name",
+                "sold_pieces",
+                "gross_sales"
+              ]
+            }
+          }
+        },
+        "required": [
+          "organization",
+          "from",
+          "to",
+          "days",
+          "totals",
+          "top_products"
+        ]
       }
     }
   }

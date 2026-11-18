@@ -23,6 +23,9 @@ final class ReportingServiceProvider extends ServiceProvider
             Route::get('', [CommercialReportController::class, 'read']);
             Route::post('costs', [CommercialReportController::class, 'cost']);
         });
+        Route::prefix('api/v1/organizations/{organization}/reports/sales-trend')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
+            Route::get('', [CashReportController::class, 'trend']);
+        });
         Route::prefix('api/v1/organizations/{organization}/reports/cash-sales')->middleware(['api', 'auth:sanctum', ActiveUser::class, 'throttle:business'])->group(function () {
             Route::get('', [CashReportController::class, 'summary']);
             Route::get('products', [CashReportController::class, 'products']);

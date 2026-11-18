@@ -1,0 +1,2 @@
+@props(['code','title','hint','message'=>null])
+<x-templates.app><section class="error-page"><p class="error-code" aria-hidden="true">{{ $code }}</p><h1>{{ $title }}</h1><p>{{ filled($message) ? $message : $hint }}</p><div class="hero-actions"><a class="button" href="/app">Kembali ke workspace</a><a class="button button--lite" href="javascript:history.back()">Halaman sebelumnya</a></div></section></x-templates.app>

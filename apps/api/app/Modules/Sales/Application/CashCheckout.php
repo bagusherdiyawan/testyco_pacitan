@@ -6,6 +6,8 @@ use App\Models\User;
 use App\Modules\Accounting\Application\PosAccounting;
 use App\Modules\Catalog\Application\RetailPricing;
 use App\Modules\Commercial\Application\ConsignmentAutomation;
+use App\Modules\Consumables\Application\ConsumableBook;
+use App\Modules\Consumables\ConsumablesServiceProvider;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Inventory\Application\SaleStock;
 use App\Modules\Promotions\Application\VoucherBook;
@@ -39,6 +41,16 @@ final class CashCheckout
         return $allocations;
     }
 
+    /** Packaging and cutlery are deducted in the checkout transaction; a shortage never blocks the sale. */
+    private function consumeSupplies(Sale $sale, array $items, ?string $serviceType, int $actor): array
+    {
+        if (! $serviceType || ! app()->getProvider(ConsumablesServiceProvider::class)) {
+            return [];
+        }
+
+        return app(ConsumableBook::class)->consume($sale->organization_id, $sale->store_id, $sale->id, $items, $serviceType, $actor);
+    }
+
     public function receipt(string $id): array
     {
         return [...Sale::with('lines')->findOrFail($id)->toArray(), 'refunds' => SaleRefund::where('sale_id', $id)->orderBy('id')->get()->toArray()];
@@ -58,7 +70,7 @@ final class CashCheckout
             $gross = $snapshot['total_amount'];
             $discount = $voucher['discount_amount'] ?? 0;
             $snapshot['total_amount'] = $gross - $discount;
-            $intent = SaleIntent::create(['subtotal' => $gross, 'discount_amount' => $discount, 'voucher_snapshot' => $voucher, 'organization_id' => $s->organization_id, 'store_id' => $store, 'cash_shift_id' => $shift->id, 'cashier_id' => $user->id, 'status' => 'pending', ...$snapshot]);
+            $intent = SaleIntent::create(['subtotal' => $gross, 'discount_amount' => $discount, 'voucher_snapshot' => $voucher, 'organization_id' => $s->organization_id, 'store_id' => $store, 'cash_shift_id' => $shift->id, 'cashier_id' => $user->id, 'status' => 'pending', 'service_type' => $v['service_type'] ?? null, ...$snapshot]);
             Audit::record($user->id, $s->organization_id, 'sale.intent_created', $intent->id, null, ['shift_id' => $shift->id, 'total_amount' => $intent->total_amount]);
 
             return $intent->toArray();
@@ -125,6 +137,8 @@ final class CashCheckout
                 $allocation->id = $a['allocation_id'];
                 $allocation->save();
             }
+            $consumption = $this->consumeSupplies($sale, $intent->items, $intent->service_type, $user->id);
+            $sale->forceFill(['service_type' => $intent->service_type, 'consumption' => $consumption ?: null])->save();
             app(ConsignmentAutomation::class)->guardSale($sale);
             app(PosAccounting::class)->sale($sale);
             $this->shifts->recordSale($shift, $intent->total_amount, $method);

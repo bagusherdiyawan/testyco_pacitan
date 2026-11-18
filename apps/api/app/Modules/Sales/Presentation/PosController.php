@@ -41,7 +41,7 @@ final class PosController
 
     public function create(Request $r, string $store): mixed
     {
-        $v = $r->validate(['operation_id' => 'required|uuid', 'shift_id' => 'required|ulid', 'voucher_code' => 'nullable|string|max:60', ...$this->lineRules()]);
+        $v = $r->validate(['operation_id' => 'required|uuid', 'shift_id' => 'required|ulid', 'voucher_code' => 'nullable|string|max:60', 'service_type' => 'nullable|in:dine_in,takeaway', ...$this->lineRules()]);
 
         return $this->run(fn () => response()->json(['data' => $this->checkout->create($r->user(), $store, $v)], 201));
     }

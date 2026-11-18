@@ -15,7 +15,16 @@ final class PosController
     {
         $context = $this->api->request('GET', "stores/$store/pos/context")->json('data');
 
-        return view('pages.pos.index', ['context' => $context, 'products' => $context['shift'] ? $this->api->all("stores/$store/catalog") : [], 'batches' => $context['shift'] ? $this->api->all("stores/$store/inventory/batches") : [], 'shifts' => $this->api->page("stores/$store/shifts")]);
+        $supplies = null;
+        if ($context['shift']) {
+            try {
+                $supplies = $this->api->request('GET', "stores/$store/consumables")->json('data.items');
+            } catch (\Throwable) {
+                // Supplies tracking is optional; the cart simply hides the service type choice.
+            }
+        }
+
+        return view('pages.pos.index', ['supplies' => is_array($supplies) && count($supplies) ? $supplies : null, 'context' => $context, 'products' => $context['shift'] ? $this->api->all("stores/$store/catalog") : [], 'batches' => $context['shift'] ? $this->api->all("stores/$store/inventory/batches") : [], 'shifts' => $this->api->page("stores/$store/shifts")]);
     }
 
     public function open(Request $r, string $store): mixed
@@ -34,7 +43,11 @@ final class PosController
             $line = ['product_id' => $line['product_id'] ?? null, 'unit' => $line['unit'] ?? null, 'quantity' => $line['quantity'] ?? null, 'allocations' => [['batch_id' => $stock[0] ?? null, 'bucket' => $stock[1] ?? null, 'quantity' => $line['quantity'] ?? null]]];
         }
         unset($line);
+        $r->validate(['service_type' => 'nullable|in:dine_in,takeaway']);
         $v = $r->only('operation_id', 'shift_id', 'voucher_code');
+        if ($r->filled('service_type')) {
+            $v['service_type'] = $r->input('service_type');
+        }
         $v['lines'] = array_values($lines);
         $intent = $this->api->request('POST', "stores/$store/sales/intents", $v)->json('data');
 

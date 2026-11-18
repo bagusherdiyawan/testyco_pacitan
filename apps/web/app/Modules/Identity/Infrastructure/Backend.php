@@ -45,7 +45,7 @@ final class Backend
             throw new HttpResponseException(redirect('/login')->withErrors(['email' => 'Sesi berakhir. Silakan masuk kembali.']));
         }
         if ($response->status() === 422) {
-            throw ValidationException::withMessages($response->json('errors') ?: ['form' => 'Data tidak valid.']);
+            throw ValidationException::withMessages($response->json('errors') ?: ['form' => $response->json('message') ?: 'Data tidak valid.']);
         }
         abort_unless($response->successful(), $response->status() >= 500 ? 503 : $response->status(), $response->status() >= 500 ? 'Layanan API sedang tidak tersedia.' : ($response->json('message') ?: 'Permintaan tidak dapat diproses.'));
 

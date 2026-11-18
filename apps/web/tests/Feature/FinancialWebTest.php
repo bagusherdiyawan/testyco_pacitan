@@ -118,7 +118,11 @@ class FinancialWebTest extends TestCase
                 return Http::response(['data' => $review]);
             }$n++;
 
-            return $n === 1 ? Http::response(['data' => ['sale_id' => 'OTHER']]) : Http::response(['data' => ['sale_id' => 'SALE', 'sale_version' => 2, 'refund' => ['id' => 'RF1', 'sale_id' => 'SALE', 'cash_shift_id' => $shift, 'payment_method' => 'cash', 'amount' => 2666, 'reference' => 'REF-1', 'stock_disposition' => 'quarantine', 'lines' => $review['lines']]]]);
+            // The real API stamps every committed allocation with a fresh source_id.
+            $committed = $review['lines'];
+            $committed[0]['allocations'][0]['source_id'] = (string) Str::ulid();
+
+            return $n === 1 ? Http::response(['data' => ['sale_id' => 'OTHER']]) : Http::response(['data' => ['sale_id' => 'SALE', 'sale_version' => 2, 'refund' => ['id' => 'RF1', 'sale_id' => 'SALE', 'cash_shift_id' => $shift, 'payment_method' => 'cash', 'amount' => 2666, 'reference' => 'REF-1', 'stock_disposition' => 'quarantine', 'lines' => $committed]]]);
         });
         $b = ['version' => 1, 'shift' => $shift.':3', 'stock_disposition' => 'quarantine', 'reference' => 'REF-1', 'reason' => 'Checked', 'lines' => [['sale_line_id' => $line, 'quantity' => 1]], 'amount' => 99999];
         $this->withSession($this->auth())->post($url.'/preview', $b)->assertRedirect($url)->assertSessionHas('refund_review.SALE');
@@ -134,6 +138,48 @@ class FinancialWebTest extends TestCase
         $this->assertCount(2, $posts);
         foreach ($posts as [$r]) {
             $this->assertSame($f, $r->data());
+        }
+    }
+
+    public function test_refund_confirmation_accepts_api_assigned_allocation_source_ids_but_nothing_else_different(): void
+    {
+        $url = '/app/pos/sales/SALE/refunds';
+        $line = (string) Str::ulid();
+        $shift = (string) Str::ulid();
+        $c = $this->refundContext($line, $shift);
+        $review = ['sale_id' => 'SALE', 'store_id' => 'STORE', 'version' => 1, 'shift_id' => $shift, 'shift_version' => 3, 'payment_method' => 'cash', 'amount' => 2666, 'stock_disposition' => 'quarantine', 'reference' => 'REF-1', 'reason' => 'Checked', 'review_hash' => str_repeat('a', 64), 'lines' => [['sale_line_id' => $line, 'quantity' => 1, 'sku' => 'OLD', 'unit' => 'piece', 'amount' => 2666, 'allocations' => [['batch_code' => 'LOT', 'pieces' => 1]]]]];
+        $committed = $review['lines'];
+        $committed[0]['allocations'][0]['source_id'] = (string) Str::ulid();
+        $refund = fn (array $lines) => ['data' => ['sale_id' => 'SALE', 'sale_version' => 2, 'refund' => ['id' => 'RF1', 'sale_id' => 'SALE', 'cash_shift_id' => $shift, 'payment_method' => 'cash', 'amount' => 2666, 'reference' => 'REF-1', 'stock_disposition' => 'quarantine', 'lines' => $lines]]];
+        $response = $refund($committed);
+        $this->fake(function ($r) use ($c, $review, &$response) {
+            if ($r->method() === 'GET') {
+                return Http::response($c);
+            }
+
+            return str_ends_with($r->url(), '/preview') ? Http::response(['data' => $review]) : Http::response($response);
+        });
+        $b = ['version' => 1, 'shift' => $shift.':3', 'stock_disposition' => 'quarantine', 'reference' => 'REF-1', 'reason' => 'Checked', 'lines' => [['sale_line_id' => $line, 'quantity' => 1]]];
+
+        // Real API behaviour: every committed allocation carries a fresh source_id.
+        $this->withSession($this->auth())->post($url.'/preview', $b)->assertRedirect($url);
+        $this->post($url.'/confirm', ['verified' => 1])->assertRedirect($url)->assertSessionMissing('refund_pending.SALE')->assertSessionHas('status', 'Respons diterima. Tinjau riwayat terbaru; replay dapat historis.');
+
+        // A missing or empty source_id, or any other changed field, stays uncertain.
+        foreach ([
+            fn (array $l) => array_replace_recursive($l, [0 => ['allocations' => [0 => ['source_id' => '']]]]),
+            function (array $l) {
+                unset($l[0]['allocations'][0]['source_id']);
+
+                return $l;
+            },
+            fn (array $l) => array_replace_recursive($l, [0 => ['allocations' => [0 => ['pieces' => 9]]]]),
+            fn (array $l) => array_replace_recursive($l, [0 => ['amount' => 1]]),
+        ] as $mutate) {
+            $response = $refund($mutate($committed));
+            $this->post($url.'/preview', $b)->assertRedirect($url);
+            $this->post($url.'/confirm', ['verified' => 1])->assertRedirect($url)->assertSessionHas('refund_pending.SALE.uncertain', true);
+            session()->forget('refund_pending.SALE');
         }
     }
 

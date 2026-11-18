@@ -181,6 +181,33 @@ class RefundController extends ChangeNotifier {
     if (!busy && uncertain) await _send(true);
   }
 
+  /// The API gives every allocation a fresh `source_id` when it commits the
+  /// refund, so committed lines never equal reviewed lines exactly. Require a
+  /// non-empty string `source_id` and compare everything else exactly.
+  static bool _sameLines(Object? committed, Object? reviewed) {
+    if (committed is! List || reviewed is! List) return false;
+    final stripped = <Object?>[];
+    for (final line in committed) {
+      if (line is! Map) return false;
+      final copy = Map<String, dynamic>.from(line);
+      final allocations = copy['allocations'];
+      if (allocations is List) {
+        final clean = <Object?>[];
+        for (final a in allocations) {
+          if (a is! Map ||
+              a['source_id'] is! String ||
+              (a['source_id'] as String).isEmpty) {
+            return false;
+          }
+          clean.add(Map<String, dynamic>.from(a)..remove('source_id'));
+        }
+        copy['allocations'] = clean;
+      }
+      stripped.add(copy);
+    }
+    return jsonEncode(stripped) == jsonEncode(reviewed);
+  }
+
   Future<void> _send(bool wasUnknown) async {
     busy = true;
     error = null;
@@ -205,7 +232,7 @@ class RefundController extends ChangeNotifier {
           f['amount'] != r['amount'] ||
           f['reference'] != b['reference'] ||
           f['stock_disposition'] != b['stock_disposition'] ||
-          jsonEncode(f['lines']) != jsonEncode(r['lines'])) {
+          !_sameLines(f['lines'], r['lines'])) {
         invalid();
       }
       _pending = null;

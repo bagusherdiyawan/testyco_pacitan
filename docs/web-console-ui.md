@@ -23,6 +23,16 @@ Konsol web memakai aset frontend **Soft UI Dashboard** (Creative Tim, lisensi MI
 | `resources/views/components/templates/console.blade.php` | Cangkang: sidebar, bilah atas, breadcrumb. Judul diambil otomatis dari `<h1>` halaman. |
 | `public/app.css` | Tetap dipakai halaman publik (beranda dan login) yang tidak memakai cangkang konsol. |
 
+## Pola tampilan halaman isi
+
+Aturan di `console.css` berlaku untuk semua halaman konsol tanpa mengubah tiap halaman:
+
+- **Menu tautan**: tautan berdiri sendiri (misalnya "← Organisasi") dan blok `<nav class="menu-chips">` tampil sebagai chip. Chip dengan class `is-active` menandai bagian yang sedang dibuka (dipakai ERP). Jangan memisahkan tautan dengan teks " · "; gunakan `menu-chips`.
+- **Form**: field otomatis disusun dalam kolom (satu kolom di ponsel), tombol rata kiri, grup checkbox dan radio menjadi chip, dan baris berulang (`fieldset.order-row`, `fieldset.pos-row`) memakai grid dengan tombol hapus sejajar.
+- **Warna**: palet cerah (koral, oranye, kuning). Gradasi hanya untuk aksen dan tombol. Teks di atas gradasi memakai warna gelap atau merah tua agar kontrasnya terjaga.
+- **Ponsel (di bawah 600 px)**: input 16 px dan tinggi 46 px (iOS tidak memperbesar layar saat mengetik), tombol aksi selebar layar, baris POS menempatkan Satuan dan Jumlah berdampingan, dan aksi sekunder (tambah atau hapus baris) tampil ringan. Form pembayaran POS menyembunyikan kolom non-tunai saat metode Tunai dipilih (`pos-payment.js`, kolom tetap dikirim kosong dan tanpa JavaScript semuanya tampil). Panel "Paket resep" hanya tampil bila ada paket.
+- Tautan yang hanya berlaku untuk pusat (misalnya bahan baku dan produksi) disembunyikan di halaman organisasi mitra.
+
 ## Dashboard
 
 Halaman **Beranda** menampilkan ringkasan 7 hari (hari ini sampai enam hari sebelumnya, kalender WIB) untuk organisasi pertama yang boleh dilaporkan pengguna (owner, admin, pimpinan mitra, kepala toko). Pengguna dengan beberapa organisasi memilihnya lewat tombol di bagian atas (`/app?org=...`).

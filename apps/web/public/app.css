@@ -1,11 +1,11 @@
 /* Testyco web UI. Colours come from tokens.css (generated from packages/design-tokens/tokens.json). */
 :root {
   color-scheme: light;
-  --grad-brand: linear-gradient(120deg, var(--red-700) 0%, var(--red-500) 46%, #f57a1f 76%, var(--yellow-400) 100%);
+  --grad-brand: linear-gradient(120deg, var(--red-500) 0%, var(--orange-400) 55%, var(--yellow-400) 100%);
   --grad-button: linear-gradient(135deg, var(--red-700), var(--red-500));
-  --grad-hero: radial-gradient(760px 380px at 88% -8%, rgba(255, 218, 74, .6), transparent 62%),
-    radial-gradient(620px 360px at -4% 108%, rgba(255, 154, 146, .38), transparent 62%),
-    linear-gradient(135deg, var(--red-900) 0%, var(--red-700) 48%, var(--red-500) 100%);
+  --grad-hero: radial-gradient(560px 340px at 92% -6%, rgba(255, 198, 26, .5), transparent 62%),
+    radial-gradient(520px 340px at -4% 108%, rgba(255, 106, 92, .28), transparent 62%),
+    linear-gradient(135deg, #fff6f0 0%, #fff0dc 55%, #fff8d9 100%);
   --shadow-card: 0 1px 2px rgba(90, 16, 10, .06), 0 10px 28px -14px rgba(90, 16, 10, .22);
   --shadow-lift: 0 2px 4px rgba(90, 16, 10, .08), 0 18px 36px -16px rgba(90, 16, 10, .34);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -118,7 +118,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .button:hover { color: #fff; filter: brightness(1.08); transform: translateY(-1px); box-shadow: 0 10px 20px -8px rgba(162, 31, 22, .7), inset 0 1px 0 rgba(255, 255, 255, .22) }
 .button:active { transform: translateY(0); filter: brightness(.96) }
 .button:disabled { cursor: not-allowed; opacity: .55; transform: none; filter: none }
-.button.button--accent { background: linear-gradient(135deg, var(--yellow-300), var(--yellow-500)); color: var(--red-900); box-shadow: 0 8px 18px -8px rgba(201, 138, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .5) }
+.button.button--accent { background: linear-gradient(135deg, var(--yellow-300), var(--yellow-400) 55%, var(--orange-400)); color: var(--ink-900); box-shadow: 0 8px 18px -8px rgba(201, 138, 0, .8), inset 0 1px 0 rgba(255, 255, 255, .5) }
 .button.button--accent:hover { color: var(--red-900) }
 .button.button--ghost { background: transparent; color: #fff; box-shadow: inset 0 0 0 2px rgba(255, 255, 255, .55); min-height: 40px; padding: 7px 16px }
 .button.button--ghost:hover { background: rgba(255, 255, 255, .16); box-shadow: inset 0 0 0 2px #fff }
@@ -240,23 +240,24 @@ summary::marker { color: var(--yellow-600) }
   padding: clamp(28px, 5vw, 64px);
   border-radius: 28px;
   background: var(--grad-hero);
-  color: #fff;
-  box-shadow: 0 30px 60px -28px rgba(90, 16, 10, .8);
+  border: 1px solid var(--surface-line);
+  color: var(--ink-900);
+  box-shadow: 0 30px 60px -36px rgba(245, 71, 58, .4);
 }
 .hero::after {
   content: "";
   position: absolute;
-  right: -90px;
-  bottom: -120px;
-  width: 360px;
-  height: 360px;
+  right: -80px;
+  bottom: -110px;
+  width: 320px;
+  height: 320px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, rgba(255, 218, 74, .55), rgba(255, 218, 74, 0) 68%);
+  background: linear-gradient(135deg, rgba(245, 71, 58, .16), rgba(255, 198, 26, .3));
   pointer-events: none;
 }
-.hero .badge { background: rgba(255, 244, 194, .16); border-color: rgba(255, 244, 194, .5); color: var(--yellow-100) }
-.hero h1 { color: #fff; font-size: clamp(2.1rem, 5.2vw, 3.7rem); font-weight: 850; line-height: 1.05; margin-bottom: 16px }
-.hero p { color: rgba(255, 255, 255, .88); font-size: 1.15rem; max-width: 560px }
+.hero .badge { background: #fff; border-color: var(--yellow-300); color: var(--red-700) }
+.hero h1 { color: var(--ink-900); font-size: clamp(2.1rem, 5.2vw, 3.7rem); font-weight: 850; line-height: 1.05; margin-bottom: 16px }
+.hero p { color: var(--ink-700); font-size: 1.15rem; max-width: 560px }
 .hero-actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 24px }
 .hero-actions .button.button--ghost { min-height: 56px; padding: 14px 26px }
 .hero-points { position: relative; z-index: 1; display: grid; gap: 12px; margin: 0; padding: 0; list-style: none }
@@ -265,15 +266,15 @@ summary::marker { color: var(--yellow-600) }
   align-items: center;
   gap: 14px;
   margin: 0;
-  padding: 14px 18px;
-  background: rgba(255, 255, 255, .12);
-  border: 1px solid rgba(255, 255, 255, .26);
+  padding: 12px 16px;
+  background: #fff;
+  border: 1px solid var(--surface-line);
   border-radius: 16px;
-  backdrop-filter: blur(6px);
-  color: #fff;
+  box-shadow: 0 12px 26px -18px rgba(150, 60, 20, .45);
+  color: var(--ink-900);
   font-weight: 650;
 }
-.hero-points svg { flex: none; width: 28px; height: 28px; stroke: var(--yellow-300); fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round }
+.hero-points svg { flex: none; width: 40px; height: 40px; padding: 9px; border-radius: 12px; background: linear-gradient(135deg, var(--red-500), var(--orange-400)); stroke: #fff; fill: none; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round }
 .section-title { display: flex; align-items: center; gap: 12px; margin: 36px 0 8px }
 .section-title::after { content: ""; flex: 1; height: 3px; border-radius: 3px; background: linear-gradient(90deg, var(--yellow-300), transparent) }
 .status-chip { display: inline-flex; align-items: center; gap: 7px; font-size: .82rem; font-weight: 700; color: var(--ink-500) }
@@ -283,10 +284,10 @@ summary::marker { color: var(--yellow-600) }
 
 /* Auth pages */
 .auth-shell { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 460px); gap: 0; max-width: 980px; margin: 24px auto; border-radius: 28px; overflow: hidden; box-shadow: 0 30px 60px -28px rgba(90, 16, 10, .7) }
-.auth-brand { position: relative; padding: 44px 40px; background: var(--grad-hero); color: #fff; display: flex; flex-direction: column; justify-content: center }
-.auth-brand .badge { align-self: flex-start; background: rgba(255, 244, 194, .16); border-color: rgba(255, 244, 194, .5); color: var(--yellow-100) }
-.auth-brand h2 { color: #fff; font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 850; line-height: 1.1 }
-.auth-brand p { color: rgba(255, 255, 255, .88) }
+.auth-brand { position: relative; padding: 44px 40px; background: var(--grad-hero); color: var(--ink-900); display: flex; flex-direction: column; justify-content: center }
+.auth-brand .badge { align-self: flex-start; background: #fff; border-color: var(--yellow-300); color: var(--red-700) }
+.auth-brand h2 { color: var(--ink-900); font-size: clamp(1.6rem, 3vw, 2.2rem); font-weight: 850; line-height: 1.1 }
+.auth-brand p { color: var(--ink-700) }
 .auth-shell .auth-card { margin: 0; border: 0; border-radius: 0; box-shadow: none; border-top: 0; padding: 44px 40px; display: flex; flex-direction: column; justify-content: center }
 .auth-shell .auth-card .button { width: 100%; margin-top: 8px }
 .auth-card { max-width: 520px; margin: 40px auto }

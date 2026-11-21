@@ -14,5 +14,5 @@
 </ul>
 </section>
 <aside role="status">Lingkungan pengembangan. Akses organisasi, toko, pengguna dan katalog tersedia setelah masuk.</aside>
-@if($unavailable)<p role="alert">API belum tersedia. Periksa koneksi layanan backend.</p>@else<h2 class="section-title">Peta modul</h2><x-organisms.module-grid :modules="$modules" />@endif
+@if($unavailable)<p role="alert">API belum tersedia. Periksa koneksi layanan backend.</p>@endif
 </x-templates.app>

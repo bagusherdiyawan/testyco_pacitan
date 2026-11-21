@@ -2,7 +2,7 @@
 (function () {
   'use strict';
   if (typeof Chart === 'undefined') { return; }
-  var red = '#e2382c', redDark = '#a21f16', yellow = '#fbc61b', ink = '#715a50', grid = '#f1ddc4';
+  var red = '#f5473a', yellow = '#ffc61a', ink = '#715a50', grid = '#f3e0d0';
   var rupiah = new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 });
   var compact = new Intl.NumberFormat('id-ID', { notation: 'compact', maximumFractionDigits: 1 });
   Chart.defaults.font.family = 'system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
@@ -25,8 +25,8 @@
     new Chart(ctx, {
       type: 'line',
       data: { labels: t.labels, datasets: [
-        { label: 'Tunai', data: t.cash, borderColor: red, backgroundColor: fill(ctx, 'rgba(226,56,44,.35)', 'rgba(226,56,44,0)'), fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: red, borderWidth: 3 },
-        { label: 'Transfer dan QRIS', data: t.noncash, borderColor: yellow, backgroundColor: fill(ctx, 'rgba(251,198,27,.45)', 'rgba(251,198,27,0)'), fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: yellow, borderWidth: 3 }
+        { label: 'Tunai', data: t.cash, borderColor: red, backgroundColor: fill(ctx, 'rgba(245,71,58,.32)', 'rgba(245,71,58,0)'), fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: red, borderWidth: 3 },
+        { label: 'Transfer dan QRIS', data: t.noncash, borderColor: yellow, backgroundColor: fill(ctx, 'rgba(255,198,26,.42)', 'rgba(255,198,26,0)'), fill: true, tension: .35, pointRadius: 3, pointBackgroundColor: yellow, borderWidth: 3 }
       ] },
       options: { maintainAspectRatio: false, interaction: { intersect: false, mode: 'index' }, plugins: { legend: { display: false }, tooltip: tooltip },
         scales: { x: { grid: { display: false } }, y: { beginAtZero: true, grid: { color: grid, borderDash: [4, 4] }, ticks: { callback: function (v) { return compact.format(v); } } } } }
@@ -38,7 +38,7 @@
   if (p) {
     new Chart(products.getContext('2d'), {
       type: 'bar',
-      data: { labels: p.labels, datasets: [{ label: 'Penjualan', data: p.values, backgroundColor: [red, '#ec6a2c', '#f58a1f', yellow, '#ffd84d'], borderRadius: 8, borderSkipped: false, barThickness: 22 }] },
+      data: { labels: p.labels, datasets: [{ label: 'Penjualan', data: p.values, backgroundColor: ['#f5473a', '#ff6a3d', '#ff8a3d', '#ffa51f', '#ffc61a'], borderRadius: 8, borderSkipped: false, barThickness: 22 }] },
       options: { indexAxis: 'y', maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: tooltip },
         scales: { x: { beginAtZero: true, grid: { color: grid, borderDash: [4, 4] }, ticks: { callback: function (v) { return compact.format(v); } } }, y: { grid: { display: false } } } }
     });

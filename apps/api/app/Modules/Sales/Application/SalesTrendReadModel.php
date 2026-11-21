@@ -18,6 +18,7 @@ final class SalesTrendReadModel
     {
         return match (DB::getDriverName()) {
             'pgsql' => "(($column AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jakarta')::date",
+            'mysql', 'mariadb' => "DATE(DATE_ADD($column, INTERVAL 7 HOUR))",
             default => "date($column, '+7 hours')",
         };
     }

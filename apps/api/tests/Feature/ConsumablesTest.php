@@ -261,6 +261,6 @@ class ConsumablesTest extends TestCase
         $sale = $this->sell($this->openShift(), 2, 'takeaway');
         $this->assertSame(8, $this->balance($box));
         $this->assertDatabaseMissing('consumable_stock_entries', ['source_type' => 'refund']);
-        $this->assertSame(2, DB::table('consumable_stock_entries')->where('source_id', $sale['id'])->sum(DB::raw('-delta')));
+        $this->assertSame(2, (int) DB::table('consumable_stock_entries')->where('source_id', $sale['id'])->sum(DB::raw('-delta')));
     }
 }

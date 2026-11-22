@@ -34,7 +34,7 @@ final class CommercialReport
             $record = $v['source_type'] === 'pos_sale' ? Sale::where('organization_id', $org)->lockForUpdate()->findOrFail($v['source_id']) : Invoice::where('organization_id', $org)->where('status', 'accepted')->lockForUpdate()->findOrFail($v['source_id']);
             $latest = DB::table('cost_declarations')->where('organization_id', $org)->where('source_type', $v['source_type'])->where('source_id', $record->id)->max('version') ?? 0;
             abort_unless((int) $latest === (int) $v['version'], 409, 'Versi bukti biaya berubah.');
-            $d = ['id' => (string) Str::ulid(), 'organization_id' => $org, 'source_type' => $v['source_type'], 'source_id' => $record->id, 'version' => (int) $latest + 1, 'goods_cost' => (int) $v['goods_cost'], 'operating_cost' => (int) $v['operating_cost'], 'evidence_reference' => $v['evidence_reference'], 'reason' => $v['reason'], 'recorded_by' => $u->id, 'recorded_at' => now()->toIso8601String()];
+            $d = ['id' => (string) Str::ulid(), 'organization_id' => $org, 'source_type' => $v['source_type'], 'source_id' => $record->id, 'version' => (int) $latest + 1, 'goods_cost' => (int) $v['goods_cost'], 'operating_cost' => (int) $v['operating_cost'], 'evidence_reference' => $v['evidence_reference'], 'reason' => $v['reason'], 'recorded_by' => $u->id, 'recorded_at' => now()->format('Y-m-d H:i:s')];
             DB::table('cost_declarations')->insert($d);
             Audit::record($u->id, $org, 'report.cost_declared', $d['id'], null, $d);
 

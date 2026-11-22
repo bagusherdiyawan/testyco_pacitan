@@ -9,7 +9,13 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('order_changes', fn (Blueprint $t) => $t->string('kind', 20)->default('reduction'));
+        if (! Schema::hasColumn('order_changes', 'kind')) {
+            Schema::table('order_changes', fn (Blueprint $t) => $t->string('kind', 20)->default('reduction'));
+        }
+        // MySQL/MariaDB use the unique index to back the supply_order_id foreign key, so give the key its own index first.
+        if (in_array(DB::getDriverName(), ['mysql', 'mariadb'], true)) {
+            Schema::table('supply_order_lines', fn (Blueprint $t) => $t->index('supply_order_id', 'supply_order_lines_supply_order_id_index'));
+        }
         Schema::table('supply_order_lines', fn (Blueprint $t) => $t->dropUnique(['supply_order_id', 'supplier_product_id']));
     }
 

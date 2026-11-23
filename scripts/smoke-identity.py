@@ -254,7 +254,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
             expiry_html=response.read().decode()
             assert 'no-store' in response.headers['Cache-Control']
         assert 'Penelusuran kedaluwarsa batch' in expiry_html and 'SMOKE-BATCH' in expiry_html and 'Karantina 16' in expiry_html
-        assert 'Telusuri kedaluwarsa batch' in stock_html
+        assert f'/app/stores/{store}/inventory/batch-expiry' in stock_html and 'Kedaluwarsa Batch' in stock_html
 
 
         api(base,'GET',f'stores/{store}/inventory/ledger',token=owner,expected=403)

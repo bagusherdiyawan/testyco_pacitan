@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import '../../../core/domain/wib_date_range.dart';
 import '../../../core/storage/device_state.dart';
 import '../domain/receipt_history.dart';
@@ -9,6 +11,28 @@ class PosRepository {
   const PosRepository(this.api, {this.deviceState});
   final DeviceState? deviceState;
   final ApiClient api;
+  static final _imageCache = <String, Uint8List?>{};
+
+  Future<Uint8List?> productImage(String store, String product) async {
+    final cacheKey = '$store:$product';
+    if (_imageCache.containsKey(cacheKey)) {
+      return _imageCache[cacheKey];
+    }
+    try {
+      final res = await api.request(
+        'GET',
+        'stores/$store/catalog/$product/image-data',
+      );
+      final encoded = res['image_base64'] as String?;
+      final bytes = encoded != null && encoded.isNotEmpty
+          ? base64Decode(encoded)
+          : null;
+      _imageCache[cacheKey] = bytes;
+      return bytes;
+    } catch (_) {
+      return null;
+    }
+  }
   Future<Map<String, dynamic>> context(String store) async =>
       (await api.request('GET', 'stores/$store/pos/context'))['data']
           as Map<String, dynamic>;

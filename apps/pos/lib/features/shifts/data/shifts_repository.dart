@@ -21,4 +21,27 @@ class ShiftsRepository {
   Future<Map<String, dynamic>> record(CashMovementDraft draft) async =>
       (await api.request('POST', draft.path, draft.body))['data']
           as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> requestMovement(
+    String shiftId,
+    Map<String, dynamic> body,
+  ) async =>
+      (await api.request(
+            'POST',
+            'shifts/$shiftId/cash-movement-requests',
+            body,
+          ))['data']
+          as Map<String, dynamic>;
+
+  Future<Map<String, dynamic>> decideRequest(
+    String requestId,
+    String action,
+    Map<String, dynamic> body,
+  ) async =>
+      (await api.request(
+            'POST',
+            'shift-cash-requests/$requestId/$action',
+            body,
+          ))['data']
+          as Map<String, dynamic>;
 }

@@ -192,7 +192,7 @@ class CashPosTest extends TestCase
         }$this->assertDatabaseCount('stock_entries', $entries);
     }
 
-    public function test_one_active_shift_per_cashier_store_but_other_cashier_can_open_and_replay_is_safe(): void
+    public function test_one_active_shift_per_store_by_default_and_multi_register_allows_other_cashier_with_safe_replay(): void
     {
         $v = ['operation_id' => (string) Str::uuid(), 'device_name' => 'Web', 'opening_cash' => 0];
         $url = '/api/v1/stores/'.$this->store->id.'/shifts';
@@ -200,6 +200,10 @@ class CashPosTest extends TestCase
         $id = $this->postJson($url, $v)->assertCreated()->json('data.id');
         $this->postJson($url, $v)->assertCreated()->assertJsonPath('data.id', $id);
         $this->postJson($url, [...$v, 'operation_id' => (string) Str::uuid()])->assertConflict();
+        // Default single_active_shift=true blocks a second cashier from opening while first shift is still open.
+        $this->act($this->other)->postJson($url, ['operation_id' => (string) Str::uuid(), 'device_name' => 'Kasir 2', 'opening_cash' => 0])->assertConflict();
+        // Disabling single_active_shift (multi-register outlet) allows concurrent cashier shifts.
+        $this->act($this->manager)->postJson('/api/v1/stores/'.$this->store->id.'/pos/policy', ['operation_id' => (string) Str::uuid(), 'single_active_shift' => false])->assertOk();
         $this->open($this->other);
         $this->assertDatabaseCount('cash_shifts', 2);
         $this->assertDatabaseCount('active_shift_locks', 2);
@@ -309,6 +313,7 @@ class CashPosTest extends TestCase
 
     public function test_stock_sold_by_other_cashier_before_confirmation_does_not_create_sale_or_debit_partial_stock(): void
     {
+        $this->store->update(['single_active_shift' => false]);
         $s = $this->open();
         $first = $this->intent($s);
         $other = $this->open($this->other);
@@ -479,6 +484,7 @@ class CashPosTest extends TestCase
 
     public function test_filtered_receipt_history_retains_ownership_and_store_tenant_guards(): void
     {
+        $this->store->update(['single_active_shift' => false]);
         $mine = $this->pay($this->intent($this->open()));
         $theirs = $this->pay($this->intent($this->open($this->other), actor: $this->other), actor: $this->other);
         $path = '/api/v1/stores/'.$this->store->id.'/sales';
@@ -551,6 +557,145 @@ class CashPosTest extends TestCase
         $this->assertCount(51, array_unique(array_column([...$first, ...$second], 'id')));
         foreach ([['page' => 0], ['page' => 'bad'], ['q' => str_repeat('a', 101)], ['from' => '2026-10-01T00:00:00Z'], ['to' => '2026-10-02T00:00:00Z'], ['from' => '2026-10-01', 'to' => '2026-10-02'], ['from' => '2026-10-02T00:00:00Z', 'to' => '2026-10-01T00:00:00Z'], ['from' => '2026-10-01T00:00:00Z', 'to' => '2026-11-02T00:00:00Z']] as $params) {
             $this->getJson($url.'?'.http_build_query($params))->assertUnprocessable();
+        }
+    }
+
+    public function test_blind_close_hides_expected_cash_while_open_and_reveals_after_close_with_retained_deposit_and_handover(): void
+    {
+        $s = $this->open(cash: 100000);
+        $this->pay($this->intent($s));
+        $this->act($this->cashier)->getJson('/api/v1/stores/'.$this->store->id.'/pos/context')
+            ->assertOk()
+            ->assertJsonPath('data.shift.blind_close', true)
+            ->assertJsonPath('data.shift.expected_cash', null)
+            ->assertJsonPath('data.shift.cash_sales', null);
+        $detail = $this->getJson('/api/v1/shifts/'.$s['id'])
+            ->assertOk()
+            ->assertJsonPath('data.blind_close', true)
+            ->assertJsonPath('data.expected_cash', null)
+            ->json('data');
+        $this->act($this->manager)->getJson('/api/v1/shifts/'.$s['id'])
+            ->assertOk()
+            ->assertJsonPath('data.blind_close', false)
+            ->assertJsonPath('data.expected_cash', 112000);
+
+        $this->act($this->cashier)->postJson('/api/v1/shifts/'.$s['id'].'/close', [
+            'operation_id' => (string) Str::uuid(),
+            'version' => $detail['version'],
+            'counted_cash' => 112000,
+            'retained_cash' => 120000,
+        ])->assertUnprocessable();
+
+        $this->act($this->cashier)->postJson('/api/v1/shifts/'.$s['id'].'/close', [
+            'operation_id' => (string) Str::uuid(),
+            'version' => $detail['version'],
+            'counted_cash' => 112000,
+            'retained_cash' => 100000,
+        ])->assertOk()
+            ->assertJsonPath('data.blind_close', false)
+            ->assertJsonPath('data.expected_cash', 112000)
+            ->assertJsonPath('data.retained_cash', 100000)
+            ->assertJsonPath('data.deposit_cash', 12000)
+            ->assertJsonPath('data.difference_cash', 0);
+
+        $this->act($this->other)->getJson('/api/v1/stores/'.$this->store->id.'/pos/context')
+            ->assertOk()
+            ->assertJsonPath('data.handover.previous_shift_id', $s['id'])
+            ->assertJsonPath('data.handover.expected_opening_cash', 100000);
+
+        $this->act($this->other)->postJson('/api/v1/stores/'.$this->store->id.'/shifts', [
+            'operation_id' => (string) Str::uuid(),
+            'device_name' => 'Kasir 2',
+            'opening_cash' => 95000,
+        ])->assertUnprocessable();
+
+        $next = $this->act($this->other)->postJson('/api/v1/stores/'.$this->store->id.'/shifts', [
+            'operation_id' => (string) Str::uuid(),
+            'device_name' => 'Kasir 2',
+            'opening_cash' => 95000,
+            'opening_note' => 'Uang pecahan kurang 5000 saat serah terima',
+        ])->assertCreated()->json('data');
+        $this->assertSame($s['id'], $next['previous_shift_id']);
+        $this->assertSame(100000, $next['expected_opening_cash']);
+        $this->assertSame(-5000, $next['opening_discrepancy']);
+    }
+
+    public function test_cashier_movement_request_approval_and_close_blocking(): void
+    {
+        $s = $this->open(cash: 100000);
+        $req = $this->act($this->cashier)->postJson('/api/v1/shifts/'.$s['id'].'/cash-movement-requests', [
+            'operation_id' => (string) Str::uuid(),
+            'kind' => 'out',
+            'amount' => 15000,
+            'category' => 'Operasional darurat',
+            'reason' => 'Beli es batu',
+            'evidence_reference' => 'NOTA-ES-01',
+        ])->assertCreated()->json('data');
+        $this->assertSame('pending', $req['status']);
+        $this->assertDatabaseHas('cash_shifts', ['id' => $s['id'], 'expected_cash' => 100000]);
+
+        // Pending cash movement request blocks closing and cashier cannot self-approve.
+        $this->postJson('/api/v1/shifts/'.$s['id'].'/close', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'counted_cash' => 100000])->assertConflict();
+        $this->postJson('/api/v1/shift-cash-requests/'.$req['id'].'/approve', ['operation_id' => (string) Str::uuid(), 'version' => 1])->assertForbidden();
+
+        // Manager approves -> expected_cash updates atomically and unblocks after no more pending requests.
+        $this->act($this->manager)->postJson('/api/v1/shift-cash-requests/'.$req['id'].'/approve', [
+            'operation_id' => (string) Str::uuid(),
+            'version' => 1,
+            'decision_note' => 'Nota es batu cocok',
+        ])->assertOk()->assertJsonPath('data.shift.expected_cash', 85000);
+        $this->assertDatabaseHas('cash_movements', ['cash_shift_id' => $s['id'], 'amount' => 15000, 'reason' => 'Beli es batu [Bukti: NOTA-ES-01]']);
+
+        $req2 = $this->act($this->cashier)->postJson('/api/v1/shifts/'.$s['id'].'/cash-movement-requests', [
+            'operation_id' => (string) Str::uuid(),
+            'kind' => 'in',
+            'amount' => 5000,
+            'category' => 'Tambah kembalian',
+            'reason' => 'Salah ajukan',
+        ])->assertCreated()->json('data');
+        $this->postJson('/api/v1/shift-cash-requests/'.$req2['id'].'/cancel', ['operation_id' => (string) Str::uuid(), 'version' => 1])->assertOk()->assertJsonPath('data.status', 'cancelled');
+
+        $version = CashShift::find($s['id'])->version;
+        $this->postJson('/api/v1/shifts/'.$s['id'].'/close', ['operation_id' => (string) Str::uuid(), 'version' => $version, 'counted_cash' => 85000])->assertOk();
+    }
+
+    public function test_manager_force_close_unblocks_abandoned_shift_and_cannot_rollback_used_handoff_schema(): void
+    {
+        $s = $this->open(cash: 100000);
+        $this->intent($s);
+        $this->act($this->other)->getJson('/api/v1/stores/'.$this->store->id.'/pos/context')
+            ->assertOk()
+            ->assertJsonPath('data.blocking_open_shift.id', $s['id']);
+        $this->act($this->other)->postJson('/api/v1/stores/'.$this->store->id.'/shifts', [
+            'operation_id' => (string) Str::uuid(),
+            'device_name' => 'Kasir 2',
+            'opening_cash' => 100000,
+        ])->assertConflict();
+
+        $this->act($this->manager)->postJson('/api/v1/shifts/'.$s['id'].'/force-close', [
+            'operation_id' => (string) Str::uuid(),
+            'version' => 1,
+            'counted_cash' => 98000,
+            'retained_cash' => 98000,
+            'reason' => 'Kasir A mendadak sakit dan perangkat mati',
+        ])->assertOk()
+            ->assertJsonPath('data.status', 'closed')
+            ->assertJsonPath('data.difference_cash', -2000)
+            ->assertJsonPath('data.force_closed_by', $this->manager->id);
+        $this->assertDatabaseHas('sale_intents', ['cash_shift_id' => $s['id'], 'status' => 'cancelled']);
+
+        $this->act($this->other)->postJson('/api/v1/stores/'.$this->store->id.'/shifts', [
+            'operation_id' => (string) Str::uuid(),
+            'device_name' => 'Kasir 2',
+            'opening_cash' => 98000,
+        ])->assertCreated();
+
+        $migration = require database_path('migrations/2026_11_23_000003_add_shift_handoff_controls.php');
+        try {
+            $migration->down();
+            $this->fail('Used shift handoff schema must not roll back.');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('Rollback kontrol serah-terima shift', $e->getMessage());
         }
     }
 }

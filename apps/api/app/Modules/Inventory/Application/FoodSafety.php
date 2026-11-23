@@ -53,8 +53,14 @@ final class FoodSafety
             return true;
         }if ($p->block_expired && $b->expires_on->format('Y-m-d') < now('Asia/Jakarta')->format('Y-m-d')) {
             return false;
-        }if ($bucket === 'ready' && $p->ready_life_minutes !== null && (! $b->ready_expires_at || $b->ready_expires_at->lte(now()))) {
-            return false;
+        }if ($bucket === 'ready' && $p->ready_life_minutes !== null) {
+            $lots = DB::table('inventory_ready_lots')->where('inventory_batch_id', $b->id)->where('remaining_pieces', '>', 0)->get(['ready_expires_at']);
+            if ($lots->isNotEmpty()) {
+                return $lots->contains(fn ($l) => $l->ready_expires_at && CarbonImmutable::parse($l->ready_expires_at)->gt(now()));
+            }
+            if (! $b->ready_expires_at || $b->ready_expires_at->lte(now())) {
+                return false;
+            }
         }
 
         return true;
@@ -137,16 +143,92 @@ final class FoodSafety
         return ['store_id' => $store, 'product_id' => $product, 'bucket' => $bucket, 'mode' => $p->fefo, 'data' => $rows];
     }
 
-    public function cooked(InventoryBatch $batch, int $previousReady, int $output): void
+    public function cooked(InventoryBatch $batch, int $previousReady, int $output, ?string $processId = null): void
     {
-        $p = $this->policy($batch->organization_id);
-        if (! $p || $p->ready_life_minutes === null || $output < 1) {
+        if ($output < 1) {
             return;
-        }$limit = now()->addMinutes((int) $p->ready_life_minutes);
-        if ($previousReady > 0) {
-            if (! $batch->ready_expires_at) {
-                return;
-            }$limit = $batch->ready_expires_at->min($limit);
-        } $batch->forceFill(['ready_expires_at' => $limit])->save();
+        }
+        $p = $this->policy($batch->organization_id);
+        $now = now();
+        $hasLots = DB::table('inventory_ready_lots')->where('inventory_batch_id', $batch->id)->where('remaining_pieces', '>', 0)->exists();
+        if ($previousReady > 0 && ! $hasLots) {
+            DB::table('inventory_ready_lots')->insert([
+                'id' => (string) \Illuminate\Support\Str::ulid(),
+                'organization_id' => $batch->organization_id,
+                'store_id' => $batch->store_id,
+                'inventory_batch_id' => $batch->id,
+                'inventory_process_id' => null,
+                'cooked_at' => $now,
+                'ready_expires_at' => $batch->ready_expires_at,
+                'initial_pieces' => $previousReady,
+                'remaining_pieces' => $previousReady,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ]);
+        }
+        $limit = ($p && $p->ready_life_minutes !== null) ? $now->copy()->addMinutes((int) $p->ready_life_minutes) : null;
+        DB::table('inventory_ready_lots')->insert([
+            'id' => (string) \Illuminate\Support\Str::ulid(),
+            'organization_id' => $batch->organization_id,
+            'store_id' => $batch->store_id,
+            'inventory_batch_id' => $batch->id,
+            'inventory_process_id' => $processId,
+            'cooked_at' => $now,
+            'ready_expires_at' => $limit,
+            'initial_pieces' => $output,
+            'remaining_pieces' => $output,
+            'created_at' => $now,
+            'updated_at' => $now,
+        ]);
+        $earliest = $this->earliestReadyExpiry($batch->id);
+        if ($earliest !== null || $batch->ready_expires_at !== null) {
+            $batch->forceFill(['ready_expires_at' => $earliest])->save();
+        }
+    }
+
+    public function depleteReadyLots(InventoryBatch $batch, int $pieces, string $sourceType): ?CarbonImmutable
+    {
+        $lots = DB::table('inventory_ready_lots')
+            ->where('inventory_batch_id', $batch->id)
+            ->where('remaining_pieces', '>', 0)
+            ->orderByRaw('CASE WHEN ready_expires_at IS NULL THEN 1 ELSE 0 END, ready_expires_at ASC, id ASC')
+            ->lockForUpdate()
+            ->get();
+        if ($lots->isEmpty()) {
+            return $batch->ready_expires_at ? CarbonImmutable::instance($batch->ready_expires_at) : null;
+        }
+        $p = $this->policy($batch->organization_id);
+        $now = now();
+        $strict = $sourceType === 'pos_sale' && $p && $p->ready_life_minutes !== null;
+        $candidates = $strict
+            ? $lots->filter(fn ($l) => $l->ready_expires_at && CarbonImmutable::parse($l->ready_expires_at)->gt($now))
+            : $lots;
+        abort_if($candidates->sum('remaining_pieces') < $pieces, 409, 'Stok siap jual yang masih dalam masa simpan tidak mencukupi.');
+        $need = $pieces;
+        foreach ($candidates as $lot) {
+            if ($need <= 0) {
+                break;
+            }
+            $take = min($need, (int) $lot->remaining_pieces);
+            DB::table('inventory_ready_lots')->where('id', $lot->id)->update([
+                'remaining_pieces' => (int) $lot->remaining_pieces - $take,
+                'updated_at' => $now,
+            ]);
+            $need -= $take;
+        }
+
+        return $this->earliestReadyExpiry($batch->id);
+    }
+
+    private function earliestReadyExpiry(string $batchId): ?CarbonImmutable
+    {
+        $min = DB::table('inventory_ready_lots')
+            ->where('inventory_batch_id', $batchId)
+            ->where('remaining_pieces', '>', 0)
+            ->whereNotNull('ready_expires_at')
+            ->orderBy('ready_expires_at')
+            ->value('ready_expires_at');
+
+        return $min ? CarbonImmutable::parse($min) : null;
     }
 }

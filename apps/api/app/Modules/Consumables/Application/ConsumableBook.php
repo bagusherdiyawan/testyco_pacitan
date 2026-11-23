@@ -33,6 +33,14 @@ final class ConsumableBook
         abort_unless(in_array($this->access->role($u, $org)?->value, ['owner', 'admin', 'partner_lead'], true), 403, 'Tidak berwenang mengelola barang non-makanan.');
     }
 
+    public function hasActiveRules(string $organization): bool
+    {
+        return ConsumableRule::where('consumable_rules.organization_id', $organization)
+            ->join('consumable_items', 'consumable_items.id', '=', 'consumable_rules.consumable_item_id')
+            ->where('consumable_items.active', true)
+            ->exists();
+    }
+
     public function catalogue(User $u, string $org): array
     {
         $this->organizationManager($u, $org);
@@ -185,7 +193,14 @@ final class ConsumableBook
         if ($rules->isEmpty()) {
             return [];
         }
-        $portions = array_sum(array_map(fn ($i) => $i['unit'] === 'portion' ? (int) $i['quantity'] : 0, $items));
+        $portions = array_sum(array_map(function ($i) {
+            if ($i['unit'] === 'portion') {
+                return (int) $i['quantity'];
+            }
+            $equivalent = (int) ($i['recipe_snapshot']['portion_equivalent'] ?? 0);
+
+            return $equivalent > 0 ? $equivalent * (int) $i['quantity'] : 0;
+        }, $items));
         $catalogue = ConsumableItem::whereIn('id', $rules->pluck('consumable_item_id'))->orderBy('id')->lockForUpdate()->get()->keyBy('id');
         $result = [];
         foreach ($rules as $rule) {

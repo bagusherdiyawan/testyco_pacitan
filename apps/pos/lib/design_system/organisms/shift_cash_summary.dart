@@ -8,9 +8,12 @@ class ShiftCashSummary extends StatelessWidget {
     required this.cashIn,
     required this.cashOut,
     required this.expected,
+    this.blindClose = false,
     super.key,
   });
-  final int opening, sales, cashIn, cashOut, expected;
+  final int opening;
+  final int? sales, cashIn, cashOut, expected;
+  final bool blindClose;
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
@@ -19,16 +22,22 @@ class ShiftCashSummary extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text('Kas awal ${formatRupiah(opening)}'),
-          Text('Penjualan tunai ${formatRupiah(sales)}'),
-          Text('Kas masuk ${formatRupiah(cashIn)}'),
-          Text('Kas keluar ${formatRupiah(cashOut)}'),
-          Text(
-            'Kas diharapkan ${formatRupiah(expected)}',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const Text(
-            'Kas masuk/keluar bukan omzet. Saldo ini bukan bukti hitungan fisik.',
-          ),
+          if (blindClose || expected == null) ...[
+            const Text(
+              'Mode Hitung Buta (Blind Close) aktif. Saldo sistem disembunyikan sampai shift ditutup.',
+            ),
+          ] else ...[
+            Text('Penjualan tunai ${formatRupiah(sales ?? 0)}'),
+            Text('Kas masuk ${formatRupiah(cashIn ?? 0)}'),
+            Text('Kas keluar ${formatRupiah(cashOut ?? 0)}'),
+            Text(
+              'Kas diharapkan ${formatRupiah(expected!)}',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const Text(
+              'Kas masuk/keluar bukan omzet. Saldo ini bukan bukti hitungan fisik.',
+            ),
+          ],
         ],
       ),
     ),

@@ -26,9 +26,15 @@ final class ShiftsServiceProvider extends ServiceProvider
             $c = ShiftController::class;
             Route::get('stores/{store}/shifts', [$c, 'index']);
             Route::post('stores/{store}/shifts', [$c, 'open']);
+            Route::post('stores/{store}/pos/policy', [$c, 'updatePolicy']);
             Route::get('shifts/{shift}', [$c, 'show']);
             Route::post('shifts/{shift}/cash-movements', [$c, 'movement']);
+            Route::post('shifts/{shift}/cash-movement-requests', [$c, 'requestMovement']);
+            Route::post('shift-cash-requests/{requestRecord}/approve', [$c, 'approveMovementRequest']);
+            Route::post('shift-cash-requests/{requestRecord}/reject', [$c, 'rejectMovementRequest']);
+            Route::post('shift-cash-requests/{requestRecord}/cancel', [$c, 'cancelMovementRequest']);
             Route::post('shifts/{shift}/close', [$c, 'close']);
+            Route::post('shifts/{shift}/force-close', [$c, 'forceClose']);
         });
     }
 }

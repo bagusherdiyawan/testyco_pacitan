@@ -214,4 +214,19 @@ class ConsumableShipmentsTest extends TestCase
         $this->act($this->lead)->postJson('/api/v1/organizations/'.$this->partner->id.'/consumables/rules', $this->op(['service_type' => 'takeaway', 'consumable_item_id' => $this->boothBox['id'], 'basis' => 'transaction', 'quantity' => 2]))->assertOk();
         $this->assertSame(10, $this->balance($this->manager, $this->booth, $this->boothBox));
     }
+
+    public function test_center_warehouse_can_ship_consumables_to_center_owned_booth(): void
+    {
+        $centerBooth = Store::create(['organization_id' => $this->center->id, 'name' => 'Booth Pusat 1', 'address' => 'Pacitan']);
+        $centerManager = $this->user($this->center, 'store_manager', [$centerBooth]);
+        $shipment = $this->send(15, $this->keeper, $centerBooth)->assertCreated()->json('data');
+        $this->assertSame(85, $this->balance($this->owner, $this->warehouse, $this->centerBox));
+        $list = $this->act($centerManager)->getJson('/api/v1/stores/'.$centerBooth->id.'/consumable-shipments')->assertOk();
+        $list->assertJsonPath('can_receive', true)->assertJsonPath('data.0.id', $shipment['id']);
+        $this->act($centerManager)->postJson('/api/v1/consumable-shipments/'.$shipment['id'].'/receive', $this->op([
+            'version' => $shipment['version'],
+            'lines' => [['line_id' => $shipment['lines'][0]['id'], 'destination_item_id' => $this->centerBox['id'], 'quantity_received' => 15]],
+        ]))->assertOk()->assertJsonPath('data.status', 'received');
+        $this->assertSame(15, $this->balance($centerManager, $centerBooth, $this->centerBox));
+    }
 }

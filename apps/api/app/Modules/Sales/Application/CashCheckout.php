@@ -162,7 +162,8 @@ final class CashCheckout
         $s = $permit->snapshot['store'];
         $cash = (int) $record->payload['cash_received'];
         abort_unless($cash >= $snapshot['total_amount'] && $shift->store_id === $record->store_id && (int) $shift->cashier_id === (int) $record->cashier_id, 409, 'Kas/shift penyelesaian tidak sesuai.');
-        $intent = SaleIntent::create(['organization_id' => $record->organization_id, 'store_id' => $record->store_id, 'cash_shift_id' => $shift->id, 'cashier_id' => $record->cashier_id, 'status' => 'paid', 'subtotal' => $snapshot['total_amount'], 'discount_amount' => 0, 'voucher_snapshot' => null, ...$snapshot]);
+        $serviceType = $record->payload['service_type'] ?? null;
+        $intent = SaleIntent::create(['organization_id' => $record->organization_id, 'store_id' => $record->store_id, 'cash_shift_id' => $shift->id, 'cashier_id' => $record->cashier_id, 'status' => 'paid', 'subtotal' => $snapshot['total_amount'], 'discount_amount' => 0, 'voucher_snapshot' => null, 'service_type' => $serviceType, ...$snapshot]);
         $sale = Sale::create(['organization_id' => $record->organization_id, 'store_id' => $record->store_id, 'cash_shift_id' => $shift->id, 'sale_intent_id' => $intent->id, 'cashier_id' => $record->cashier_id, 'number' => 'POS-'.Str::ulid(), 'store_name' => $s['name'], 'store_address' => $s['address'] ?? null, 'cashier_name' => $permit->snapshot['cashier_name'], 'status' => 'completed', 'currency' => 'IDR', 'version' => 1, 'payment_method' => 'cash', 'subtotal' => $snapshot['total_amount'], 'discount_amount' => 0, 'total_amount' => $snapshot['total_amount'], 'cash_received' => $cash, 'change_amount' => $cash - $snapshot['total_amount'], 'sold_at' => $record->captured_at, 'offline_sale_id' => $record->id, 'synced_at' => now()]);
         $lines = [];
         foreach ($snapshot['items'] as $index => $item) {
@@ -173,6 +174,8 @@ final class CashCheckout
             $allocation->id = $a['allocation_id'];
             $allocation->save();
         }
+        $consumption = $this->consumeSupplies($sale, $snapshot['items'], $serviceType, $actor->id);
+        $sale->forceFill(['service_type' => $serviceType, 'consumption' => $consumption ?: null])->save();
         app(ConsignmentAutomation::class)->guardSale($sale);
         app(PosAccounting::class)->sale($sale);
         $this->shifts->recordSale($shift, $snapshot['total_amount']);

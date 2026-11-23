@@ -42,7 +42,7 @@ final class OfflineController
 
     public function sync(Request $r, string $store): mixed
     {
-        $v = $r->validate(['operation_id' => 'required|uuid', 'permit_id' => 'required|ulid', 'captured_at' => ['required', 'date', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'], 'client_total' => 'required|integer|min:0|max:1000000000000', 'cash_received' => 'required|integer|min:0|max:1000000000000', ...$this->lines()]);
+        $v = $r->validate(['operation_id' => 'required|uuid', 'permit_id' => 'required|ulid', 'captured_at' => ['required', 'date', 'regex:/(Z|[+-][0-9]{2}:[0-9]{2})$/'], 'client_total' => 'required|integer|min:0|max:1000000000000', 'cash_received' => 'required|integer|min:0|max:1000000000000', 'service_type' => 'nullable|in:dine_in,takeaway', ...$this->lines()]);
         abort_if($r->hasAny(['voucher_code', 'payment_method']), 422, 'Offline hanya tunai tanpa voucher.');
 
         return response()->json(['data' => $this->offline->sync($r->user(), $store, $v)], 201);

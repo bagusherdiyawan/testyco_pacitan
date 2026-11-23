@@ -2,12 +2,15 @@
 
 namespace App\Modules\Sales\Presentation;
 
+use App\Modules\Consumables\Application\ConsumableBook;
+use App\Modules\Consumables\ConsumablesServiceProvider;
 use App\Modules\Sales\Application\CashCheckout;
 use App\Modules\Sales\Application\ReceiptHistory;
 use App\Modules\Sales\Infrastructure\Sale;
 use App\Modules\Sales\Infrastructure\SaleIntent;
 use App\Modules\Shifts\Application\PosAccess;
 use App\Modules\Shifts\Application\ShiftBook;
+use App\Modules\Shifts\Infrastructure\CashMovementRequest;
 use Carbon\CarbonImmutable;
 use DomainException;
 use Illuminate\Http\Request;
@@ -30,8 +33,33 @@ final class PosController
     {
         $s = $this->access->store($r->user(), $store, false);
         $shift = $this->shifts->active($r->user(), $store);
+        $canManage = $this->access->canManage($r->user(), $s->organization_id);
 
-        return ['data' => ['store' => $s, 'can_manage' => $this->access->canManage($r->user(), $s->organization_id), 'shift' => $shift, 'pending_intents' => $shift ? SaleIntent::where('cash_shift_id', $shift->id)->where('status', 'pending')->orderByDesc('id')->get(['id', 'status', 'total_amount', 'created_at']) : [], 'recent_sales' => Sale::where('store_id', $store)->where('cashier_id', $r->user()->id)->orderByDesc('id')->limit(20)->get(['id', 'number', 'total_amount', 'sold_at'])]];
+        $consumablesEnabled = app()->getProvider(ConsumablesServiceProvider::class)
+            ? app(ConsumableBook::class)->hasActiveRules($s->organization_id)
+            : false;
+
+        $presentedShift = $shift ? $this->shifts->presentForViewer($shift->toArray(), $canManage) : null;
+        $blockingOpenShift = $shift ? null : $this->shifts->blockingOpenShift($store, $r->user()->id);
+        $handover = $shift ? null : $this->shifts->latestHandover($store);
+        $pendingRequests = $shift
+            ? CashMovementRequest::where('cash_shift_id', $shift->id)->where('status', 'pending')->orderByDesc('id')->get()->toArray()
+            : [];
+
+        return [
+            'data' => [
+                'store' => $s,
+                'can_manage' => $canManage,
+                'consumables_enabled' => $consumablesEnabled,
+                'shift' => $presentedShift,
+                'blocking_open_shift' => $blockingOpenShift,
+                'handover' => $handover,
+                'pending_cash_requests' => $pendingRequests,
+                'movement_categories' => ShiftBook::MOVEMENT_CATEGORIES,
+                'pending_intents' => $shift ? SaleIntent::where('cash_shift_id', $shift->id)->where('status', 'pending')->orderByDesc('id')->get(['id', 'status', 'total_amount', 'created_at']) : [],
+                'recent_sales' => Sale::where('store_id', $store)->where('cashier_id', $r->user()->id)->orderByDesc('id')->limit(20)->get(['id', 'number', 'total_amount', 'sold_at']),
+            ],
+        ];
     }
 
     private function lineRules(): array

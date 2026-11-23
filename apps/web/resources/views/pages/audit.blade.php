@@ -19,10 +19,41 @@
     <p>Diamati {{ \Carbon\CarbonImmutable::parse($metadata['observed_at'])->timezone('Asia/Jakarta')->format('d M Y H:i:s') }} WIB. Setiap halaman dibaca terpisah; bukan snapshot beku.</p>
     <p>Snapshot kosong berarti tidak ada snapshot tersimpan. ID objek bukan UUID operasi. Catatan keamanan global tanpa organisasi tidak termasuk halaman ini.</p>
     <p><a href="/app/organizations/{{ $organization }}/audit/export?{{ http_build_query($filters) }}">Unduh CSV audit dengan filter aktif</a> · Maksimal 10.000 catatan / 8 MiB snapshot; persempit filter jika melebihi batas. Unduhan mencakup semua halaman yang cocok.</p>
-    @forelse($entries as $entry)
-        <x-organisms.audit-record :entry="$entry" />
-    @empty
-        <p>Tidak ada audit pada filter ini.</p>
-    @endforelse
+    @if(count($entries))
+    <div class="panel">
+    <table>
+        <thead>
+            <tr>
+                <th>Waktu (WIB)</th>
+                <th>Aksi</th>
+                <th>Pelaku</th>
+                <th>Objek</th>
+                <th>Perubahan</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($entries as $entry)
+            <tr class="audit-record">
+                <td>{{ \Carbon\CarbonImmutable::parse($entry['occurred_at'])->timezone('Asia/Jakarta')->format('d M Y H:i:s') }} WIB</td>
+                <td><strong>{{ $entry['action'] }}</strong></td>
+                <td>{{ $entry['actor_id'] === null ? 'Pelaku tidak tersedia' : 'Pelaku #'.$entry['actor_id'] }}</td>
+                <td><code>{{ $entry['subject_id'] }}</code></td>
+                <td>
+                    <details><summary>Perubahan sebelum / sesudah</summary>
+                        <div class="form-grid">
+                            <x-molecules.json-snapshot label="Sebelum" :value="$entry['before']" />
+                            <x-molecules.json-snapshot label="Sesudah" :value="$entry['after']" />
+                        </div>
+                        <p>ID audit: {{ $entry['id'] }}</p>
+                    </details>
+                </td>
+            </tr>
+            @endforeach
+        </tbody>
+    </table>
+    </div>
+    @else
+        <p class="panel">Tidak ada audit pada filter ini.</p>
+    @endif
     <x-molecules.pagination :items="$entries" />
 </x-templates.console>

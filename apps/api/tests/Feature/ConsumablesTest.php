@@ -263,4 +263,45 @@ class ConsumablesTest extends TestCase
         $this->assertDatabaseMissing('consumable_stock_entries', ['source_type' => 'refund']);
         $this->assertSame(2, (int) DB::table('consumable_stock_entries')->where('source_id', $sale['id'])->sum(DB::raw('-delta')));
     }
+
+    public function test_pos_context_bundle_portion_equivalent_and_offline_sync_deduct_supplies(): void
+    {
+        $this->act($this->cashier)->getJson('/api/v1/stores/'.$this->store->id.'/pos/context')->assertOk()->assertJsonPath('data.consumables_enabled', false);
+        $box = $this->item('Kotak');
+        $this->rule($box, 'takeaway', 'portion', 1);
+        $this->buy($box, 20)->assertCreated();
+        $this->act($this->cashier)->getJson('/api/v1/stores/'.$this->store->id.'/pos/context')->assertOk()->assertJsonPath('data.consumables_enabled', true);
+
+        $bundle = Product::create(['organization_id' => $this->org->id, 'sku' => 'PAKET1', 'name' => 'Paket Hemat', 'condition' => 'frozen', 'pack_size' => 1, 'portion_size' => 1, 'retail_price' => 15000, 'wholesale_price' => 0]);
+        $this->act($this->lead)->postJson('/api/v1/organizations/'.$this->org->id.'/products/'.$bundle->id.'/recipe', $this->op([
+            'version' => 0,
+            'active' => true,
+            'portion_equivalent' => 2,
+            'components' => [['product_id' => $this->product->id, 'pieces' => 5]],
+        ]))->assertOk();
+
+        $shift = $this->openShift();
+        $intent = $this->act($this->cashier)->postJson('/api/v1/stores/'.$this->store->id.'/sales/intents', $this->op([
+            'shift_id' => $shift['id'],
+            'service_type' => 'takeaway',
+            'lines' => [['product_id' => $bundle->id, 'unit' => 'piece', 'quantity' => 2, 'allocations' => [['component_product_id' => $this->product->id, 'batch_id' => $this->batch->id, 'bucket' => 'ready', 'quantity' => 10]]]],
+        ]))->assertCreated()->json('data');
+        $this->postJson('/api/v1/sales/intents/'.$intent['id'].'/pay', $this->op(['payment_method' => 'cash', 'cash_received' => 50000]))->assertOk();
+        // 2 bundles * portion_equivalent 2 = 4 portions => 4 boxes deducted.
+        $this->assertSame(16, $this->balance($box));
+
+        // Offline sale with service_type also deducts supplies on sync.
+        $permit = $this->act($this->cashier)->postJson('/api/v1/stores/'.$this->store->id.'/sales/offline/permits', $this->op(['shift_id' => $shift['id'], 'duration_minutes' => 60]))->assertCreated()->json('data');
+        $this->assertTrue($permit['snapshot']['consumables_enabled']);
+        $synced = $this->act($this->cashier)->postJson('/api/v1/stores/'.$this->store->id.'/sales/offline', $this->op([
+            'permit_id' => $permit['id'],
+            'captured_at' => now()->toIso8601String(),
+            'client_total' => 12000,
+            'cash_received' => 20000,
+            'service_type' => 'takeaway',
+            'lines' => [['product_id' => $this->product->id, 'unit' => 'portion', 'quantity' => 1, 'allocations' => [['batch_id' => $this->batch->id, 'bucket' => 'ready', 'quantity' => 1]]]],
+        ]))->assertCreated()->json('data');
+        $this->assertSame('accepted', $synced['status']);
+        $this->assertSame(15, $this->balance($box));
+    }
 }

@@ -45,7 +45,7 @@ final class CatalogExtensionController
         abort_if(session()->has($this->slot($product)), 409, 'Selesaikan request belum pasti.');
         $base = ['operation_id' => 'required|uuid'];
         $rules = match ($action) {
-            'prices' => ['channel' => 'required|in:retail,wholesale', 'partner_id' => 'nullable|ulid', 'starts_on' => 'required|date_format:Y-m-d', 'ends_on' => 'required|date_format:Y-m-d|after_or_equal:starts_on', 'price' => 'required|integer|min:0|max:1000000000', 'reason' => 'required|string|max:2000'],'recipe' => ['version' => 'required|integer|min:0', 'components' => 'required|array|min:1|max:50', 'components.*.product_id' => 'nullable|ulid', 'components.*.pieces' => 'nullable|integer|min:1|max:10000'],'image' => ['version' => 'required|integer|min:0', 'image' => 'required|file|max:5120'],default => abort(404)
+            'prices' => ['channel' => 'required|in:retail,wholesale', 'partner_id' => 'nullable|ulid', 'starts_on' => 'required|date_format:Y-m-d', 'ends_on' => 'required|date_format:Y-m-d|after_or_equal:starts_on', 'price' => 'required|integer|min:0|max:1000000000', 'reason' => 'required|string|max:2000'],'recipe' => ['version' => 'required|integer|min:0', 'portion_equivalent' => 'nullable|integer|min:0|max:100', 'components' => 'required|array|min:1|max:50', 'components.*.product_id' => 'nullable|ulid', 'components.*.pieces' => 'nullable|integer|min:1|max:10000'],'image' => ['version' => 'required|integer|min:0', 'image' => 'required|file|max:5120'],default => abort(404)
         };
         $v = $r->validate([...$base, ...$rules]);
         if ($action === 'recipe') {

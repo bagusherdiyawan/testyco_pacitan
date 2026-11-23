@@ -40,7 +40,7 @@ final class CatalogController
         return $page->through(function ($p) use ($prices, $recipes, $images) {
             $recipe = $recipes->get($p->id);
 
-            return [...$p->only(['id', 'sku', 'name', 'variant', 'condition', 'pack_size', 'portion_size']), 'retail_price' => (int) ($prices->get($p->id)?->price ?? $p->retail_price), 'has_image' => $images->has($p->id), 'is_bundle' => $recipe !== null, 'bundle_recipe' => $recipe ? ['id' => $recipe->id, 'version' => (int) $recipe->version, 'components' => json_decode($recipe->components, true)] : null];
+            return [...$p->only(['id', 'sku', 'name', 'variant', 'condition', 'pack_size', 'portion_size']), 'retail_price' => (int) ($prices->get($p->id)?->price ?? $p->retail_price), 'has_image' => $images->has($p->id), 'is_bundle' => $recipe !== null, 'bundle_recipe' => $recipe ? ['id' => $recipe->id, 'version' => (int) $recipe->version, 'portion_equivalent' => (int) ($recipe->portion_equivalent ?? 0), 'components' => json_decode($recipe->components, true)] : null];
         });
     }
 

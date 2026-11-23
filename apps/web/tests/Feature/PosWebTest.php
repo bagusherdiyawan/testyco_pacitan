@@ -89,4 +89,91 @@ class PosWebTest extends TestCase
         $this->withSession($this->apiSession())->get('/app/stores/STORE/pos/sales?page=2')->assertOk()->assertSee('POS-123')->assertSee('Halaman 2 dari 2');
         Http::assertSent(fn ($r) => str_contains($r->url(), 'page=2'));
     }
+
+    public function test_shift_detail_hides_expected_cash_in_blind_close_and_forwards_cash_request_and_force_close(): void
+    {
+        Http::fake([
+            '*/shifts/SHIFT' => Http::response([
+                'data' => [
+                    'id' => 'SHIFT',
+                    'store_id' => 'STORE',
+                    'cashier_id' => 1,
+                    'cashier_name' => 'Kasir',
+                    'device_name' => 'Tablet',
+                    'status' => 'open',
+                    'version' => 1,
+                    'opening_cash' => 100000,
+                    'cash_sales' => null,
+                    'cash_in' => null,
+                    'cash_out' => null,
+                    'expected_cash' => null,
+                    'blind_close' => true,
+                    'is_owner' => true,
+                    'can_manage' => false,
+                    'can_request_movement' => true,
+                    'movements' => [],
+                    'cash_movement_requests' => [],
+                ],
+            ]),
+            '*/shifts/SHIFT/cash-movement-requests' => Http::response(['data' => ['id' => 'REQ1']], 201),
+            '*/shifts/SHIFT/force-close' => Http::response(['data' => ['id' => 'SHIFT', 'status' => 'closed']]),
+        ]);
+
+        $this->withSession($this->apiSession())
+            ->get('/app/pos/shifts/SHIFT')
+            ->assertOk()
+            ->assertSee('Mode Hitung Buta (Blind Close) Aktif')
+            ->assertDontSee('Kas seharusnya Rp');
+
+        $this->withSession($this->apiSession())
+            ->post('/app/pos/shifts/SHIFT/cash-requests', [
+                'operation_id' => 'OP1',
+                'kind' => 'out',
+                'amount' => 10000,
+                'category' => 'Operasional darurat',
+                'reason' => 'Beli es batu',
+                'evidence_reference' => 'NOTA-1',
+            ])
+            ->assertRedirect('/app/pos/shifts/SHIFT');
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/shifts/SHIFT/cash-movement-requests') && (int) $r['amount'] === 10000 && $r['evidence_reference'] === 'NOTA-1');
+
+        $this->withSession($this->apiSession())
+            ->post('/app/pos/shifts/SHIFT/force-close', [
+                'operation_id' => 'OP2',
+                'version' => 1,
+                'counted_cash' => 90000,
+                'retained_cash' => 50000,
+                'reason' => 'Kasir pulang darurat',
+            ])
+            ->assertRedirect('/app/pos/shifts/SHIFT');
+        Http::assertSent(fn ($r) => str_ends_with($r->url(), '/shifts/SHIFT/force-close') && $r['retained_cash'] === 50000 && $r['reason'] === 'Kasir pulang darurat');
+    }
+
+    public function test_receipt_settings_customize_thermal_receipt_and_product_image_proxies_safely(): void
+    {
+        Http::fake([
+            '*/sales/SALE' => Http::response(['data' => $this->sale()]),
+            '*/stores/STORE/catalog/PRODUCT/image' => Http::response('png-bytes', 200, ['Content-Type' => 'image/png']),
+        ]);
+
+        $this->withSession($this->apiSession())
+            ->post('/app/pos/receipt-settings', [
+                'header_text' => 'Dimsum Hangat Pacitan',
+                'footer_text' => 'Terima kasih sudah jajan!',
+                'show_address' => '1',
+                'show_cashier' => '1',
+                'show_discount' => '1',
+            ])
+            ->assertRedirect();
+
+        $this->get('/app/pos/sales/SALE')
+            ->assertOk()
+            ->assertSee('Dimsum Hangat Pacitan')
+            ->assertSee('Terima kasih sudah jajan!');
+
+        $this->get('/app/stores/STORE/catalog/PRODUCT/image')
+            ->assertOk()
+            ->assertHeader('Content-Type', 'image/png')
+            ->assertHeader('X-Content-Type-Options', 'nosniff');
+    }
 }

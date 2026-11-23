@@ -15,7 +15,7 @@ final class BundlePricing
             return null;
         }
 
-        return ['id' => $r->id, 'version' => (int) $r->version, 'components' => json_decode($r->components, true)];
+        return ['id' => $r->id, 'version' => (int) $r->version, 'portion_equivalent' => (int) ($r->portion_equivalent ?? 0), 'components' => json_decode($r->components, true)];
     }
 
     public static function item(Product $p, array $row, array $recipe): array

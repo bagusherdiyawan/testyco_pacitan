@@ -4,6 +4,8 @@ namespace App\Modules\Sales\Application;
 
 use App\Models\User;
 use App\Modules\Catalog\Application\RetailPricing;
+use App\Modules\Consumables\Application\ConsumableBook;
+use App\Modules\Consumables\ConsumablesServiceProvider;
 use App\Modules\Identity\Application\Audit;
 use App\Modules\Inventory\Application\FoodSafety;
 use App\Modules\Inventory\Infrastructure\InventoryBatch;
@@ -36,7 +38,10 @@ final class OfflineCash
             abort_if(count($catalogue) > 1000 || count($batches) > 2000, 422, 'Snapshot offline melebihi kapasitas perangkat; persempit data aktif.');
             $policy = app(FoodSafety::class)->policy($s->organization_id);
             $safety = ['block_expired' => (bool) ($policy?->block_expired ?? false), 'ready_life_minutes' => $policy?->ready_life_minutes === null ? null : (int) $policy->ready_life_minutes, 'fefo' => $policy?->fefo ?? 'off'];
-            $snapshot = ['safety' => $safety, 'user_id' => $u->id, 'store' => $s->only(['id', 'organization_id', 'name', 'address']), 'cashier_name' => $u->name, 'products' => $catalogue, 'batches' => $batches, 'payment_methods' => ['cash'], 'vouchers_allowed' => false];
+            $consumablesEnabled = app()->getProvider(ConsumablesServiceProvider::class)
+                ? app(ConsumableBook::class)->hasActiveRules($s->organization_id)
+                : false;
+            $snapshot = ['safety' => $safety, 'consumables_enabled' => $consumablesEnabled, 'user_id' => $u->id, 'store' => $s->only(['id', 'organization_id', 'name', 'address']), 'cashier_name' => $u->name, 'products' => $catalogue, 'batches' => $batches, 'payment_methods' => ['cash'], 'vouchers_allowed' => false];
             $p = OfflinePermit::create(['organization_id' => $s->organization_id, 'store_id' => $store, 'cash_shift_id' => $shift->id, 'cashier_id' => $u->id, 'access_version' => (int) User::whereKey($u->id)->value('access_version'), 'snapshot' => $snapshot, 'issued_at' => now(), 'expires_at' => now()->addMinutes((int) $v['duration_minutes'])]);
             Audit::record($u->id, $s->organization_id, 'offline.permit_issued', $p->id, null, $p->only(['id', 'store_id', 'cash_shift_id', 'issued_at', 'expires_at']));
 

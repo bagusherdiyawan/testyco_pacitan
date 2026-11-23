@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import '../../../design_system/formatters.dart';
 import '../../../design_system/molecules/cash_movement_review.dart';
 import '../../../design_system/organisms/shift_cash_summary.dart';
@@ -23,8 +24,12 @@ class _ShiftDetailPageState extends State<ShiftDetailPage> {
   late final CashMovementController model;
   final amount = TextEditingController(),
       category = TextEditingController(),
-      reason = TextEditingController();
+      reason = TextEditingController(),
+      evidence = TextEditingController(),
+      decisionNote = TextEditingController();
   String kind = 'out';
+  String? requestCategory;
+  bool requestBusy = false;
   int _epoch = 0;
   @override
   void initState() {
@@ -50,7 +55,73 @@ class _ShiftDetailPageState extends State<ShiftDetailPage> {
     amount.dispose();
     category.dispose();
     reason.dispose();
+    evidence.dispose();
+    decisionNote.dispose();
     super.dispose();
+  }
+
+  Future<void> submitRequest(CashShift s) async {
+    final n = int.tryParse(amount.text.trim());
+    final cat = (requestCategory ?? s.movementCategories.first).trim();
+    if (n == null || n <= 0 || reason.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Isi nominal positif dan alasan pengajuan.')),
+      );
+      return;
+    }
+    setState(() => requestBusy = true);
+    try {
+      await widget.repository.requestMovement(s.id, {
+        'operation_id': const Uuid().v4(),
+        'kind': kind,
+        'amount': n,
+        'category': cat,
+        'reason': reason.text.trim(),
+        if (evidence.text.trim().isNotEmpty)
+          'evidence_reference': evidence.text.trim(),
+      });
+      amount.clear();
+      reason.clear();
+      evidence.clear();
+      await model.load();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Pengajuan kas dikirim ke pengelola.')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => requestBusy = false);
+    }
+  }
+
+  Future<void> decideRequest(
+    Map<String, dynamic> req,
+    String action, {
+    String noteText = '',
+  }) async {
+    setState(() => requestBusy = true);
+    try {
+      await widget.repository.decideRequest(req['id'] as String, action, {
+        'operation_id': const Uuid().v4(),
+        'version': req['version'],
+        if (noteText.trim().isNotEmpty) 'decision_note': noteText.trim(),
+      });
+      await model.load();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$e')));
+      }
+    } finally {
+      if (mounted) setState(() => requestBusy = false);
+    }
   }
 
   Widget review(CashMovementDraft draft) {
@@ -179,11 +250,23 @@ class _ShiftDetailPageState extends State<ShiftDetailPage> {
                   cashIn: s.cashIn,
                   cashOut: s.cashOut,
                   expected: s.expected,
+                  blindClose: s.blindClose,
                 ),
+                if (s.noncashSummary != null)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Text(
+                      'Non-tunai: QRIS ${s.noncashSummary!['qris_count']}x (${formatRupiah((s.noncashSummary!['qris_amount'] as int?) ?? 0)}) · Transfer ${s.noncashSummary!['transfer_count']}x (${formatRupiah((s.noncashSummary!['transfer_amount'] as int?) ?? 0)})',
+                    ),
+                  ),
                 if (s.status == 'closed') ...[
                   Text(
                     'Kas fisik ${formatRupiah(s.counted ?? 0)} · Selisih ${formatRupiah(s.difference ?? 0)}',
                   ),
+                  if (s.depositCash != null || s.retainedCash != null)
+                    Text(
+                      'Setoran ${formatRupiah(s.depositCash ?? 0)} · Sisa modal ${formatRupiah(s.retainedCash ?? s.counted ?? 0)}',
+                    ),
                   if (s.closingNote != null) Text(s.closingNote!),
                 ],
               ],
@@ -217,10 +300,113 @@ class _ShiftDetailPageState extends State<ShiftDetailPage> {
                   onPressed: model.editable ? confirm : null,
                   child: const Text('Tinjau catatan kas'),
                 ),
+              ] else if (s != null && s.canRequest) ...[
+                Text(
+                  'Ajukan kas masuk/keluar (butuh persetujuan pengelola)',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: kind,
+                  decoration: const InputDecoration(labelText: 'Jenis pengajuan'),
+                  items: const [
+                    DropdownMenuItem(value: 'out', child: Text('Kas keluar')),
+                    DropdownMenuItem(value: 'in', child: Text('Kas masuk')),
+                  ],
+                  onChanged: requestBusy
+                      ? null
+                      : (v) => setState(() => kind = v!),
+                ),
+                DropdownButtonFormField<String>(
+                  initialValue: requestCategory ?? s.movementCategories.first,
+                  decoration: const InputDecoration(labelText: 'Kategori'),
+                  items: [
+                    for (final c in s.movementCategories)
+                      DropdownMenuItem(value: c, child: Text(c)),
+                  ],
+                  onChanged: requestBusy
+                      ? null
+                      : (v) => setState(() => requestCategory = v),
+                ),
+                TextField(
+                  controller: amount,
+                  enabled: !requestBusy,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Nilai kas (Rp)'),
+                ),
+                TextField(
+                  controller: reason,
+                  enabled: !requestBusy,
+                  decoration: const InputDecoration(labelText: 'Alasan & kebutuhan'),
+                ),
+                TextField(
+                  controller: evidence,
+                  enabled: !requestBusy,
+                  decoration: const InputDecoration(
+                    labelText: 'Nomor nota / bukti (opsional)',
+                  ),
+                ),
+                FilledButton(
+                  onPressed: requestBusy ? null : () => submitRequest(s),
+                  child: const Text('Kirim pengajuan kas'),
+                ),
               ] else if (s != null)
                 const Text(
                   'Pencatatan tidak tersedia. Periksa status, izin, dan muat ulang setelah kas berubah.',
                 ),
+              if (s != null && s.movementRequests.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Daftar pengajuan kas',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+                for (final req in s.movementRequests)
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${req['kind'] == 'in' ? 'Masuk' : 'Keluar'} ${formatRupiah(req['amount'] as int)} · ${req['category']} (${req['status']})',
+                          ),
+                          Text('${req['reason']}'),
+                          if (req['status'] == 'pending')
+                            Wrap(
+                              spacing: 8,
+                              children: [
+                                if (s.canManage &&
+                                    req['requested_by'] !=
+                                        widget.repository.api.identity?['id']) ...[
+                                  TextButton(
+                                    onPressed: requestBusy
+                                        ? null
+                                        : () => decideRequest(req, 'approve'),
+                                    child: const Text('Setujui'),
+                                  ),
+                                  TextButton(
+                                    onPressed: requestBusy
+                                        ? null
+                                        : () => decideRequest(
+                                            req,
+                                            'reject',
+                                            noteText: 'Ditolak pengelola',
+                                          ),
+                                    child: const Text('Tolak'),
+                                  ),
+                                ] else if (s.isOwner)
+                                  TextButton(
+                                    onPressed: requestBusy
+                                        ? null
+                                        : () => decideRequest(req, 'cancel'),
+                                    child: const Text('Batalkan pengajuan'),
+                                  ),
+                              ],
+                            ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
               if (s != null) ...[
                 const SizedBox(height: 16),
                 Text(

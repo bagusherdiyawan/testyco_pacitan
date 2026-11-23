@@ -59,12 +59,22 @@ final class ShipmentDiscrepancyWorkflow
 
     private function supplierDecision(User $user, SupplyOrder $order): bool
     {
-        return $order->kind === 'wholesale' && Organization::whereKey($order->supplier_organization_id)->where('type', 'center')->exists() && in_array($this->identity->role($user, $order->supplier_organization_id)?->value, ['owner', 'admin'], true);
+        return in_array($order->kind, ['wholesale', 'internal_transfer'], true)
+            && Organization::whereKey($order->supplier_organization_id)->where('type', 'center')->exists()
+            && in_array($this->identity->role($user, $order->supplier_organization_id)?->value, ['owner', 'admin'], true);
     }
 
     private function partnerDecision(User $user, SupplyOrder $order): bool
     {
-        return $order->kind === 'wholesale' && Organization::whereKey($order->organization_id)->where('type', 'partner')->exists() && $this->identity->role($user, $order->organization_id)?->value === 'partner_lead';
+        $role = $this->identity->role($user, $order->organization_id)?->value;
+        if ($order->kind === 'internal_transfer') {
+            return Organization::whereKey($order->organization_id)->where('type', 'center')->exists()
+                && in_array($role, ['owner', 'admin'], true);
+        }
+
+        return $order->kind === 'wholesale'
+            && Organization::whereKey($order->organization_id)->where('type', 'partner')->exists()
+            && $role === 'partner_lead';
     }
 
     public function context(User $user, string $id, string $shipmentId): array
@@ -148,6 +158,19 @@ final class ShipmentDiscrepancyWorkflow
             $this->shipment($id, $shipmentId, true);
             $case = ShipmentDiscrepancy::where('supply_order_id', $id)->where('shipment_id', $shipmentId)->lockForUpdate()->firstOrFail();
             abort_unless($case->version === (int) $v['version'] && $case->status === 'reported', 409, 'Versi/status kasus berubah.');
+            if ($order->kind === 'internal_transfer') {
+                abort_if($v['type'] === 'credit', 422, 'Transfer internal tidak memakai nota kredit komersial.');
+            } else {
+                abort_if($v['type'] === 'write_off', 422, 'Pesanan grosir harus memakai retur, pengganti atau nota kredit.');
+                if ($v['type'] === 'credit') {
+                    $shipmentLineIds = \App\Modules\Fulfillment\Infrastructure\ShipmentLine::where('shipment_id', $shipmentId)->pluck('id')->all();
+                    $billed = \Illuminate\Support\Facades\DB::table('invoice_shipment_lines as isl')
+                        ->join('invoices as inv', 'inv.id', '=', 'isl.invoice_id')
+                        ->whereIn('isl.active_shipment_line_id', $shipmentLineIds)
+                        ->get(['isl.active_shipment_line_id', 'inv.basis']);
+                    abort_if($billed->isNotEmpty() && $billed->every(fn ($b) => $b->basis === 'good_received') && $billed->pluck('active_shipment_line_id')->unique()->count() === count($shipmentLineIds), 409, 'Kiriman sudah ditagih berdasar penerimaan baik; gunakan rencana pengganti atau retur fisik.');
+                }
+            }
             abort_unless(Organization::whereKey($order->organization_id)->where('active', true)->exists(), 409, 'Organisasi penerima nonaktif.');
             abort_if(ShipmentDiscrepancyResolution::where('pending_case_id', $case->id)->exists(), 409, 'Masih ada usulan menunggu konfirmasi.');
             $resolution = ShipmentDiscrepancyResolution::create(['shipment_discrepancy_id' => $case->id, 'pending_case_id' => $case->id, 'proposed_by' => $user->id, 'type' => $v['type'], 'status' => 'pending', 'proposal' => $v['proposal'], 'reference' => $v['reference'] ?? null]);
@@ -182,6 +205,9 @@ final class ShipmentDiscrepancyWorkflow
             $case->version++;
             $case->status = $action === 'confirm' ? 'plan_confirmed' : 'reported';
             $case->save();
+            if ($action === 'confirm') {
+                app(OrderSettlement::class)->evaluate($user, $order);
+            }
             $this->audit($user, $order, 'shipment.discrepancy_resolution_'.$resolution->status, $case, ['resolution' => $resolution->toArray()]);
 
             return ['order_id' => $id, 'shipment_id' => $shipmentId, 'case' => $case->toArray(), 'resolution' => $resolution->toArray()];

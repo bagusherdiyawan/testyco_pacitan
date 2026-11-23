@@ -263,8 +263,12 @@ class ShipmentDiscrepancyTest extends TestCase
         $this->lead = $this->owner;
         $d = $this->received();
         $this->report($d);
-        $this->getJson($this->path($d))->assertJsonPath('order.kind', 'internal_transfer')->assertJsonPath('actions.propose_resolution', false);
-        $this->postJson($this->path($d).'/resolutions', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'type' => 'return', 'proposal' => 'Needs own-store policy'])->assertForbidden();
+        $this->getJson($this->path($d))->assertJsonPath('order.kind', 'internal_transfer')->assertJsonPath('actions.propose_resolution', true);
+        // Commercial credit is rejected for internal transfers; write_off settles the order.
+        $this->postJson($this->path($d).'/resolutions', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'type' => 'credit', 'proposal' => 'Tidak ada nota kredit internal'])->assertStatus(422);
+        $res = $this->postJson($this->path($d).'/resolutions', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'type' => 'write_off', 'proposal' => 'Tutup selisih internal'])->assertCreated()->json('data.resolution');
+        $this->postJson($this->path($d).'/resolutions/'.$res['id'].'/confirm', ['operation_id' => (string) Str::uuid(), 'version' => 2])->assertOk();
+        $this->assertSame('settled', SupplyOrder::find($d['order']['id'])->status);
         $this->assertSame(1, DB::table('audit_entries')->where('action', 'shipment.discrepancy_reported')->count());
         $migration = require database_path('migrations/2026_11_02_000008_create_shipment_discrepancies.php');
         $this->expectException(\RuntimeException::class);

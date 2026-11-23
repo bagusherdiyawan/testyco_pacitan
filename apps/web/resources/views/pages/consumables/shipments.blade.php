@@ -38,7 +38,34 @@
 <x-atoms.button>Konfirmasi penerimaan</x-atoms.button>
 </form>
 @else
-<ul>@foreach($s['lines'] as $line)<li>{{ $line['name'] }}: dikirim {{ $line['quantity_sent'] }} {{ $line['unit'] }}@if($line['quantity_received'] !== null) · diterima {{ $line['quantity_received'] }}@if($line['quantity_received'] < $line['quantity_sent']) <span class="stock-short">kurang {{ $line['quantity_sent'] - $line['quantity_received'] }}</span>@endif @endif</li>@endforeach</ul>
+<div class="overflow-x-auto mt-2">
+    <table class="min-w-full text-sm">
+        <thead>
+            <tr class="border-b border-slate-200 text-left text-slate-500">
+                <th class="py-1.5 pr-4">Barang</th>
+                <th class="py-1.5 pr-4">Dikirim</th>
+                <th class="py-1.5 pr-4">Diterima</th>
+                <th class="py-1.5">Selisih</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach($s['lines'] as $line)
+                <tr class="border-b border-slate-100">
+                    <td class="py-1.5 pr-4 font-medium">{{ $line['name'] }}</td>
+                    <td class="py-1.5 pr-4">dikirim {{ $line['quantity_sent'] }} {{ $line['unit'] }}</td>
+                    <td class="py-1.5 pr-4">{{ $line['quantity_received'] !== null ? 'diterima '.$line['quantity_received'] : '—' }}</td>
+                    <td class="py-1.5">
+                        @if($line['quantity_received'] !== null && $line['quantity_received'] < $line['quantity_sent'])
+                            <span class="stock-short">kurang {{ $line['quantity_sent'] - $line['quantity_received'] }}</span>
+                        @else
+                            —
+                        @endif
+                    </td>
+                </tr>
+            @endforeach
+        </tbody>
+    </table>
+</div>
 @if($s['receive_note'])<p>Catatan penerima: {{ $s['receive_note'] }}</p>@endif
 @endif
 </section>

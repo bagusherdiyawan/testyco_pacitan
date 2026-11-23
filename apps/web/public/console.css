@@ -15,8 +15,8 @@
 
 /* Cards */
 .console-content .panel, .console-content .module-card {
-  background: #fff; border: 0; border-radius: 1rem; padding: 1.5rem; margin: 1rem 0;
-  box-shadow: 0 20px 27px 0 rgba(90, 16, 10, .06);
+  background: #fff; border: 1px solid var(--surface-line); border-radius: .95rem; padding: 1.4rem; margin: 1rem 0;
+  box-shadow: 0 4px 16px -4px rgba(15, 23, 42, .05);
 }
 .console-content .panel > :first-child { margin-top: 0 }
 .console-content .panel > :last-child { margin-bottom: 0 }
@@ -28,13 +28,13 @@
 .console-content .module-card a { font-weight: 600 }
 
 /* Badges and chips */
-.console-content .badge { display: inline-block; margin-bottom: .6rem; padding: .3rem .75rem; border-radius: 999px; background: var(--yellow-100); border: 1px solid var(--yellow-300); color: var(--red-800); font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase }
+.console-content .badge { display: inline-block; margin-bottom: .5rem; padding: .25rem .7rem; border-radius: 999px; background: var(--red-50); border: 1px solid var(--red-200); color: var(--red-700); font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase }
 .console-content .status-chip { display: inline-flex; align-items: center; gap: .45rem; font-size: .8rem; font-weight: 700; color: var(--ink-500) }
-.console-content .status-chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #c9b8a6 }
-.console-content .status-chip.is-available { color: var(--red-800) }
-.console-content .status-chip.is-available::before { background: var(--yellow-500); box-shadow: 0 0 0 4px var(--yellow-100) }
-.console-content .stock-ok, .console-content .stock-zero, .console-content .stock-short { display: inline-block; padding: .15rem .75rem; border-radius: 999px; font-size: .78rem; font-weight: 800 }
-.console-content .stock-ok { background: var(--yellow-100); color: var(--red-800); border: 1px solid var(--yellow-300) }
+.console-content .status-chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1 }
+.console-content .status-chip.is-available { color: #047857 }
+.console-content .status-chip.is-available::before { background: #10b981; box-shadow: 0 0 0 4px #d1fae5 }
+.console-content .stock-ok, .console-content .stock-zero, .console-content .stock-short { display: inline-block; padding: .15rem .75rem; border-radius: 999px; font-size: .78rem; font-weight: 700 }
+.console-content .stock-ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0 }
 .console-content .stock-zero { background: var(--surface-tint); color: var(--ink-700); border: 1px solid var(--surface-line) }
 .console-content .stock-short { background: var(--red-600); color: #fff }
 
@@ -48,10 +48,10 @@
 .console-content label { font-weight: 600; font-size: .85rem; color: var(--ink-700) }
 .console-content .field, .console-content label:has(> input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])), .console-content label:has(> select), .console-content label:has(> textarea) { display: flex; flex-direction: column; gap: .35rem; margin: .8rem 0 }
 .console-content input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), .console-content select, .console-content textarea {
-  display: block; width: 100%; min-height: 42px; padding: .5rem .85rem; background: #fff; border: 1px solid #d6bd9d; border-radius: .5rem; color: var(--ink-900); font-size: .9rem; font-weight: 400; transition: border-color .12s, box-shadow .12s;
+  display: block; width: 100%; min-height: 42px; padding: .5rem .85rem; background: #fff; border: 1px solid #cbd5e1; border-radius: .5rem; color: var(--ink-900); font-size: .9rem; font-weight: 400; transition: border-color .12s, box-shadow .12s;
 }
 .console-content textarea { min-height: 90px; resize: vertical }
-.console-content input:not([type="checkbox"]):not([type="radio"]):focus, .console-content select:focus, .console-content textarea:focus { outline: 0; border-color: var(--red-500); box-shadow: 0 0 0 3px var(--yellow-200) }
+.console-content input:not([type="checkbox"]):not([type="radio"]):focus, .console-content select:focus, .console-content textarea:focus { outline: 0; border-color: var(--red-600); box-shadow: 0 0 0 3px var(--red-100) }
 .console-content input[type="checkbox"], .console-content input[type="radio"] { width: 1.1rem; height: 1.1rem; accent-color: var(--red-600); margin: 0 .5rem 0 0; vertical-align: middle }
 .console-content .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .1rem 1rem }
 .console-content fieldset { display: flex; gap: .75rem; flex-wrap: wrap; margin: 1rem 0; padding: 1rem 1.1rem; background: var(--surface-tint); border: 1px solid var(--surface-line); border-radius: .75rem }
@@ -62,14 +62,14 @@
 
 /* Buttons */
 .console-content .button, .console-content a.button {
-  display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 40px; padding: .55rem 1.4rem; border: 0; border-radius: .6rem;
-  background-image: var(--soft-grad-primary); color: #fff; font-size: .75rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; text-decoration: none; cursor: pointer;
-  box-shadow: 0 4px 7px -1px rgba(90, 16, 10, .2), 0 2px 4px -1px rgba(90, 16, 10, .12); transition: transform .12s, filter .12s;
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 40px; padding: .55rem 1.25rem; border: 0; border-radius: .55rem;
+  background: var(--red-600); color: #fff; font-size: .78rem; font-weight: 700; letter-spacing: .02em; text-decoration: none; cursor: pointer;
+  box-shadow: 0 2px 6px -1px rgba(185, 28, 28, .25); transition: transform .12s, background-color .12s;
 }
-.console-content .button:hover { color: #fff; filter: brightness(1.1); transform: translateY(-1px) }
-.console-content .button:disabled { opacity: .55; cursor: not-allowed; transform: none; filter: none }
-.console-content .button.button--lite { background: var(--yellow-100); background-image: none; color: var(--red-800); box-shadow: inset 0 0 0 1px var(--yellow-300) }
-.console-content .button.button--lite:hover { background: var(--yellow-200); color: var(--red-900) }
+.console-content .button:hover { color: #fff; background: var(--red-700); transform: translateY(-1px) }
+.console-content .button:disabled { opacity: .55; cursor: not-allowed; transform: none }
+.console-content .button.button--lite { background: #fff; color: var(--ink-700); box-shadow: inset 0 0 0 1px #cbd5e1 }
+.console-content .button.button--lite:hover { background: #f1f5f9; color: var(--ink-900) }
 .console-content .item-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .6rem 0; border-bottom: 1px solid var(--surface-line) }
 .console-content .item-row .button { margin-left: auto }
 
@@ -77,7 +77,28 @@
 .console-content table { width: 100%; margin: .5rem 0; border-collapse: collapse }
 .console-content th { padding: .75rem 1rem; text-align: left; font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500); background: var(--surface-tint); border-bottom: 1px solid var(--surface-line) }
 .console-content td { padding: .8rem 1rem; border-bottom: 1px solid var(--surface-line); color: var(--ink-900) }
-.console-content tbody tr:hover { background: var(--yellow-50) }
+.console-content tbody tr:hover { background: #f8fafc }
+@media (max-width: 991px) {
+  .console-content table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch }
+}
+
+/* Sidebar sections, action grids & responsive navbar polish */
+.sidenav { box-shadow: 0 20px 30px -15px rgba(90, 16, 10, .12) }
+.sidenav #sidenav-collapse-main { max-height: calc(100vh - 96px); overflow-y: auto; padding-bottom: 1.5rem }
+.sidenav .navbar-nav > .nav-item .nav-link { padding-top: .5rem; padding-bottom: .5rem; margin: 0 .65rem; border-radius: .65rem; font-size: .86rem; font-weight: 600; color: var(--ink-700) }
+.sidenav .navbar-nav > .nav-item .nav-link:hover { background: var(--red-50); color: var(--red-800) }
+.sidenav .navbar-nav > .nav-item .nav-link.active { background: #fff; color: var(--red-800); font-weight: 750; box-shadow: 0 6px 16px -8px rgba(90, 16, 10, .18) }
+.sidenav .sidenav-section { display: block; padding: .35rem 1.35rem; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500) }
+.nav-drawer-btn { min-width: 44px; min-height: 44px; border-radius: .65rem; background: #fff; border: 1px solid var(--surface-line); box-shadow: 0 2px 6px rgba(90, 16, 10, .08) }
+.console-content .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .85rem; margin: .75rem 0 1.25rem }
+.console-content .action-card { display: flex; flex-direction: column; gap: .35rem; padding: 1rem 1.15rem; background: #fff; border: 1px solid var(--surface-line); border-radius: .9rem; text-decoration: none; color: var(--ink-900); box-shadow: 0 8px 18px -14px rgba(90, 16, 10, .35); transition: transform .12s, border-color .12s }
+.console-content .action-card:hover { transform: translateY(-2px); border-color: var(--red-400); color: var(--red-900) }
+.console-content .action-card strong { font-size: .95rem; color: var(--red-800) }
+.console-content .action-card span { font-size: .82rem; color: var(--ink-500); line-height: 1.35 }
+.console-content .section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; margin: 1.25rem 0 .65rem }
+.console-content .section-heading h2 { margin: 0 }
+.console-content .pill-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem }
+.console-content .pill-actions a { margin: 0 }
 
 /* Helpers used by existing pages */
 .console-content .stock-balances { display: grid; grid-template-columns: 1fr auto; gap: .5rem }
@@ -148,13 +169,23 @@
 .console-content .menu-chips > a.is-active { background: var(--soft-grad-primary); border-color: var(--red-600); color: #fff; box-shadow: 0 8px 16px -8px rgba(224, 51, 40, .6) }
 .console-content .menu-chips > a.is-active:hover { color: #fff }
 
+/* ---- Tablets: comfortable 2-column grids and compact top bar ---- */
+@media (max-width: 1024px) {
+  .console-content .panel, .console-content .module-card { padding: 1.2rem }
+  .console-content .module-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .85rem }
+  .navbar-main .user-chip { font-size: .78rem; padding: .3rem .65rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+}
+
 /* ---- Phones: touch-friendly forms and a compact POS cart ---- */
 @media (max-width: 600px) {
   /* 16px inputs stop iOS from zooming the page on focus; 44px targets are easy to hit */
   .console-content input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), .console-content select, .console-content textarea { min-height: 46px; font-size: 16px }
   .console-content form > .button, .console-content form > button, .console-content .button { width: 100%; min-height: 48px; justify-self: stretch }
   .console-content .menu-chips > a, .console-content > a, .console-content > p:has(> a:only-child) > a { min-height: 44px }
-  .console-content .panel { padding: 1.1rem }
+  .console-content .panel { padding: 1rem }
+  .console-content .action-grid { grid-template-columns: 1fr }
+  .console-content .module-grid { grid-template-columns: 1fr }
+  .console-content .pill-actions .button, .console-content .pill-actions a { width: 100%; text-align: center }
   /* POS and order lines: product and stock span the row, unit and quantity sit side by side */
   .console-content fieldset.pos-row, .console-content fieldset.order-row { grid-template-columns: 1fr 1fr; padding: .85rem }
   .console-content fieldset.pos-row > label:nth-of-type(1), .console-content fieldset.pos-row > label:nth-of-type(4), .console-content fieldset.pos-row > .button,
@@ -164,9 +195,9 @@
 
 /* Secondary actions (add or remove a line) stay quiet so the main action stands out */
 .console-content fieldset.pos-row .button, .console-content fieldset.order-row .button, .console-content #add-pos-line, .console-content #add-order-line {
-  background: var(--yellow-100); background-image: none; color: var(--red-800); box-shadow: inset 0 0 0 1px var(--yellow-300);
+  background: #fff; color: var(--ink-700); box-shadow: inset 0 0 0 1px #cbd5e1;
 }
-.console-content fieldset.pos-row .button:hover, .console-content fieldset.order-row .button:hover, .console-content #add-pos-line:hover, .console-content #add-order-line:hover { background: var(--yellow-200); color: var(--red-900) }
+.console-content fieldset.pos-row .button:hover, .console-content fieldset.order-row .button:hover, .console-content #add-pos-line:hover, .console-content #add-order-line:hover { background: #f1f5f9; color: var(--ink-900) }
 
 /* The hidden attribute must win over the field layout rules above */
 .console-content [hidden] { display: none !important }

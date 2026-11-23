@@ -20,7 +20,7 @@ class OfflinePage extends StatefulWidget {
 
 class _OfflinePageState extends State<OfflinePage> {
   Map<String, dynamic>? state;
-  String? error, permitId, productId, unit;
+  String? error, permitId, productId, unit, serviceType;
   String? candidate;
   final duration = TextEditingController(),
       quantity = TextEditingController(),
@@ -409,6 +409,28 @@ class _OfflinePageState extends State<OfflinePage> {
                     icon: const Icon(Icons.delete_outline),
                   ),
                 ),
+              if (permit!['snapshot']['consumables_enabled'] == true)
+                DropdownButtonFormField<String>(
+                  key: ValueKey('offline-service:$permitId:$serviceType'),
+                  initialValue: serviceType,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Jenis penjualan',
+                  ),
+                  items: const [
+                    DropdownMenuItem(
+                      value: 'dine_in',
+                      child: Text('Makan di tempat'),
+                    ),
+                    DropdownMenuItem(
+                      value: 'takeaway',
+                      child: Text('Bawa pulang (pakai kemasan)'),
+                    ),
+                  ],
+                  onChanged: busy
+                      ? null
+                      : (v) => setState(() => serviceType = v),
+                ),
               TextField(
                 controller: cash,
                 enabled: !busy,
@@ -424,7 +446,12 @@ class _OfflinePageState extends State<OfflinePage> {
                         final n = int.tryParse(cash.text);
                         if (n == null) throw 'Isi tunai aktual.';
                         candidate = jsonEncode(
-                          await widget.repository.preview(permitId!, cart, n),
+                          await widget.repository.preview(
+                            permitId!,
+                            cart,
+                            n,
+                            serviceType: serviceType,
+                          ),
                         );
                         verified = false;
                       }),

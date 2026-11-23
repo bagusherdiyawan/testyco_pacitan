@@ -12,10 +12,35 @@
 @if(isset($filters['from_day']))<p>Periode diterapkan: {{ $filters['from_day'] }} — {{ $filters['to_day'] }} WIB.</p>@else<p>Periode diterapkan: seluruh riwayat.</p>@endif
 @if(isset($filters['q']))<p>Nomor struk diterapkan: {{ $filters['q'] }}</p>@endif
 <p>Setiap halaman dibaca terpisah; bukan snapshot beku. Buka struk untuk melihat rincian pembayaran historis.</p>
-@forelse($sales as $sale)
-    <x-molecules.receipt-summary :sale="$sale" />
-@empty
-    <p>Tidak ada struk pada filter ini.</p>
-@endforelse
+@if(count($sales))
+<div class="panel">
+<table>
+    <thead>
+        <tr>
+            <th>Nomor Struk</th>
+            <th>Waktu (WIB)</th>
+            <th>Kasir</th>
+            <th>Toko saat transaksi</th>
+            <th>Total</th>
+            <th>Aksi</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach($sales as $sale)
+        <tr class="receipt-summary">
+            <td><a href="/app/pos/sales/{{ $sale['id'] }}"><strong>{{ $sale['number'] }}</strong></a></td>
+            <td>{{ \Carbon\CarbonImmutable::parse($sale['sold_at'])->timezone('Asia/Jakarta')->format('d M Y H:i:s') }} WIB</td>
+            <td>Kasir {{ $sale['cashier_name'] }}</td>
+            <td>{{ $sale['store_name'] }}</td>
+            <td><strong>Rp {{ number_format($sale['total_amount'], 0, ',', '.') }}</strong></td>
+            <td><a href="/app/pos/sales/{{ $sale['id'] }}">Buka struk tersimpan</a></td>
+        </tr>
+        @endforeach
+    </tbody>
+</table>
+</div>
+@else
+<p class="panel">Tidak ada struk pada filter ini.</p>
+@endif
 <x-molecules.pagination :items="$sales" />
 </x-templates.console>

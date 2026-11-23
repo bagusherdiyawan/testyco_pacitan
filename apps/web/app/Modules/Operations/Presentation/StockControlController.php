@@ -12,9 +12,10 @@ final class StockControlController
     public function index(string $store): mixed
     {
         $context = $this->api->request('GET', "stores/$store/operations-context")->json('data');
-        abort_unless($context['can_manage_stock'] ?? false, 403);
+        abort_unless(($context['can_manage_stock'] ?? false) || ($context['can_process_stock'] ?? false), 403);
+        $canManage = (bool) ($context['can_manage_stock'] ?? false);
 
-        return view('pages.operations.stock-control', ['store' => $context, 'batches' => $this->api->all("stores/$store/inventory/batches"), 'processes' => $this->api->page("stores/$store/inventory/processes", 'processes_page'), 'counts' => $this->api->page("stores/$store/inventory/counts", 'counts_page')]);
+        return view('pages.operations.stock-control', ['store' => $context, 'canPropose' => $canManage, 'batches' => $this->api->all("stores/$store/inventory/batches"), 'processes' => $this->api->page("stores/$store/inventory/processes", 'processes_page'), 'counts' => $canManage ? $this->api->page("stores/$store/inventory/counts", 'counts_page') : new \Illuminate\Pagination\LengthAwarePaginator([], 0, 50)]);
     }
 
     public function process(Request $r, string $store): mixed

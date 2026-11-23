@@ -185,13 +185,17 @@ class ReplacementTest extends TestCase
         $this->assertDatabaseCount('replacement_lines', 1);
         $this->assertSame(1, DB::table('stock_entries')->where('source_type', 'replacement_dispatch')->count());
         $this->assertSame(1, DB::table('stock_entries')->where('source_type', 'replacement_receipt')->count());
-        $this->assertSame($order, SupplyOrder::with('lines')->find($d['order']['id'])->toArray());
+        $settled = SupplyOrder::with('lines')->find($d['order']['id'])->toArray();
+        $this->assertSame('settled', $settled['status']);
+        $this->assertSame($order['version'] + 1, $settled['version']);
+        $this->assertSame($order['total_amount'], $settled['total_amount']);
+        $this->assertSame($order['lines'], $settled['lines']);
         $this->assertSame($original, DB::table('shipment_lines')->get()->toJson());
         $this->getJson('/api/v1/stores/'.$this->target->id.'/inventory/ledger?source_type=replacement_receipt')->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.quantity_pieces', 24);
         $this->assertSame(4, DB::table('audit_entries')->whereIn('action', ['replacement.dispatched', 'replacement.received'])->count());
         $this->act($this->owner)->postJson($path, [...$this->replacementBody($d, 1, 5)])->assertUnprocessable();
         // Original dispatch quota still cannot be expanded by replacement delivery.
-        $this->postJson('/api/v1/orders/'.$d['order']['id'].'/shipments', ['operation_id' => (string) Str::uuid(), 'version' => $order['version'], 'handler' => 'No extra', 'lines' => [['order_line_id' => $order['lines'][0]['id'], 'allocations' => [['batch_id' => $before->id, 'quantity_packs' => 1]]]]])->assertUnprocessable();
+        $this->postJson('/api/v1/orders/'.$d['order']['id'].'/shipments', ['operation_id' => (string) Str::uuid(), 'version' => $settled['version'], 'handler' => 'No extra', 'lines' => [['order_line_id' => $order['lines'][0]['id'], 'allocations' => [['batch_id' => $before->id, 'quantity_packs' => 1]]]]])->assertConflict();
     }
 
     public function test_partial_replacement_quota_is_sent_not_good_and_secondary_damage_requires_follow_up(): void

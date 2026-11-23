@@ -58,10 +58,19 @@ final class ConsumableShipments
         $names = Store::whereIn('id', $rows->pluck('source_store_id')->merge($rows->pluck('destination_store_id'))->unique())->pluck('name', 'id')->all();
         $destinations = [];
         if ($isCenter) {
-            $destinations = Store::join('organizations', 'organizations.id', '=', 'stores.organization_id')->where('organizations.type', 'partner')->where('organizations.active', true)->where('stores.active', true)->orderBy('organizations.name')->orderBy('stores.name')->get(['stores.id', 'stores.name', 'organizations.name as organization_name'])->toArray();
+            $destinations = Store::join('organizations', 'organizations.id', '=', 'stores.organization_id')
+                ->where('organizations.active', true)
+                ->where('stores.active', true)
+                ->where('stores.id', '!=', $store)
+                ->where(fn ($q) => $q->where('organizations.type', 'partner')->orWhere('organizations.id', $s->organization_id))
+                ->orderBy('organizations.name')
+                ->orderBy('stores.name')
+                ->get(['stores.id', 'stores.name', 'organizations.name as organization_name'])
+                ->toArray();
         }
+        $canReceiveHere = $this->canReceive($u, $s) && (! $isCenter || $rows->contains(fn ($r) => $r->destination_store_id === $store));
 
-        return ['store_id' => $store, 'organization_id' => $s->organization_id, 'is_center' => $isCenter, 'can_send' => $isCenter && $this->canSend($u, $s), 'can_receive' => ! $isCenter && $this->canReceive($u, $s), 'destinations' => $destinations, 'data' => $rows->map(fn ($r) => $this->view($r, $store, $names))->values()->all()];
+        return ['store_id' => $store, 'organization_id' => $s->organization_id, 'is_center' => $isCenter, 'can_send' => $isCenter && $this->canSend($u, $s), 'can_receive' => $canReceiveHere, 'destinations' => $destinations, 'data' => $rows->map(fn ($r) => $this->view($r, $store, $names))->values()->all()];
     }
 
     private function canSend(User $u, Store $s): bool
@@ -80,9 +89,9 @@ final class ConsumableShipments
         abort_unless(Organization::findOrFail($source->organization_id)->type === 'center', 403, 'Hanya gudang pusat yang dapat mengirim barang non-makanan.');
 
         return $this->ops->run($source->organization_id, $u->id, $v['operation_id'], 'consumable.dispatch:'.$store, $v, function () use ($u, $source, $v) {
-            $destination = Store::where('active', true)->find($v['destination_store_id']);
-            $partner = $destination ? Organization::where('type', 'partner')->where('active', true)->find($destination->organization_id) : null;
-            abort_unless($destination && $partner, 422, 'Toko tujuan tidak tersedia.');
+            $destination = Store::where('active', true)->where('id', '!=', $source->id)->find($v['destination_store_id']);
+            $targetOrg = $destination ? Organization::where('active', true)->where(fn ($q) => $q->where('type', 'partner')->orWhere('id', $source->organization_id))->find($destination->organization_id) : null;
+            abort_unless($destination && $targetOrg, 422, 'Toko tujuan tidak tersedia.');
             $ids = array_column($v['lines'], 'consumable_item_id');
             abort_unless(count($ids) === count(array_unique($ids)), 422, 'Barang tidak boleh dobel dalam satu kiriman.');
             $items = ConsumableItem::where('organization_id', $source->organization_id)->where('active', true)->whereIn('id', $ids)->orderBy('id')->lockForUpdate()->get()->keyBy('id');
@@ -91,7 +100,7 @@ final class ConsumableShipments
                 $have = $this->balance($source->id, $line['consumable_item_id']);
                 abort_if($have < (int) $line['quantity'], 409, 'Stok gudang kurang untuk '.$items[$line['consumable_item_id']]->name.' (tersedia '.$have.').');
             }
-            $shipment = ConsumableShipment::create(['organization_id' => $source->organization_id, 'source_store_id' => $source->id, 'destination_organization_id' => $partner->id, 'destination_store_id' => $destination->id, 'status' => 'dispatched', 'note' => $v['note'] ?? null, 'version' => 1, 'dispatched_by' => $u->id, 'dispatched_at' => now()]);
+            $shipment = ConsumableShipment::create(['organization_id' => $source->organization_id, 'source_store_id' => $source->id, 'destination_organization_id' => $targetOrg->id, 'destination_store_id' => $destination->id, 'status' => 'dispatched', 'note' => $v['note'] ?? null, 'version' => 1, 'dispatched_by' => $u->id, 'dispatched_at' => now()]);
             foreach ($v['lines'] as $line) {
                 $item = $items[$line['consumable_item_id']];
                 $row = ConsumableShipmentLine::create(['shipment_id' => $shipment->id, 'source_item_id' => $item->id, 'name' => $item->name, 'unit' => $item->unit, 'quantity_sent' => (int) $line['quantity']]);

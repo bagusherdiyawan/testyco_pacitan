@@ -71,7 +71,7 @@ class _ShiftsPageState extends State<ShiftsPage> {
               child: ListTile(
                 title: Text('${s.cashier} · ${s.device}'),
                 subtitle: Text(
-                  '${s.status} · ${s.openedAt}\nKas diharapkan ${formatRupiah(s.expected)}',
+                  '${s.status} · ${s.openedAt}\n${s.expected != null && !s.blindClose ? 'Kas diharapkan ${formatRupiah(s.expected!)}' : 'Mode hitung buta aktif'}',
                 ),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () async {

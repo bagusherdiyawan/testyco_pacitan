@@ -585,7 +585,8 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert source_after['usable_pieces']==source_before-16
         assert sum(b['usable_pieces'] for b in target_after)==target_before+16
         assert sum(b['quarantined_pieces'] for b in target_after)==damaged_before
-        assert api(base,'GET',f'orders/{order_id}',token=lead_token)['data']['version']==before_case_order['version']
+        settled_order=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
+        assert settled_order['status']=='settled' and settled_order['version']==before_case_order['version']+1
         assert api(base,'GET',f'stores/{store}/inventory/ledger?source_type=replacement_receipt',token=manager_token)['data'][0]['quantity_pieces']==16
         ledger_before+=1
         # Disposable account: real web CSRF reactivation, stale version and old-token denial.
@@ -620,25 +621,34 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         new_source=api(base,'POST',f'organizations/{center}/products',{'sku':'UDANG-8','name':'Smoke Udang','condition':'frozen','pack_size':8,'portion_size':4,'wholesale_price':24000,'retail_price':4000},owner,201)['data']
         new_local=api(base,'POST',f'organizations/{org}/products',{'sku':'LOCAL-UDANG8','name':'Smoke Local Udang','condition':'frozen','pack_size':8,'portion_size':4,'wholesale_price':24000,'retail_price':4000},lead_token,201)['data']
         original=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
-        revision_path=f'/app/orders/{order_id}/revisions'
+        # A settled order is final, so the revision scenario runs on its own fully received order.
+        revision_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':supplier_id,'batch_code':'REVISION-BASE','expires_on':'2030-01-01','quantity_packs':20,'note':'Stock for the revision scenario order'},owner,201)['data']
+        rev=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':supplier_id,'local_product_id':local_product_id,'quantity_packs':20}]},lead_token,201)['data']
+        for action,actor,extra in [('approve',lead_token,{}),('process',owner,{'source_store_id':source})]:
+            rev=api(base,'POST',f'orders/{rev["id"]}/{action}',{'operation_id':str(uuid.uuid4()),'version':rev['version'],**extra},actor)['data']
+        rev_ship=api(base,'POST',f'orders/{rev["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':rev['version'],'handler':'Revision base shipment','lines':[{'order_line_id':rev['lines'][0]['id'],'allocations':[{'batch_id':revision_stock['id'],'quantity_packs':20}]}]},owner,201)['data']
+        api(base,'POST',f'shipments/{rev_ship["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':rev_ship['order']['version'],'lines':[{'shipment_line_id':rev_ship['shipment']['lines'][0]['id'],'good_packs':20,'damaged_packs':0}]},lead_token)
+        ledger_before=api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']
+        rev_id=rev['id']
+        revision_path=f'/app/orders/{rev_id}/revisions'
         revision_html=opener.open(web+revision_path).read().decode()
         proposal=fields(revision_html,revision_path)
         proposal.update({'existing[0][quantity_packs]':'20','additions[0][supplier_product_id]':new_source['id'],'additions[0][local_product_id]':new_local['id'],'additions[0][quantity_packs]':'3','reason':'Add shrimp after actual initial shipment'})
         preview_html=web_post(revision_path,proposal).read().decode()
         assert '432000' in preview_html and 'Konfirmasi ajukan revisi' in preview_html
-        assert api(base,'GET',f'orders/{order_id}/revisions',token=lead_token)['total']==0
+        assert api(base,'GET',f'orders/{rev_id}/revisions',token=lead_token)['total']==0
         confirm_revision=revision_path+'/confirm'
         web_post(confirm_revision,fields(preview_html,confirm_revision)).read()
-        revised=api(base,'GET',f'orders/{order_id}/revisions',token=lead_token)
+        revised=api(base,'GET',f'orders/{rev_id}/revisions',token=lead_token)
         assert revised['pending']['after']['total_amount']==432000
         revision_id=revised['pending']['id'];accept_revision=revision_path+'/'+revision_id+'/approve'
         revision_html=central_browser.open(web+revision_path).read().decode()
         central_browser.open(Request(web+accept_revision,data=urlencode(fields(revision_html,accept_revision)).encode())).read()
-        revised=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
+        revised=api(base,'GET',f'orders/{rev_id}',token=lead_token)['data']
         assert len(revised['lines'])==2 and revised['total_amount']==432000
         new_line=next(l for l in revised['lines'] if l['supplier_product_id']==new_source['id'])
         new_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':new_source['id'],'batch_code':'UDANG-NEW','expires_on':'2030-01-01','quantity_packs':3,'note':'Actual shrimp stock'},owner,201)['data']
-        extra_shipment=api(base,'POST',f'orders/{order_id}/shipments',{'operation_id':str(uuid.uuid4()),'version':revised['version'],'handler':'Shrimp dispatch','lines':[{'order_line_id':new_line['id'],'allocations':[{'batch_id':new_stock['id'],'quantity_packs':3}]}]},owner,201)['data']
+        extra_shipment=api(base,'POST',f'orders/{rev_id}/shipments',{'operation_id':str(uuid.uuid4()),'version':revised['version'],'handler':'Shrimp dispatch','lines':[{'order_line_id':new_line['id'],'allocations':[{'batch_id':new_stock['id'],'quantity_packs':3}]}]},owner,201)['data']
         api(base,'POST',f'shipments/{extra_shipment["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':extra_shipment['order']['version'],'lines':[{'shipment_line_id':extra_shipment['shipment']['lines'][0]['id'],'good_packs':3,'damaged_packs':0}]},lead_token)
         stocks=api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']
         old_batch=next(b for b in stocks if b['product_id']==local_product_id and b['usable_pieces']>=8)

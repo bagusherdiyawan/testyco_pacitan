@@ -328,7 +328,8 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         cashier = {'name':'Smoke Cashier','email':'cashier@smoke.test','password':PASSWORD,'role':'cashier','store_ids':[store]}
         api(base, 'POST', f'organizations/{org}/users', cashier, owner, 201)
         cashier_token = api(base, 'POST', 'auth/login', {'email':cashier['email'],'password':PASSWORD,'device_name':'smoke'})['token']
-        api(base, 'GET', f'stores/{store}/inventory/control-context', token=cashier_token, expected=403)
+        cashier_context = api(base, 'GET', f'stores/{store}/inventory/control-context', token=cashier_token)['data']
+        assert cashier_context['can_process'] and not cashier_context['can_propose'] and not cashier_context['can_review']
         api(base,'GET',f'stores/{store}/inventory/ledger',token=cashier_token,expected=403)
         api(base,'GET',f'stores/{store}/inventory/ledger/export?'+ledger_export_query,token=cashier_token,expected=403)
         assert not api(base,'GET',minimum_detail_path,token=cashier_token)['can_manage']

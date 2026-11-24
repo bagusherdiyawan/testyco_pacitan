@@ -982,11 +982,11 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         wp=api(base,'POST',wbpath+'/'+wi['id']+'/payments',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'kind':'collection','method':'bank_transfer','amount':4000,'reference':'WHOLESALE-PAY-1','paid_on':erp_day,'verified':True,'note':'Verified manual collection'},owner,201)['data']
         reverse={'operation_id':str(uuid.uuid4()),'version':wp['version'],'reason':'Incorrect matching reversed'}
         wi=api(base,'POST',wbpath+'/'+wi['id']+'/payments/'+wp['payments'][0]['id']+'/reverse',reverse,owner)['data'];api(base,'POST',wbpath+'/'+wi['id']+'/payments/'+wp['payments'][0]['id']+'/reverse',reverse,owner)
-        credit=api(base,'POST',wbpath+'/'+wi['id']+'/credits',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'case_id':case['case']['id'],'base_amount':10000,'tax_amount':1000,'reason':'Agreed one damaged pack credit'},owner,201)['data']
+        credit=api(base,'POST',wbpath+'/'+wi['id']+'/credits',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'case_id':case['case']['id'],'base_amount':9950,'tax_amount':995,'reason':'Agreed one damaged pack credit'},owner,201)['data']
         credit_id=credit['credits'][0]['id']
         wi=api(base,'POST',wbpath+'/'+wi['id']+'/credits/'+credit_id+'/accept',{'operation_id':str(uuid.uuid4()),'version':credit['version'],'consent':True,'reason':'Buyer confirms historical credit'},lead_token)['data']
-        assert wi['outstanding_amount']==11990
-        api(base,'POST',wbpath+'/'+wi['id']+'/payments',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'kind':'collection','method':'cash','amount':11990,'reference':'WHOLESALE-PAY-2','paid_on':erp_day,'verified':True,'note':'Actual external cash verified; no POS drawer write'},owner,201)
+        assert wi['outstanding_amount']==12045
+        api(base,'POST',wbpath+'/'+wi['id']+'/payments',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'kind':'collection','method':'cash','amount':12045,'reference':'WHOLESALE-PAY-2','paid_on':erp_day,'verified':True,'note':'Actual external cash verified; no POS drawer write'},owner,201)
         assert 'Jurnal dibukukan: 10' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         buyer_events=api(base,'GET',partner_erp+'/context?section=posting_events',token=lead_token)['data']

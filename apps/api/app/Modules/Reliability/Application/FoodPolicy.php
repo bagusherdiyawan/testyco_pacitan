@@ -40,7 +40,7 @@ final class FoodPolicy
             Organization::whereKey($org)->lockForUpdate()->firstOrFail();
             $old = DB::table('food_sops')->where('organization_id', $org)->first();
             abort_unless((int) ($old?->version ?? 0) === (int) $v['version'], 409);
-            $p = ['organization_id' => $org, 'version' => (int) $v['version'] + 1, 'enabled' => $v['enabled'], 'block_expired' => $v['block_expired'], 'fefo' => $v['fefo'], 'ready_life_minutes' => $v['ready_life_minutes'] ?? null, 'reference' => $v['reference'], 'approved_by' => $u->id, 'approved_at' => now()->toIso8601String()];
+            $p = ['organization_id' => $org, 'version' => (int) $v['version'] + 1, 'enabled' => $v['enabled'], 'block_expired' => $v['block_expired'], 'fefo' => $v['fefo'], 'ready_life_minutes' => $v['ready_life_minutes'] ?? null, 'reference' => $v['reference'], 'approved_by' => $u->id, 'approved_at' => now()->format('Y-m-d H:i:s')];
             DB::table('food_sops')->updateOrInsert(['organization_id' => $org], $p);
             app(FoodSafety::class)->forget($org);
             Audit::record($u->id, $org, 'food.sop_approved', $org, null, $p);
@@ -59,7 +59,7 @@ final class FoodPolicy
             abort_if(DB::table('batch_recalls')->where('organization_id', $org)->where('product_id', $v['product_id'])->where('batch_code', $v['batch_code'])->where('status', 'active')->exists(), 409, 'Recall aktif sudah ada.');
             abort_unless(InventoryBatch::where('organization_id', $org)->where('product_id', $v['product_id'])->where('batch_code', $v['batch_code'])->exists(), 422, 'Lot tidak ditemukan di organisasi ini.');
             InventoryBatch::where('organization_id', $org)->where('product_id', $v['product_id'])->where('batch_code', $v['batch_code'])->orderBy('id')->lockForUpdate()->get();
-            $r = ['id' => (string) Str::ulid(), 'organization_id' => $org, 'product_id' => $v['product_id'], 'batch_code' => $v['batch_code'], 'status' => 'active', 'version' => 1, 'reason' => $v['reason'], 'reference' => $v['reference'], 'issued_by' => $u->id, 'issued_at' => now()->toIso8601String()];
+            $r = ['id' => (string) Str::ulid(), 'organization_id' => $org, 'product_id' => $v['product_id'], 'batch_code' => $v['batch_code'], 'status' => 'active', 'version' => 1, 'reason' => $v['reason'], 'reference' => $v['reference'], 'issued_by' => $u->id, 'issued_at' => now()->format('Y-m-d H:i:s')];
             DB::table('batch_recalls')->insert($r);
             app(FoodSafety::class)->forget($org);
             Audit::record($u->id, $org, 'food.recalled', $r['id'], null, $r);
@@ -77,7 +77,7 @@ final class FoodPolicy
             $r = DB::table('batch_recalls')->where('organization_id', $org)->lockForUpdate()->find($id);
             abort_unless($r, 404);
             abort_unless($r->status === 'active' && (int) $r->version === (int) $v['version'], 409);
-            $d = ['status' => 'withdrawn', 'version' => (int) $r->version + 1, 'withdrawn_by' => $u->id, 'withdrawn_at' => now()->toIso8601String(), 'withdrawal_reason' => $v['reason']];
+            $d = ['status' => 'withdrawn', 'version' => (int) $r->version + 1, 'withdrawn_by' => $u->id, 'withdrawn_at' => now()->format('Y-m-d H:i:s'), 'withdrawal_reason' => $v['reason']];
             DB::table('batch_recalls')->where('id', $id)->update($d);
             app(FoodSafety::class)->forget($org);
             $result = [...(array) $r, ...$d];

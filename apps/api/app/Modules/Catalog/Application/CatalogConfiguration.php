@@ -31,6 +31,7 @@ final class CatalogConfiguration
         }$r = (array) $row;
         $r['version'] = (int) $r['version'];
         $r['active'] = (bool) $r['active'];
+        $r['portion_equivalent'] = (int) ($r['portion_equivalent'] ?? 0);
         $r['components'] = json_decode($r['components'], true);
 
         return $r;
@@ -91,7 +92,7 @@ final class CatalogConfiguration
                 abort_if(DB::table('product_recipes')->where('product_id', $item->id)->where('active', true)->exists(), 422, 'Paket bersarang belum diperbolehkan.');
                 $components[] = ['product_id' => $item->id, 'sku' => $item->sku, 'name' => $item->name, 'condition' => $item->condition, 'pieces' => (int) $c['pieces']];
             }
-            DB::table('product_recipes')->updateOrInsert(['product_id' => $product], ['id' => $old['id'] ?? (string) Str::ulid(), 'organization_id' => $organization, 'version' => ($old['version'] ?? 0) + 1, 'active' => $v['active'], 'components' => json_encode($components), 'created_at' => $old['created_at'] ?? now(), 'updated_at' => now()]);
+            DB::table('product_recipes')->updateOrInsert(['product_id' => $product], ['id' => $old['id'] ?? (string) Str::ulid(), 'organization_id' => $organization, 'version' => ($old['version'] ?? 0) + 1, 'active' => $v['active'], 'portion_equivalent' => (int) ($v['portion_equivalent'] ?? 0), 'components' => json_encode($components), 'created_at' => $old['created_at'] ?? now(), 'updated_at' => now()]);
             $new = $this->recipe($product);
             Audit::record($user->id, $organization, 'product.recipe_updated', $product, $old, $new);
 

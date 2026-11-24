@@ -71,4 +71,10 @@ class OperationsWebTest extends TestCase
         Http::fake(['*/orders/O1' => Http::response(['data' => $this->order(['can_approve' => false])]), '*/shipments' => Http::response(['data' => []])]);
         $this->withSession($this->apiSession())->get('/app/orders/O1')->assertOk()->assertDontSee('Setujui dan kirim ke pusat');
     }
+
+    public function test_order_detail_uses_tables_and_hides_legacy_changes_link_by_default(): void
+    {
+        Http::fake(['*/orders/O1' => Http::response(['data' => $this->order(['status' => 'approved'])]), '*/shipments' => Http::response(['data' => []])]);
+        $this->withSession($this->apiSession())->get('/app/orders/O1')->assertOk()->assertSee('<table>', false)->assertSee('/app/orders/O1/revisions')->assertDontSee('/app/orders/O1/changes');
+    }
 }

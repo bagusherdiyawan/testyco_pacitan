@@ -39,6 +39,9 @@ final class InventoryServiceProvider extends ServiceProvider
             Route::get('stores/{store}/inventory/counts', [$control, 'counts']);
             Route::post('stores/{store}/inventory/counts', [$control, 'propose']);
             Route::post('inventory/counts/{count}/{action}', [$control, 'review'])->where('action', 'approve|reject|cancel');
+            Route::get('stores/{store}/inventory/quarantine-releases', [$control, 'releases']);
+            Route::post('stores/{store}/inventory/quarantine-releases', [$control, 'proposeRelease']);
+            Route::post('inventory/quarantine-releases/{release}/{action}', [$control, 'reviewRelease'])->where('action', 'approve|reject|cancel');
             Route::get('stores/{store}/inventory/batches', [InventoryController::class, 'batches']);
             Route::get('stores/{store}/inventory/ledger/export', LedgerExportController::class);
             Route::get('stores/{store}/inventory/ledger', [InventoryController::class, 'ledger']);

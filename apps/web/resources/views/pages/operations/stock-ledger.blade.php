@@ -18,10 +18,45 @@
 @if(isset($filters['batch_id']))<p>Batch diterapkan: {{ $filters['batch_id'] }}</p><p><a href="{{ url()->current() }}?{{ http_build_query(array_diff_key($filters, ['batch_id'=>true])) }}">Lihat semua batch</a></p>@endif
 <p>Diamati {{ \Carbon\CarbonImmutable::parse($metadata['observed_at'])->timezone('Asia/Jakarta')->format('d M Y H:i:s') }} WIB. Setiap halaman dibaca terpisah, bukan snapshot beku.</p>
 <p><a href="/app/stores/{{ $storeId }}/inventory/ledger/export?{{ http_build_query($filters) }}">Unduh CSV pergerakan dengan filter aktif</a> · Seluruh halaman yang cocok, maksimal10.000 catatan / 8 MiB data. Nilai dalam biji adalah perubahan per bucket, bukan saldo.</p>
-@forelse($entries as $entry)
-    <x-molecules.stock-movement :entry="$entry" :sources="$sources" :buckets="$buckets" />
-@empty
-    <p>Tidak ada pergerakan pada filter ini.</p>
-@endforelse
+@if(count($entries))
+<div class="panel">
+<table>
+    <thead>
+        <tr>
+            <th>Waktu (WIB)</th>
+            <th>Produk &amp; Batch</th>
+            <th>Bucket</th>
+            <th>Perubahan</th>
+            <th>Sumber &amp; Pelaku</th>
+            <th>Catatan / ID</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach($entries as $entry)
+        <tr class="stock-movement">
+            <td>{{ \Carbon\CarbonImmutable::parse($entry['occurred_at'])->timezone('Asia/Jakarta')->format('d M Y H:i:s') }} WIB</td>
+            <td>
+                <strong>{{ $entry['sku'] }} · {{ $entry['name'] }}</strong><br>
+                <span>Batch {{ $entry['batch_code'] }} · Isi kemasan historis: {{ $entry['pack_size'] }} biji · {{ $entry['condition'] }}</span><br>
+                <span>Kedaluwarsa kemasan: {{ $entry['expires_on'] ?? '—' }}</span>
+            </td>
+            <td>{{ $buckets[$entry['bucket']] ?? $entry['bucket'] }}</td>
+            <td><strong>{{ $entry['quantity_pieces'] > 0 ? '+' : '' }}{{ number_format($entry['quantity_pieces'], 0, ',', '.') }} biji</strong></td>
+            <td>
+                {{ $sources[$entry['source_type']] ?? $entry['source_type'] }}<br>
+                <span>Pelaku #{{ $entry['actor_id'] }} · Referensi sumber: {{ $entry['source_id'] }}</span>
+            </td>
+            <td>
+                @if($entry['note'] !== null)<p>{{ $entry['note'] }}</p>@endif
+                <details><summary>ID catatan dan batch</summary><p>ID ledger: {{ $entry['id'] }}</p><p>ID batch: {{ $entry['inventory_batch_id'] }}</p></details>
+            </td>
+        </tr>
+        @endforeach
+    </tbody>
+</table>
+</div>
+@else
+<p class="panel">Tidak ada pergerakan pada filter ini.</p>
+@endif
 <x-molecules.pagination :items="$entries" />
 </x-templates.console>

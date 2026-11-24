@@ -17,6 +17,24 @@ final class CashShift extends Model
 
     protected function casts(): array
     {
-        return ['noncash_sales' => 'integer', 'noncash_refunds' => 'integer', 'version' => 'integer', 'opening_cash' => 'integer', 'cash_sales' => 'integer', 'cash_in' => 'integer', 'cash_out' => 'integer', 'expected_cash' => 'integer', 'counted_cash' => 'integer', 'difference_cash' => 'integer', 'opened_at' => 'datetime', 'closed_at' => 'datetime'];
+        return [
+            'noncash_sales' => 'integer',
+            'noncash_refunds' => 'integer',
+            'version' => 'integer',
+            'opening_cash' => 'integer',
+            'expected_opening_cash' => 'integer',
+            'opening_discrepancy' => 'integer',
+            'cash_sales' => 'integer',
+            'cash_in' => 'integer',
+            'cash_out' => 'integer',
+            'expected_cash' => 'integer',
+            'counted_cash' => 'integer',
+            'retained_cash' => 'integer',
+            'deposit_cash' => 'integer',
+            'difference_cash' => 'integer',
+            'force_closed_by' => 'integer',
+            'opened_at' => 'datetime',
+            'closed_at' => 'datetime',
+        ];
     }
 }

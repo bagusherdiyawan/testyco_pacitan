@@ -4,6 +4,7 @@ use App\Modules\Assets\AssetsServiceProvider;
 use App\Modules\Billing\BillingServiceProvider;
 use App\Modules\Catalog\CatalogServiceProvider;
 use App\Modules\Commercial\CommercialServiceProvider;
+use App\Modules\Consumables\ConsumablesServiceProvider;
 use App\Modules\Fulfillment\FulfillmentServiceProvider;
 use App\Modules\Identity\IdentityServiceProvider;
 use App\Modules\Inventory\InventoryServiceProvider;
@@ -27,6 +28,7 @@ return ['providers' => [
     OrderingServiceProvider::class,
     FulfillmentServiceProvider::class,
     ShiftsServiceProvider::class,
+    ConsumablesServiceProvider::class,
     PromotionsServiceProvider::class,
     SalesServiceProvider::class,
     BillingServiceProvider::class,

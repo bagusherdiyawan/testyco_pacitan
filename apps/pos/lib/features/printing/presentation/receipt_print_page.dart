@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import '../application/receipt_printer.dart';
 import '../application/bluetooth_printer.dart';
@@ -15,12 +17,22 @@ class ReceiptPrintPage extends StatefulWidget {
 }
 
 class _ReceiptPrintPageState extends State<ReceiptPrintPage> {
-  final host = TextEditingController(), port = TextEditingController();
+  final host = TextEditingController(),
+      port = TextEditingController(),
+      headerText = TextEditingController(),
+      footerText = TextEditingController(text: 'Simpan sebagai bukti transaksi');
   int? paper;
   String connection = 'bluetooth';
-  String? deviceId;
+  String? deviceId, logoBase64;
   List<Map<String, String>> devices = [];
-  bool cut = false, busy = false, profileLoaded = false;
+  bool cut = false,
+      busy = false,
+      profileLoaded = false,
+      templateLoaded = false,
+      showLogo = false,
+      showAddress = true,
+      showCashier = true,
+      showDiscount = true;
   String? error;
   Map<String, dynamic>? data;
   @override
@@ -33,7 +45,27 @@ class _ReceiptPrintPageState extends State<ReceiptPrintPage> {
   void dispose() {
     host.dispose();
     port.dispose();
+    headerText.dispose();
+    footerText.dispose();
     super.dispose();
+  }
+
+  Future<void> pickLogo() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: true,
+    );
+    final bytes = result?.files.singleOrNull?.bytes;
+    if (bytes == null) return;
+    if (bytes.length > 512 * 1024) {
+      setState(() => error = 'Ukuran logo struk maksimal 512 KB.');
+      return;
+    }
+    setState(() {
+      logoBase64 = base64Encode(bytes);
+      showLogo = true;
+      error = null;
+    });
   }
 
   Future<void> refresh() async {
@@ -53,6 +85,18 @@ class _ReceiptPrintPageState extends State<ReceiptPrintPage> {
         port.text = '${p['port']}';
         paper = p['paper'];
         cut = p['cut'];
+      }
+      final t = data!['template'] as Map<String, dynamic>?;
+      if (t != null && !templateLoaded) {
+        templateLoaded = true;
+        headerText.text = (t['header_text'] as String?) ?? '';
+        footerText.text =
+            (t['footer_text'] as String?) ?? 'Simpan sebagai bukti transaksi';
+        showAddress = t['show_address'] != false;
+        showCashier = t['show_cashier'] != false;
+        showDiscount = t['show_discount'] != false;
+        showLogo = t['show_logo'] == true;
+        logoBase64 = t['logo_base64'] as String?;
       }
     } catch (e) {
       error = '$e';
@@ -187,6 +231,154 @@ class _ReceiptPrintPageState extends State<ReceiptPrintPage> {
                   });
                 }),
           child: const Text('Simpan konfigurasi printer'),
+        ),
+        const SizedBox(height: 8),
+        ExpansionTile(
+          title: const Text('Edit tampilan struk thermal (Logo, Header, Footer)'),
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (logoBase64 != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Image.memory(
+                            base64Decode(logoBase64!),
+                            height: 56,
+                            fit: BoxFit.contain,
+                          ),
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: busy
+                                ? null
+                                : () => setState(() {
+                                    logoBase64 = null;
+                                    showLogo = false;
+                                  }),
+                            child: const Text('Hapus logo'),
+                          ),
+                        ],
+                      ),
+                    ),
+                  OutlinedButton.icon(
+                    onPressed: busy ? null : pickLogo,
+                    icon: const Icon(Icons.image_outlined),
+                    label: const Text('Pilih logo struk (PNG/JPG, maks 512 KB)'),
+                  ),
+                  SwitchListTile(
+                    value: showLogo,
+                    onChanged: busy || logoBase64 == null
+                        ? null
+                        : (v) => setState(() => showLogo = v),
+                    title: const Text('Tampilkan logo di bagian atas struk'),
+                  ),
+                  TextField(
+                    controller: headerText,
+                    enabled: !busy,
+                    maxLength: 160,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Tagline / header tambahan (opsional)',
+                    ),
+                  ),
+                  TextField(
+                    controller: footerText,
+                    enabled: !busy,
+                    maxLength: 240,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'Pesan bawah / footer struk',
+                    ),
+                  ),
+                  SwitchListTile(
+                    value: showAddress,
+                    onChanged: busy
+                        ? null
+                        : (v) => setState(() => showAddress = v),
+                    title: const Text('Tampilkan alamat toko'),
+                  ),
+                  SwitchListTile(
+                    value: showCashier,
+                    onChanged: busy
+                        ? null
+                        : (v) => setState(() => showCashier = v),
+                    title: const Text('Tampilkan nama kasir'),
+                  ),
+                  SwitchListTile(
+                    value: showDiscount,
+                    onChanged: busy
+                        ? null
+                        : (v) => setState(() => showDiscount = v),
+                    title: const Text('Tampilkan baris diskon'),
+                  ),
+                  const SizedBox(height: 8),
+                  Card(
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          const Text(
+                            'Pratinjau Struk Thermal',
+                            style: TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          const Divider(),
+                          if (showLogo && logoBase64 != null)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Image.memory(
+                                base64Decode(logoBase64!),
+                                height: 42,
+                                fit: BoxFit.contain,
+                              ),
+                            ),
+                          Text('${widget.sale['store_name']}'),
+                          if (showAddress &&
+                              '${widget.sale['store_address'] ?? ''}'
+                                  .isNotEmpty)
+                            Text('${widget.sale['store_address']}'),
+                          if (headerText.text.trim().isNotEmpty)
+                            Text(headerText.text.trim()),
+                          Text('${widget.sale['number']}'),
+                          if (showCashier)
+                            Text('Kasir: ${widget.sale['cashier_name']}'),
+                          const Divider(),
+                          Text('Total Rp${widget.sale['total_amount']}'),
+                          if (showDiscount)
+                            Text('Diskon Rp${widget.sale['discount_amount'] ?? 0}'),
+                          if (footerText.text.trim().isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text(footerText.text.trim()),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  FilledButton(
+                    onPressed: busy
+                        ? null
+                        : () => run(() async {
+                            await widget.printer.saveTemplate({
+                              'header_text': headerText.text,
+                              'footer_text': footerText.text,
+                              'show_address': showAddress,
+                              'show_cashier': showCashier,
+                              'show_discount': showDiscount,
+                              'show_logo': showLogo,
+                              'logo_base64': logoBase64,
+                            });
+                          }),
+                    child: const Text('Simpan tampilan struk'),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ),
         FilledButton(
           onPressed: busy

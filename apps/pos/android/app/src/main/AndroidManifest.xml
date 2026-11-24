@@ -6,7 +6,7 @@
     <uses-feature android:name="android.hardware.bluetooth" android:required="false"/>
     <application
         android:allowBackup="false"
-        android:label="testyco_pos"
+        android:label="Testyco POS"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

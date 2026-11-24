@@ -3,6 +3,7 @@ import 'package:uuid/uuid.dart';
 import '../../../core/network/api_client.dart';
 import '../../catalog/domain/catalog_product.dart';
 import '../domain/cart_entry.dart';
+import '../data/offline_repository.dart';
 import '../data/pos_repository.dart';
 
 class PosController extends ChangeNotifier {
@@ -18,9 +19,19 @@ class PosController extends ChangeNotifier {
       _payRequest,
       _closeRequest;
   bool busy = false, _disposed = false;
-  String? error;
+  String? error, offlineBlockerMessage;
   String query = '';
+  String? serviceType;
   Map<String, dynamic>? get shift => context?['shift'] as Map<String, dynamic>?;
+  bool get canManage => context?['can_manage'] == true;
+  Map<String, dynamic>? get blockingOpenShift =>
+      context?['blocking_open_shift'] as Map<String, dynamic>?;
+  Map<String, dynamic>? get handover =>
+      context?['handover'] as Map<String, dynamic>?;
+  List<Map<String, dynamic>> get pendingCashRequests =>
+      ((context?['pending_cash_requests'] as List?) ?? [])
+          .cast<Map<String, dynamic>>();
+  bool get consumablesEnabled => context?['consumables_enabled'] == true;
   bool get cartLocked => busy || intent != null || _createRequest != null;
   bool get creatingUncertain => _createRequest != null;
   bool get closingUncertain => _closeRequest != null;
@@ -81,6 +92,41 @@ class PosController extends ChangeNotifier {
     if (shift != null) {
       _openRequest = null;
     }
+    offlineBlockerMessage = await _checkLocalOfflineBlocker();
+  }
+
+  Future<String?> _checkLocalOfflineBlocker() async {
+    final ds = repository.deviceState;
+    final activeShift = shift;
+    if (ds == null ||
+        activeShift == null ||
+        repository.api.identity?['id'] is! int) {
+      return null;
+    }
+    try {
+      final state = await OfflineRepository(repository.api, ds).load();
+      final shiftId = activeShift['id'];
+      final permits = (state['permits'] as Map).values.where(
+        (p) => p['closed_at'] == null && p['cash_shift_id'] == shiftId,
+      );
+      final outbox = (state['outbox'] as Map).values.where(
+        (o) =>
+            o['status'] != 'accepted' &&
+            o['status'] != 'voided' &&
+            o['permit_id'] != null &&
+            (state['permits'] as Map)[o['permit_id']]?['cash_shift_id'] ==
+                shiftId,
+      );
+      if (outbox.isNotEmpty) {
+        return 'Ada ${outbox.length} transaksi offline yang belum tersinkron/selesai konflik. Buka menu Offline dan sinkronkan dahulu sebelum tutup shift.';
+      }
+      if (permits.isNotEmpty) {
+        return 'Izin offline masih aktif. Buka menu Offline lalu akhiri izin offline secara online sebelum tutup shift.';
+      }
+    } catch (_) {
+      // If encrypted state is inaccessible for another identity, API still enforces close blockers.
+    }
+    return null;
   }
 
   Future<void> load() => _perform(() async {
@@ -111,13 +157,71 @@ class PosController extends ChangeNotifier {
   List<CatalogProduct> get filtered => products
       .where((p) => '${p.name} ${p.sku}'.toLowerCase().contains(query))
       .toList();
+  void _autoSelectStock(CartEntry entry) {
+    if (entry.product.isBundle || entry.stock != null) {
+      return;
+    }
+    final available = choices(entry);
+    if (available.isEmpty) {
+      return;
+    }
+    available.sort((a, b) {
+      final exp = '${a['expiry']}'.compareTo('${b['expiry']}');
+      if (exp != 0) return exp;
+      if (a['bucket'] == b['bucket']) return 0;
+      if (a['bucket'] == 'ready') return -1;
+      if (b['bucket'] == 'ready') return 1;
+      return 0;
+    });
+    entry.stock = available.first['key'] as String;
+  }
+
   void add(CatalogProduct product) {
     if (busy || intent != null || _createRequest != null) {
       return;
     }
-    cart.putIfAbsent(product.id, () => CartEntry(product));
+    final existing = cart[product.id];
+    if (existing != null) {
+      existing.quantity += 1;
+      _autoSelectStock(existing);
+    } else {
+      final entry = CartEntry(product);
+      _autoSelectStock(entry);
+      cart[product.id] = entry;
+    }
     _notify();
   }
+
+  void increment(CartEntry entry) {
+    if (busy || _createRequest != null) {
+      return;
+    }
+    entry.quantity += 1;
+    _notify();
+  }
+
+  void decrement(CartEntry entry) {
+    if (busy || _createRequest != null) {
+      return;
+    }
+    if (entry.quantity <= 1) {
+      cart.remove(entry.product.id);
+    } else {
+      entry.quantity -= 1;
+    }
+    _notify();
+  }
+
+  int get totalCartUnits =>
+      cart.values.fold(0, (sum, e) => sum + (e.quantity > 0 ? e.quantity : 0));
+
+  int get estimatedSubtotal => cart.values.fold(0, (sum, e) {
+    final qty = e.quantity > 0 ? e.quantity : 0;
+    final multiplier = e.unit == 'pack'
+        ? e.product.packSize
+        : (e.unit == 'portion' ? e.product.portionSize : 1);
+    return sum + (e.product.retailPrice * qty * multiplier);
+  });
 
   void remove(String id) {
     if (!busy && _createRequest == null) {
@@ -132,6 +236,7 @@ class PosController extends ChangeNotifier {
     }
     entry.unit = value;
     entry.stock = null;
+    _autoSelectStock(entry);
     _notify();
   }
 
@@ -178,6 +283,12 @@ class PosController extends ChangeNotifier {
     _notify();
   }
 
+  void setServiceType(String? value) {
+    if (cartLocked) return;
+    serviceType = value;
+    _notify();
+  }
+
   List<Map<String, dynamic>> choices(CartEntry entry) {
     final choices = <Map<String, dynamic>>[];
     for (final b in batches) {
@@ -208,16 +319,30 @@ class PosController extends ChangeNotifier {
     return choices;
   }
 
-  Future<void> open(String device, String opening) => _perform(() async {
+  Future<void> open(
+    String device,
+    String opening, {
+    String openingNote = '',
+  }) => _perform(() async {
     final cash = int.tryParse(opening);
     if (_openRequest == null &&
         (cash == null || cash < 0 || device.trim().isEmpty)) {
       throw const ApiException('Isi nama terminal dan kas awal yang valid.');
     }
+    final expectedOpening = handover?['expected_opening_cash'] as int?;
+    if (_openRequest == null &&
+        expectedOpening != null &&
+        cash != expectedOpening &&
+        openingNote.trim().isEmpty) {
+      throw const ApiException(
+        'Kas awal berbeda dari sisa modal shift sebelumnya. Wajib isi catatan serah terima.',
+      );
+    }
     _openRequest ??= {
       'operation_id': const Uuid().v4(),
       'device_name': device.trim(),
       'opening_cash': cash,
+      if (openingNote.trim().isNotEmpty) 'opening_note': openingNote.trim(),
     };
     try {
       await repository.post('stores/$store/shifts', _openRequest!);
@@ -242,6 +367,11 @@ class PosController extends ChangeNotifier {
       }
       if (cart.isEmpty) {
         throw const ApiException('Keranjang masih kosong.');
+      }
+      if (consumablesEnabled && serviceType == null) {
+        throw const ApiException(
+          'Pilih jenis penjualan (Makan di tempat / Bawa pulang).',
+        );
       }
       final lines = <Map<String, dynamic>>[];
       for (final entry in cart.values) {
@@ -321,6 +451,7 @@ class PosController extends ChangeNotifier {
         'operation_id': const Uuid().v4(),
         'shift_id': shift!['id'],
         if (voucherCode.trim().isNotEmpty) 'voucher_code': voucherCode.trim(),
+        if (serviceType != null) 'service_type': serviceType,
         'lines': lines,
       };
     }
@@ -435,18 +566,37 @@ class PosController extends ChangeNotifier {
     cart.clear();
     await _refresh();
   });
-  Future<void> close(String counted, String note) => _perform(() async {
+  Future<void> close(
+    String counted,
+    String note, {
+    String retainedText = '',
+  }) => _perform(() async {
     if (shift == null) {
       return;
+    }
+    final blocker = await _checkLocalOfflineBlocker();
+    if (blocker != null) {
+      offlineBlockerMessage = blocker;
+      throw ApiException(blocker);
     }
     final cash = int.tryParse(counted);
     if (_closeRequest == null && (cash == null || cash < 0)) {
       throw const ApiException('Isi kas fisik hasil hitungan.');
     }
+    int? retained;
+    if (_closeRequest == null && retainedText.trim().isNotEmpty) {
+      retained = int.tryParse(retainedText.trim());
+      if (retained == null || retained < 0 || retained > cash!) {
+        throw const ApiException(
+          'Sisa modal di laci harus berupa angka valid dan tidak melebihi kas fisik.',
+        );
+      }
+    }
     _closeRequest ??= {
       'operation_id': const Uuid().v4(),
       'version': shift!['version'],
       'counted_cash': cash,
+      if (retained != null) 'retained_cash': retained,
       'closing_note': note.trim(),
     };
     final id = shift!['id'];

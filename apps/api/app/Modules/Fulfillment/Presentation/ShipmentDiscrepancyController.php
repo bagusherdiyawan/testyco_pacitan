@@ -32,7 +32,7 @@ final class ShipmentDiscrepancyController
 
     public function proposeResolution(Request $r, string $order, string $shipment): mixed
     {
-        $v = $r->validate(['operation_id' => 'required|uuid', 'version' => 'required|integer|min:1', 'type' => 'required|in:return,replacement,credit', 'proposal' => 'required|string|max:2000', 'reference' => 'nullable|string|max:500']);
+        $v = $r->validate(['operation_id' => 'required|uuid', 'version' => 'required|integer|min:1', 'type' => 'required|in:return,replacement,credit,write_off', 'proposal' => 'required|string|max:2000', 'reference' => 'nullable|string|max:500']);
 
         return response()->json(['data' => $this->cases->proposeResolution($r->user(), $order, $shipment, $v)], 201)->header('Cache-Control', 'private, no-store');
     }

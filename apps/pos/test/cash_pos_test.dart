@@ -354,4 +354,81 @@ void main() {
       },
     );
   }
+
+  testWidgets('Blind close hides expected cash from cashier while open', (
+    tester,
+  ) async {
+    final server = FakeCashServer();
+    server.opened = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PosPage(repository: repository(server), storeId: 'STORE'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Mode hitung buta aktif'), findsOneWidget);
+    expect(find.textContaining('Kas seharusnya'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('POS stepper, auto-FEFO, and Quick Cash Uang Pas work', (
+    tester,
+  ) async {
+    tester.view.physicalSize = const Size(430, 1200);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.resetPhysicalSize);
+    addTearDown(tester.view.resetDevicePixelRatio);
+    final server = FakeCashServer();
+    server.opened = true;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: PosPage(repository: repository(server), storeId: 'STORE'),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Tambah AYAM'));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 3; i++) {
+      await tester.ensureVisible(find.byTooltip('Tambah jumlah AYAM'));
+      await tester.tap(find.byTooltip('Tambah jumlah AYAM'));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('4 item · 1 produk'), findsOneWidget);
+    expect(find.text('Estimasi Rp 12000'), findsOneWidget);
+    await tester.tap(find.text('Tinjau pembayaran'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Uang Pas'));
+    await tester.tap(find.text('Uang Pas'));
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextField>(
+            find.byWidgetPredicate(
+              (w) =>
+                  w is TextField &&
+                  w.decoration?.labelText == 'Tunai diterima (Rp)',
+            ),
+          )
+          .controller!
+          .text,
+      '12000',
+    );
+    await tester.ensureVisible(find.text('Rp 20000'));
+    await tester.tap(find.text('Rp 20000'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Konfirmasi tunai'));
+    await tester.tap(find.text('Konfirmasi tunai'));
+    await tester.pumpAndSettle();
+    expect(server.payments, 1);
+    expect(find.text('Kembalian Rp 8000', skipOffstage: false), findsOneWidget);
+    expect(
+      find.text('Salin / bagikan struk', skipOffstage: false),
+      findsOneWidget,
+    );
+    expect(tester.takeException(), isNull);
+  });
 }

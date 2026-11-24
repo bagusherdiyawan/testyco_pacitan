@@ -88,6 +88,28 @@ final class RefundController
 
     private function send(string $sale, array $p): mixed
     {
-        return $this->mutations->send('refund_pending.'.$sale, $p, fn ($d, $p) => ($d['sale_id'] ?? null) === $sale && ($d['sale_version'] ?? null) === $p['body']['version'] + 1 && is_string(data_get($d, 'refund.id')) && data_get($d, 'refund.sale_id') === $sale && data_get($d, 'refund.cash_shift_id') === $p['body']['shift_id'] && data_get($d, 'refund.payment_method') === $p['review']['payment_method'] && data_get($d, 'refund.amount') === $p['review']['amount'] && data_get($d, 'refund.reference') === $p['body']['reference'] && data_get($d, 'refund.stock_disposition') === $p['body']['stock_disposition'] && data_get($d, 'refund.lines') === $p['review']['lines']);
+        return $this->mutations->send('refund_pending.'.$sale, $p, fn ($d, $p) => ($d['sale_id'] ?? null) === $sale && ($d['sale_version'] ?? null) === $p['body']['version'] + 1 && is_string(data_get($d, 'refund.id')) && data_get($d, 'refund.sale_id') === $sale && data_get($d, 'refund.cash_shift_id') === $p['body']['shift_id'] && data_get($d, 'refund.payment_method') === $p['review']['payment_method'] && data_get($d, 'refund.amount') === $p['review']['amount'] && data_get($d, 'refund.reference') === $p['body']['reference'] && data_get($d, 'refund.stock_disposition') === $p['body']['stock_disposition'] && $this->sameLines(data_get($d, 'refund.lines'), $p['review']['lines']));
+    }
+
+    /**
+     * The API assigns a fresh source_id to every allocation when it commits the refund,
+     * so the committed lines can never equal the reviewed lines byte for byte. Require
+     * a non-empty string source_id and compare everything else exactly.
+     */
+    private function sameLines(mixed $committed, array $reviewed): bool
+    {
+        if (! is_array($committed)) {
+            return false;
+        }
+        foreach ($committed as $i => $line) {
+            foreach (($line['allocations'] ?? []) as $j => $allocation) {
+                if (! is_string($allocation['source_id'] ?? null) || $allocation['source_id'] === '') {
+                    return false;
+                }
+                unset($committed[$i]['allocations'][$j]['source_id']);
+            }
+        }
+
+        return $committed === $reviewed;
     }
 }

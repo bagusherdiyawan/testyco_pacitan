@@ -75,6 +75,112 @@ Future<void> main() async {
 class TestycoApp extends StatefulWidget {
   const TestycoApp({required this.session, super.key});
   final Session session;
+
+  static ThemeData buildTheme() => ThemeData(
+    colorScheme: ColorScheme.fromSeed(
+      seedColor: DesignTokens.primary,
+      brightness: Brightness.light,
+    ).copyWith(
+      primary: DesignTokens.primary,
+      onPrimary: Colors.white,
+      primaryContainer: const Color(0xFFFEE2E2),
+      onPrimaryContainer: const Color(0xFF7F1D1D),
+      secondary: const Color(0xFF0F172A),
+      onSecondary: Colors.white,
+      secondaryContainer: const Color(0xFFFEE2E2),
+      onSecondaryContainer: DesignTokens.primary,
+      surface: Colors.white,
+      onSurface: const Color(0xFF0F172A),
+      onSurfaceVariant: const Color(0xFF475569),
+      surfaceContainerLowest: Colors.white,
+      surfaceContainerLow: const Color(0xFFF8FAFC),
+      surfaceContainer: const Color(0xFFF1F5F9),
+      surfaceContainerHigh: const Color(0xFFE2E8F0),
+      surfaceContainerHighest: const Color(0xFFE2E8F0),
+      outline: const Color(0xFFCBD5E1),
+      outlineVariant: const Color(0xFFE2E8F0),
+    ),
+    scaffoldBackgroundColor: const Color(0xFFF8FAFC),
+    appBarTheme: const AppBarTheme(
+      backgroundColor: DesignTokens.primary,
+      foregroundColor: Colors.white,
+      elevation: 0,
+      scrolledUnderElevation: 0,
+      centerTitle: false,
+    ),
+    cardTheme: CardThemeData(
+      color: Colors.white,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(14),
+        side: const BorderSide(color: Color(0xFFE2E8F0)),
+      ),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      filled: true,
+      fillColor: Colors.white,
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: Color(0xFFCBD5E1)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12),
+        borderSide: const BorderSide(color: DesignTokens.primary, width: 1.5),
+      ),
+    ),
+    chipTheme: ChipThemeData(
+      backgroundColor: Colors.white,
+      selectedColor: DesignTokens.primary,
+      labelStyle: const TextStyle(
+        color: Color(0xFF334155),
+        fontWeight: FontWeight.w600,
+      ),
+      secondaryLabelStyle: const TextStyle(
+        color: Colors.white,
+        fontWeight: FontWeight.w700,
+      ),
+      checkmarkColor: Colors.white,
+      side: const BorderSide(color: Color(0xFFE2E8F0)),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+    ),
+    filledButtonTheme: FilledButtonThemeData(
+      style: FilledButton.styleFrom(
+        backgroundColor: DesignTokens.primary,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        foregroundColor: const Color(0xFF0F172A),
+        backgroundColor: Colors.white,
+        side: const BorderSide(color: Color(0xFFCBD5E1)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+    ),
+    switchTheme: SwitchThemeData(
+      thumbColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? Colors.white
+            : const Color(0xFF64748B),
+      ),
+      trackColor: WidgetStateProperty.resolveWith(
+        (states) => states.contains(WidgetState.selected)
+            ? DesignTokens.primary
+            : const Color(0xFFE2E8F0),
+      ),
+    ),
+    useMaterial3: true,
+  );
+
   @override
   State<TestycoApp> createState() => _TestycoAppState();
 }
@@ -103,10 +209,7 @@ class _TestycoAppState extends State<TestycoApp> {
     key: ValueKey(widget.session.authenticated),
     title: 'Testyco POS',
     debugShowCheckedModeBanner: false,
-    theme: ThemeData(
-      colorScheme: ColorScheme.fromSeed(seedColor: DesignTokens.primary),
-      useMaterial3: true,
-    ),
+    theme: TestycoApp.buildTheme(),
     home: !widget.session.authenticated
         ? LoginPage(session: widget.session)
         : widget.session.offlineOnly && widget.session.deviceState != null

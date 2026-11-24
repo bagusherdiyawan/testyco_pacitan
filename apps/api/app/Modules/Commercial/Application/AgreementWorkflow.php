@@ -186,7 +186,7 @@ final class AgreementWorkflow
             $balance = (int) DB::table('commercial_entries')->where('commercial_agreement_id', $id)->sum('amount') - (int) DB::table('commercial_payments')->where('commercial_agreement_id', $id)->sum('signed_amount');
             $signed = $v['direction'] === 'collection' ? (int) $v['amount'] : -(int) $v['amount'];
             abort_unless($signed > 0 && $signed <= $balance || $signed < 0 && $signed >= $balance, 422, 'Nominal/arah wajib sesuai saldo aktual.');
-            $p = ['id' => (string) Str::ulid(), 'commercial_agreement_id' => $id, 'signed_amount' => $signed, 'method' => $v['method'], 'reference' => $v['reference'], 'evidence_reference' => $v['evidence_reference'], 'verified_by' => $u->id, 'paid_on' => $v['paid_on'], 'created_at' => now()->toIso8601String()];
+            $p = ['id' => (string) Str::ulid(), 'commercial_agreement_id' => $id, 'signed_amount' => $signed, 'method' => $v['method'], 'reference' => $v['reference'], 'evidence_reference' => $v['evidence_reference'], 'verified_by' => $u->id, 'paid_on' => $v['paid_on'], 'created_at' => now()->format('Y-m-d H:i:s')];
             DB::table('commercial_payments')->insert($p);
             app(CommercialPosting::class)->payment($g, $p);
             $g->increment('version');

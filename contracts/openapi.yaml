@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Testyco Operations API",
-    "version": "0.41.0",
+    "version": "0.43.0",
     "description": "Authenticated, modular organization/store-scoped operations. Explicit per-document wholesale invoice basis, discounts/shipping/tax/rounding/due date and partner consent; verified manual partial collections, reversals, customer-credit liability, bounded two-party credits and signed-contract/manual consignment reports. Confirmed physical returns move damaged goods from partner quarantine to original center quarantine, never usable. Online POS supports cash and explicitly verified QRIS/transfer, own-issuer-funded store/product vouchers and reviewed manager refunds using historical discounted prices and actual component allocations. No payment-provider calls, automatic profit sharing, automatic offline noncash settlement. Cash-sales reports retain original cash-sale scope and exclude noncash/B2B and refund deduction; refunds are separately recorded. Immutable UUID retries, parent/version locks, private files and scoped audit remain mandatory. Development SQLite only; PostgreSQL concurrency, production tax/legal acceptance, device/printer and UAT are not verified. DL18–20: SMTP/inbox (push deferred), explicit organization-leader SOP/recall/FEFO, encrypted MFA/reset and device sessions, durable encrypted cash-only offline queue with review conflicts, contract-backed asset lifecycle and bounded commercial cohort reports with evidenced net costs. External SMTP delivery and real device Keystore/release remain unverified. Explicit bilateral standing consignment/profit-sharing and sponsored promotions now accrue immutable settlement deltas with historical refund reversals and hard sponsor budgets, separate from manual invoices. Coordinated recalls follow real receipt provenance and recipient-leader hold/release. Native ESC/POS TCP LAN58/80mm and browser/system printing are client integrations; transport send is not physical print acknowledgement. Push and payment gateways remain deferred. ERP manufacturing: own active center owner/admin only. Exact kg/g/l/ml/whole-pcs material ledgers dispatch through StockLedger.apply; explicit opening values, approved supplier purchases/partial receipts/verified payments and supplier refunds. Immutable recipe versions may output a finished product or an intermediate material. Production consumes actual eligible reviewed lot revisions atomically with quarantined output and lot-derived costs; owner/admin must inspect before release. Explicit FEFO and minimum settings, independent material counts, internal transfers, bounded planning/HPP and transitive material trace. No invented recipe, yield, lifetime, tax, cost or auto bank/recall policy. Web and native Flutter use scoped declarative forms and immutable UUID retry. Explicit per-user/per-assigned-store production grants now allow warehouse/store managers to plan and record production including process cost; supplier finance and mandatory QC remain owner/admin only. Manual double-entry accounting includes explicit chart/normal balances, independent draft review, exact linked reversals, activity-versioned open/closed periods and bounded opening/movement/closing trial balance with period account net movements and as-of categories. No automatic ERP/POS historical posting or chart/tax mapping is implied. ADR060 adds source-proven replacement costing, bilateral missing-cost agreements and return custody/ownership. Only remaining buyer stock value is redistributed, including quarantine, preserving historical COGS; supplier replacement expense covers actual received dispatch cost. Pending replacement valuation blocks depletion. Missing burden is explicitly proposed by center then approved by partner leader; exact loss/claim journals do not transfer funds. Supplier return custody is excluded from owned inventory quantity/value and disposal until physical receipt and accepted credit coverage; supplier recovery uses original dispatch cost. Own-org section distribution_settlements supports missing_propose(id,version,owner_share_basis_points,note), missing_decide(id,version,decision,consent,note), distribution_retry(id,version,note), all with operation_id. Pure shortage credits can reconcile actual invoice quantity/capital; ambiguous mixed damage/shortage remains reviewed. Unknown/cutover/manual-reconciled/mixed lineage never becomes guessed zero. See docs/distribution-cost-settlement.md."
   },
   "security": [
@@ -21392,6 +21392,1162 @@
           }
         }
       }
+    },
+    "/api/v1/organizations/{organization}/consumables": {
+      "get": {
+        "operationId": "listConsumables",
+        "summary": "Read kemasan dan alat makan items and per-service-type deduction rules; owner, admin and partner lead only",
+        "description": "Read kemasan dan alat makan items and per-service-type deduction rules; owner, admin and partner lead only. Scoped authorization, UUID replay protection for writes and private/no-store reads. Sales are never blocked by a supply shortage; the shortfall is reported. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConsumableCatalogue"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/consumables/items": {
+      "post": {
+        "operationId": "createConsumableItem",
+        "summary": "Create a packaging or cutlery item",
+        "description": "Create a packaging or cutlery item. Scoped authorization, UUID replay protection for writes and private/no-store reads. Sales are never blocked by a supply shortage; the shortfall is reported. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConsumableItem"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumableItemInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/consumables/items/{item}/status": {
+      "post": {
+        "operationId": "setConsumableItemStatus",
+        "summary": "Activate or deactivate an item with a versioned reason",
+        "description": "Activate or deactivate an item with a versioned reason. Scoped authorization, UUID replay protection for writes and private/no-store reads. Sales are never blocked by a supply shortage; the shortfall is reported. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "path",
+            "name": "item",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConsumableItem"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumableItemStatusInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/consumables/rules": {
+      "post": {
+        "operationId": "setConsumableRule",
+        "summary": "Create, change or remove (quantity 0) the deduction rule of an item for dine_in or takeaway",
+        "description": "Create, change or remove (quantity 0) the deduction rule of an item for dine_in or takeaway. Scoped authorization, UUID replay protection for writes and private/no-store reads. Sales are never blocked by a supply shortage; the shortfall is reported. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConsumableRule"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumableRuleInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/consumables": {
+      "get": {
+        "operationId": "readConsumableStock",
+        "summary": "Read supply balances and recent movements for an assigned store",
+        "description": "Read supply balances and recent movements for an assigned store. Scoped authorization, UUID replay protection for writes and private/no-store reads. Sales are never blocked by a supply shortage; the shortfall is reported. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConsumableStock"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/consumables/purchases": {
+      "post": {
+        "operationId": "purchaseConsumables",
+        "summary": "Record a booth purchase: adds stock and, with an open shift, records the cash spent as belanja_operasional",
+        "description": "Record a booth purchase: adds stock and, with an open shift, records the cash spent as belanja_operasional. Scoped authorization, UUID replay protection for writes and private/no-store reads. Sales are never blocked by a supply shortage; the shortfall is reported. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumablePurchaseInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/consumables/counts": {
+      "post": {
+        "operationId": "countConsumables",
+        "summary": "Record a physical count; the balance becomes the counted quantity and the difference is audited",
+        "description": "Record a physical count; the balance becomes the counted quantity and the difference is audited. Scoped authorization, UUID replay protection for writes and private/no-store reads. Sales are never blocked by a supply shortage; the shortfall is reported. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumableCountInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/stores/{store}/consumable-shipments": {
+      "get": {
+        "operationId": "listConsumableShipments",
+        "summary": "List shipments sent from or received at an assigned store",
+        "description": "List shipments sent from or received at an assigned store. Quantity only: no price, invoice or accounting. Each side sees only its own item ids. Scoped authorization, UUID replay protection and private/no-store reads. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConsumableShipmentList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "dispatchConsumableShipment",
+        "summary": "Center warehouse ships packaging and cutlery to a booth; refused when the warehouse balance is short",
+        "description": "Center warehouse ships packaging and cutlery to a booth; refused when the warehouse balance is short. Quantity only: no price, invoice or accounting. Each side sees only its own item ids. Scoped authorization, UUID replay protection and private/no-store reads. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "store",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConsumableShipment"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumableShipmentInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/consumable-shipments/{shipment}/receive": {
+      "post": {
+        "operationId": "receiveConsumableShipment",
+        "summary": "Booth manager confirms actual quantities and maps each line to its own item; a short receipt needs a reason",
+        "description": "Booth manager confirms actual quantities and maps each line to its own item; a short receipt needs a reason. Quantity only: no price, invoice or accounting. Each side sees only its own item ids. Scoped authorization, UUID replay protection and private/no-store reads. Development SQLite; PostgreSQL concurrency and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "shipment",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful scoped result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/ConsumableShipment"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Denied role/organization/store",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not found in scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Stale version, duplicate, changed review, quota or UUID conflict",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid explicit input",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Rate limited; preserve immutable request for retry",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConsumableShipmentReceiveInput"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/organizations/{organization}/reports/sales-trend": {
+      "get": {
+        "operationId": "readSalesTrend",
+        "summary": "Read daily sales for dashboards: all confirmed payment methods, Asia/Jakarta calendar days, refunds on their own day, top products",
+        "description": "Read daily sales for dashboards: all confirmed payment methods, Asia/Jakarta calendar days, refunds on their own day, top products. Same period rules (at most 31 days, explicit offsets) and store scoping as the cash sales report. Read only. Development SQLite; the PostgreSQL date expression and UAT remain release gates.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            }
+          },
+          {
+            "in": "query",
+            "name": "from",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "to",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "description": "Timezone offset required; from inclusive and to exclusive. Maximum 31 days."
+          },
+          {
+            "in": "query",
+            "name": "store_id",
+            "schema": {
+              "type": "string",
+              "description": "ULID"
+            },
+            "description": "Optional authorized store; omission aggregates only stores currently authorized in this organization."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "$ref": "#/components/schemas/SalesTrend"
+                    }
+                  },
+                  "required": [
+                    "data"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Authentication required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Organization role or store filter outside authorized scope",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Unknown organization",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Invalid period/filter or export exceeds 10000 transactions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -23738,6 +24894,18 @@
               "null"
             ],
             "maxLength": 60
+          },
+          "service_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "dine_in",
+              "takeaway",
+              null
+            ],
+            "description": "Selects which packaging and cutlery rules apply at payment"
           }
         },
         "required": [
@@ -24150,6 +25318,26 @@
               "null"
             ],
             "format": "date-time"
+          },
+          "service_type": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "dine_in",
+              "takeaway",
+              null
+            ]
+          },
+          "consumption": {
+            "type": [
+              "array",
+              "null"
+            ],
+            "items": {
+              "$ref": "#/components/schemas/SaleConsumption"
+            }
           }
         },
         "required": [
@@ -35969,6 +37157,802 @@
         },
         "additionalProperties": false,
         "description": "consignor_retry rechecks activation evidence; consignor_dispose approves known-cost waste with a different supplier finance actor and original open period. Preserve complete UUID/body/version on unknown response."
+      },
+      "ConsumableItem": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 30
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "name",
+          "unit",
+          "active",
+          "version"
+        ]
+      },
+      "ConsumableRule": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "service_type": {
+            "type": "string",
+            "enum": [
+              "dine_in",
+              "takeaway"
+            ]
+          },
+          "consumable_item_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "transaction",
+              "portion"
+            ],
+            "description": "transaction = once per sale; portion = per portion line unit sold"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000
+          }
+        },
+        "required": [
+          "id",
+          "organization_id",
+          "service_type",
+          "consumable_item_id",
+          "basis",
+          "quantity"
+        ]
+      },
+      "ConsumableCatalogue": {
+        "type": "object",
+        "properties": {
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsumableItem"
+            }
+          },
+          "rules": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsumableRule"
+            }
+          }
+        },
+        "required": [
+          "organization_id",
+          "items",
+          "rules"
+        ]
+      },
+      "ConsumableStock": {
+        "type": "object",
+        "properties": {
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "unit": {
+                  "type": "string"
+                },
+                "balance": {
+                  "type": "integer",
+                  "description": "Negative means a shortage was recorded"
+                },
+                "short": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "unit",
+                "balance",
+                "short"
+              ]
+            }
+          },
+          "recent": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          }
+        },
+        "required": [
+          "store_id",
+          "organization_id",
+          "items",
+          "recent"
+        ]
+      },
+      "SaleConsumption": {
+        "type": "object",
+        "properties": {
+          "consumable_item_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "shortfall": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "balance_after": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "consumable_item_id",
+          "name",
+          "unit",
+          "quantity",
+          "shortfall",
+          "balance_after"
+        ]
+      },
+      "ConsumableItemInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 120
+          },
+          "unit": {
+            "type": "string",
+            "maxLength": 30
+          }
+        },
+        "required": [
+          "operation_id",
+          "name",
+          "unit"
+        ],
+        "additionalProperties": false
+      },
+      "ConsumableItemStatusInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 2000
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "active",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "ConsumableRuleInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "service_type": {
+            "type": "string",
+            "enum": [
+              "dine_in",
+              "takeaway"
+            ]
+          },
+          "consumable_item_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "transaction",
+              "portion"
+            ]
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000,
+            "description": "0 removes the rule"
+          }
+        },
+        "required": [
+          "operation_id",
+          "service_type",
+          "consumable_item_id",
+          "basis",
+          "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "ConsumablePurchaseInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "consumable_item_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "quantity": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 1000000
+          },
+          "amount": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Rupiah spent; required with shift_id"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 400
+          },
+          "shift_id": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "ULID of an open cash shift; records a belanja_operasional cash-out"
+          },
+          "shift_version": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 1
+          }
+        },
+        "required": [
+          "operation_id",
+          "consumable_item_id",
+          "quantity"
+        ],
+        "additionalProperties": false
+      },
+      "ConsumableCountInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "consumable_item_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "counted": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1000000
+          },
+          "reason": {
+            "type": "string",
+            "maxLength": 1000
+          }
+        },
+        "required": [
+          "operation_id",
+          "consumable_item_id",
+          "counted",
+          "reason"
+        ],
+        "additionalProperties": false
+      },
+      "ConsumableShipmentLine": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "name": {
+            "type": "string"
+          },
+          "unit": {
+            "type": "string"
+          },
+          "quantity_sent": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "quantity_received": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0
+          },
+          "source_item_id": {
+            "type": "string",
+            "description": "Visible to the sending center only"
+          },
+          "destination_item_id": {
+            "type": "string",
+            "description": "Visible to the receiving booth only"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "unit",
+          "quantity_sent"
+        ]
+      },
+      "ConsumableShipment": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "dispatched",
+              "received"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "direction": {
+            "type": "string",
+            "enum": [
+              "outgoing",
+              "incoming"
+            ]
+          },
+          "source_store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "destination_store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "source_store_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "destination_store_name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "dispatched_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "received_at": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "receive_note": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lines": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsumableShipmentLine"
+            }
+          }
+        },
+        "required": [
+          "id",
+          "status",
+          "version",
+          "direction",
+          "lines"
+        ]
+      },
+      "ConsumableShipmentList": {
+        "type": "object",
+        "properties": {
+          "store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "organization_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "is_center": {
+            "type": "boolean"
+          },
+          "can_send": {
+            "type": "boolean"
+          },
+          "can_receive": {
+            "type": "boolean"
+          },
+          "destinations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "organization_name": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Active partner stores; only for center stores"
+          },
+          "data": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ConsumableShipment"
+            }
+          }
+        },
+        "required": [
+          "store_id",
+          "is_center",
+          "can_send",
+          "can_receive",
+          "destinations",
+          "data"
+        ]
+      },
+      "ConsumableShipmentInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "destination_store_id": {
+            "type": "string",
+            "description": "ULID"
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "consumable_item_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "quantity": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 1000000
+                }
+              },
+              "required": [
+                "consumable_item_id",
+                "quantity"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "operation_id",
+          "destination_store_id",
+          "lines"
+        ],
+        "additionalProperties": false
+      },
+      "ConsumableShipmentReceiveInput": {
+        "type": "object",
+        "properties": {
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000,
+            "description": "Required when any line is received short"
+          },
+          "lines": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 50,
+            "items": {
+              "type": "object",
+              "properties": {
+                "line_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "destination_item_id": {
+                  "type": "string",
+                  "description": "ULID"
+                },
+                "quantity_received": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 1000000
+                }
+              },
+              "required": [
+                "line_id",
+                "destination_item_id",
+                "quantity_received"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "operation_id",
+          "version",
+          "lines"
+        ],
+        "additionalProperties": false
+      },
+      "SalesTrend": {
+        "type": "object",
+        "properties": {
+          "organization": {
+            "type": "object"
+          },
+          "available_stores": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            }
+          },
+          "from": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "to": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "currency": {
+            "type": "string",
+            "enum": [
+              "IDR"
+            ]
+          },
+          "scope": {
+            "type": "string",
+            "enum": [
+              "server_confirmed_sales_all_payment_methods"
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "days": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "date": {
+                  "type": "string",
+                  "format": "date",
+                  "description": "Asia/Jakarta calendar day"
+                },
+                "transactions": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "cash": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "noncash": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Verified bank transfer and manual QRIS"
+                },
+                "refunds": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "description": "Refunds made on this day, not netted into the sale day"
+                }
+              },
+              "required": [
+                "date",
+                "transactions",
+                "cash",
+                "noncash",
+                "refunds"
+              ]
+            }
+          },
+          "totals": {
+            "type": "object",
+            "properties": {
+              "transactions": {
+                "type": "integer"
+              },
+              "cash": {
+                "type": "integer"
+              },
+              "noncash": {
+                "type": "integer"
+              },
+              "refunds": {
+                "type": "integer"
+              },
+              "revenue": {
+                "type": "integer"
+              },
+              "net_revenue": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "transactions",
+              "cash",
+              "noncash",
+              "refunds",
+              "revenue",
+              "net_revenue"
+            ]
+          },
+          "top_products": {
+            "type": "array",
+            "maxItems": 5,
+            "items": {
+              "type": "object",
+              "properties": {
+                "sku": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "sold_pieces": {
+                  "type": "integer"
+                },
+                "gross_sales": {
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "sku",
+                "name",
+                "sold_pieces",
+                "gross_sales"
+              ]
+            }
+          }
+        },
+        "required": [
+          "organization",
+          "from",
+          "to",
+          "days",
+          "totals",
+          "top_products"
+        ]
       }
     }
   }

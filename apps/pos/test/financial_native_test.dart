@@ -42,7 +42,31 @@ class DigitalServer extends FakeCashServer {
 class RefundServer {
   int version = 1, status = 0, writes = 0, reads = 0;
   bool wrong = false;
+  // The real API stamps every committed allocation with a fresh source_id.
+  bool stamp = true;
+  // Simulates a committed refund that differs from the reviewed one.
+  bool tamper = false;
   final bodies = <String>[];
+  Map<String, dynamic> committedLines(Map b) {
+    final lines = (review(b)['lines'] as List)
+        .map(
+          (l) => {
+            ...(l as Map<String, dynamic>),
+            'allocations': (l['allocations'] as List)
+                .map(
+                  (a) => {
+                    ...(a as Map<String, dynamic>),
+                    if (stamp) 'source_id': '01HZ8Y6Q3K5M7N9P2R4S6T8V0A',
+                    if (tamper) 'pieces': 9,
+                  },
+                )
+                .toList(),
+          },
+        )
+        .toList();
+    return {'lines': lines};
+  }
+
   Map<String, dynamic> context() => {
     'sale': {
       'id': 'SALE',
@@ -127,7 +151,7 @@ class RefundServer {
               'reference': b['reference'],
               'amount': 2666,
               'stock_disposition': b['stock_disposition'],
-              'lines': review(b)['lines'],
+              'lines': committedLines(b)['lines'],
             },
           },
         }),
@@ -249,6 +273,35 @@ void main() {
       expect(s.bodies.toSet().length, 1);
       expect(s.writes, 1);
       expect(m.context!['sale']['version'], 2);
+    },
+  );
+  test(
+    'Refund confirmation accepts API-assigned allocation source ids',
+    () async {
+      final s = RefundServer();
+      final m = RefundController(s.api, 'SALE');
+      addTearDown(m.dispose);
+      await m.load();
+      await m.preview('SHIFT', 'quarantine', 'REF1', 'Checked', {'L1': 1});
+      await m.confirm();
+      expect(m.uncertain, isFalse);
+      expect(s.writes, 1);
+    },
+  );
+  test(
+    'Refund result stays uncertain without source ids or with any other change',
+    () async {
+      for (final mode in ['missing source id', 'changed pieces']) {
+        final s = RefundServer()
+          ..stamp = mode != 'missing source id'
+          ..tamper = mode == 'changed pieces';
+        final m = RefundController(s.api, 'SALE');
+        addTearDown(m.dispose);
+        await m.load();
+        await m.preview('SHIFT', 'quarantine', 'REF1', 'Checked', {'L1': 1});
+        await m.confirm();
+        expect(m.uncertain, isTrue, reason: mode);
+      }
     },
   );
   test(

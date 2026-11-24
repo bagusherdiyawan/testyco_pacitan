@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# Build a streamlined Android APK for booth cashiers/daily store staff by hiding
+# admin, audit, manufacturing/ERP, and organization reporting UI modules.
+# Server-side RBAC remains authoritative regardless of build flags.
+
+cd "$(dirname "$0")/../apps/pos"
+
+API_BASE_URL="${1:-https://api-mitra.testyco.id/api/v1/}"
+
+flutter build apk --release \
+  --dart-define="API_BASE_URL=${API_BASE_URL}" \
+  --dart-define=FEATURE_ADMINISTRATION=false \
+  --dart-define=FEATURE_AUDIT=false \
+  --dart-define=FEATURE_MANUFACTURING=false \
+  --dart-define=FEATURE_REPORTING=false

@@ -35,7 +35,7 @@ final class ReplacementWorkflow
         Shipment::where('supply_order_id', $orderId)->lockForUpdate()->findOrFail($shipmentId);
         $case = ShipmentDiscrepancy::where('supply_order_id', $orderId)->where('shipment_id', $shipmentId)->lockForUpdate()->firstOrFail();
         $plan = ShipmentDiscrepancyResolution::where('shipment_discrepancy_id', $case->id)->where('status', 'confirmed')->lockForUpdate()->first();
-        abort_unless($order->kind === 'wholesale' && $case->status === 'plan_confirmed' && $plan?->type === 'replacement', 409, 'Belum ada rencana pengganti yang dikonfirmasi.');
+        abort_unless(in_array($order->kind, ['wholesale', 'internal_transfer'], true) && $case->status === 'plan_confirmed' && $plan?->type === 'replacement', 409, 'Belum ada rencana pengganti yang dikonfirmasi.');
 
         return [$order, $case, $plan];
     }
@@ -203,6 +203,7 @@ final class ReplacementWorkflow
             $shipment->update(['received_at' => now(), 'received_by' => $user->id, 'receipt_note' => $v['note'] ?? null]);
             $case->increment('version');
             $shipment->load('lines');
+            app(OrderSettlement::class)->evaluate($user, $order);
             $this->audit($user, $order, $case, $shipment, 'received');
 
             return ['order_id' => $id, 'shipment_id' => $shipmentId, 'case_id' => $case->id, 'case_version' => $case->version, 'replacement' => $shipment->toArray(), 'execution_status' => $this->state($this->quota($case))];

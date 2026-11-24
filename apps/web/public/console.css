@@ -1,0 +1,203 @@
+/* Page content styles for the operations console, scoped so they never touch the Soft UI shell.
+   Colours come from tokens.css and soft-brand.css. */
+.console-content { color: var(--ink-700); font-size: .95rem; line-height: 1.6 }
+.console-content h1 { font-size: 1.6rem; font-weight: 800; color: var(--ink-900); letter-spacing: -.01em; margin: .25rem 0 .75rem }
+.console-content h2 { font-size: 1.15rem; font-weight: 750; color: var(--ink-900); margin: 1.25rem 0 .6rem }
+.console-content h3 { font-size: 1rem; font-weight: 700; color: var(--ink-900); margin: 0 0 .5rem }
+.console-content p { margin: 0 0 .75rem; color: var(--ink-700) }
+.console-content ul, .console-content ol { padding-left: 1.25rem; margin: .4rem 0 1rem }
+.console-content li { margin: .25rem 0 }
+.console-content hr { border: 0; height: 1px; background: var(--surface-line); opacity: 1; margin: 1.25rem 0 }
+.console-content a { color: var(--red-700); text-underline-offset: 3px }
+.console-content a:hover { color: var(--red-900) }
+.console-content pre { background: var(--surface-tint); border: 1px solid var(--surface-line); border-radius: .75rem; padding: .9rem 1rem; overflow-x: auto }
+.console-content img { max-width: 100%; border-radius: .6rem }
+
+/* Cards */
+.console-content .panel, .console-content .module-card {
+  background: #fff; border: 1px solid var(--surface-line); border-radius: .95rem; padding: 1.4rem; margin: 1rem 0;
+  box-shadow: 0 4px 16px -4px rgba(15, 23, 42, .05);
+}
+.console-content .panel > :first-child { margin-top: 0 }
+.console-content .panel > :last-child { margin-bottom: 0 }
+.console-content .module-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1rem; margin: 1rem 0 1.5rem }
+.console-content .module-card { position: relative; overflow: hidden; margin: 0; padding-left: 1.75rem; transition: transform .15s, box-shadow .15s }
+.console-content .module-card::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 6px; background: var(--soft-grad-brand) }
+.console-content .module-card:hover { transform: translateY(-2px); box-shadow: 0 24px 34px -10px rgba(90, 16, 10, .2) }
+.console-content .module-card form { margin: .6rem 0 }
+.console-content .module-card a { font-weight: 600 }
+
+/* Badges and chips */
+.console-content .badge { display: inline-block; margin-bottom: .5rem; padding: .25rem .7rem; border-radius: 999px; background: var(--red-50); border: 1px solid var(--red-200); color: var(--red-700); font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-transform: uppercase }
+.console-content .status-chip { display: inline-flex; align-items: center; gap: .45rem; font-size: .8rem; font-weight: 700; color: var(--ink-500) }
+.console-content .status-chip::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #cbd5e1 }
+.console-content .status-chip.is-available { color: #047857 }
+.console-content .status-chip.is-available::before { background: #10b981; box-shadow: 0 0 0 4px #d1fae5 }
+.console-content .stock-ok, .console-content .stock-zero, .console-content .stock-short { display: inline-block; padding: .15rem .75rem; border-radius: 999px; font-size: .78rem; font-weight: 700 }
+.console-content .stock-ok { background: #ecfdf5; color: #065f46; border: 1px solid #a7f3d0 }
+.console-content .stock-zero { background: var(--surface-tint); color: var(--ink-700); border: 1px solid var(--surface-line) }
+.console-content .stock-short { background: var(--red-600); color: #fff }
+
+/* Feedback */
+.console-content aside, .console-content .notice { margin: 0 0 1rem; padding: .9rem 1.1rem; background: linear-gradient(90deg, var(--yellow-100), var(--yellow-50)); border: 1px solid var(--yellow-200); border-left: 6px solid var(--yellow-500); border-radius: .75rem; color: var(--ink-900) }
+.console-content aside p, .console-content .notice p { margin: 0; color: inherit }
+.console-content .errors, .console-content [role="alert"] { margin: 0 0 1rem; padding: .9rem 1.1rem; background: linear-gradient(90deg, var(--red-100), var(--red-50)); border: 1px solid var(--red-200); border-left: 6px solid var(--red-600); border-radius: .75rem; color: var(--red-900); font-weight: 600 }
+.console-content .errors ul { margin: 0; padding-left: 1.1rem; color: inherit }
+
+/* Forms */
+.console-content label { font-weight: 600; font-size: .85rem; color: var(--ink-700) }
+.console-content .field, .console-content label:has(> input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"])), .console-content label:has(> select), .console-content label:has(> textarea) { display: flex; flex-direction: column; gap: .35rem; margin: .8rem 0 }
+.console-content input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), .console-content select, .console-content textarea {
+  display: block; width: 100%; min-height: 42px; padding: .5rem .85rem; background: #fff; border: 1px solid #cbd5e1; border-radius: .5rem; color: var(--ink-900); font-size: .9rem; font-weight: 400; transition: border-color .12s, box-shadow .12s;
+}
+.console-content textarea { min-height: 90px; resize: vertical }
+.console-content input:not([type="checkbox"]):not([type="radio"]):focus, .console-content select:focus, .console-content textarea:focus { outline: 0; border-color: var(--red-600); box-shadow: 0 0 0 3px var(--red-100) }
+.console-content input[type="checkbox"], .console-content input[type="radio"] { width: 1.1rem; height: 1.1rem; accent-color: var(--red-600); margin: 0 .5rem 0 0; vertical-align: middle }
+.console-content .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .1rem 1rem }
+.console-content fieldset { display: flex; gap: .75rem; flex-wrap: wrap; margin: 1rem 0; padding: 1rem 1.1rem; background: var(--surface-tint); border: 1px solid var(--surface-line); border-radius: .75rem }
+.console-content legend { float: none; width: auto; padding: 0 .5rem; margin: 0; font-size: .85rem; font-weight: 800; color: var(--red-700) }
+.console-content details { margin: .75rem 0; padding: .25rem 1rem; background: var(--surface-tint); border: 1px solid var(--surface-line); border-radius: .75rem }
+.console-content details[open] { background: #fff }
+.console-content summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 700; color: var(--red-700) }
+
+/* Buttons */
+.console-content .button, .console-content a.button {
+  display: inline-flex; align-items: center; justify-content: center; gap: .5rem; min-height: 40px; padding: .55rem 1.25rem; border: 0; border-radius: .55rem;
+  background: var(--red-600); color: #fff; font-size: .78rem; font-weight: 700; letter-spacing: .02em; text-decoration: none; cursor: pointer;
+  box-shadow: 0 2px 6px -1px rgba(185, 28, 28, .25); transition: transform .12s, background-color .12s;
+}
+.console-content .button:hover { color: #fff; background: var(--red-700); transform: translateY(-1px) }
+.console-content .button:disabled { opacity: .55; cursor: not-allowed; transform: none }
+.console-content .button.button--lite { background: #fff; color: var(--ink-700); box-shadow: inset 0 0 0 1px #cbd5e1 }
+.console-content .button.button--lite:hover { background: #f1f5f9; color: var(--ink-900) }
+.console-content .item-row { display: flex; align-items: center; gap: .75rem; flex-wrap: wrap; padding: .6rem 0; border-bottom: 1px solid var(--surface-line) }
+.console-content .item-row .button { margin-left: auto }
+
+/* Tables */
+.console-content table { width: 100%; margin: .5rem 0; border-collapse: collapse }
+.console-content th { padding: .75rem 1rem; text-align: left; font-size: .68rem; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-500); background: var(--surface-tint); border-bottom: 1px solid var(--surface-line) }
+.console-content td { padding: .8rem 1rem; border-bottom: 1px solid var(--surface-line); color: var(--ink-900) }
+.console-content tbody tr:hover { background: #f8fafc }
+@media (max-width: 991px) {
+  .console-content table { display: block; width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch }
+}
+
+/* Sidebar sections, action grids & responsive navbar polish */
+.sidenav { box-shadow: 0 20px 30px -15px rgba(90, 16, 10, .12) }
+.sidenav #sidenav-collapse-main { max-height: calc(100vh - 96px); overflow-y: auto; padding-bottom: 1.5rem }
+.sidenav .navbar-nav > .nav-item .nav-link { padding-top: .5rem; padding-bottom: .5rem; margin: 0 .65rem; border-radius: .65rem; font-size: .86rem; font-weight: 600; color: var(--ink-700) }
+.sidenav .navbar-nav > .nav-item .nav-link:hover { background: var(--red-50); color: var(--red-800) }
+.sidenav .navbar-nav > .nav-item .nav-link.active { background: #fff; color: var(--red-800); font-weight: 750; box-shadow: 0 6px 16px -8px rgba(90, 16, 10, .18) }
+.sidenav .sidenav-section { display: block; padding: .35rem 1.35rem; font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500) }
+.nav-drawer-btn { min-width: 44px; min-height: 44px; border-radius: .65rem; background: #fff; border: 1px solid var(--surface-line); box-shadow: 0 2px 6px rgba(90, 16, 10, .08) }
+.console-content .action-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .85rem; margin: .75rem 0 1.25rem }
+.console-content .action-card { display: flex; flex-direction: column; gap: .35rem; padding: 1rem 1.15rem; background: #fff; border: 1px solid var(--surface-line); border-radius: .9rem; text-decoration: none; color: var(--ink-900); box-shadow: 0 8px 18px -14px rgba(90, 16, 10, .35); transition: transform .12s, border-color .12s }
+.console-content .action-card:hover { transform: translateY(-2px); border-color: var(--red-400); color: var(--red-900) }
+.console-content .action-card strong { font-size: .95rem; color: var(--red-800) }
+.console-content .action-card span { font-size: .82rem; color: var(--ink-500); line-height: 1.35 }
+.console-content .section-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .5rem; margin: 1.25rem 0 .65rem }
+.console-content .section-heading h2 { margin: 0 }
+.console-content .pill-actions { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .75rem }
+.console-content .pill-actions a { margin: 0 }
+
+/* Helpers used by existing pages */
+.console-content .stock-balances { display: grid; grid-template-columns: 1fr auto; gap: .5rem }
+.console-content .stock-balances dt, .console-content .stock-balances dd { margin: 0 }
+.console-content .stock-balances dd { font-weight: 800; color: var(--red-700) }
+.console-content .audit-record, .console-content .audit-record section, .console-content .stock-movement, .console-content .receipt-summary, .console-content .batch-expiry { min-width: 0; overflow-wrap: anywhere }
+.console-content .audit-snapshot { white-space: pre-wrap; overflow-wrap: anywhere; max-width: 100%; font: .88rem/1.6 ui-monospace, SFMono-Regular, Menlo, monospace }
+.console-footer { padding: 1.25rem 0 .5rem; text-align: center; font-size: .8rem; color: var(--ink-500) }
+.sidenav-close { position: absolute; top: .5rem; right: .75rem; border: 0; background: transparent; font-size: 1.4rem; line-height: 1; color: var(--ink-500); cursor: pointer }
+
+/* Keyboard focus stays obvious on every control */
+.console-content a:focus-visible, .console-content button:focus-visible, .console-content summary:focus-visible, .sidenav a:focus-visible, .navbar-main button:focus-visible, .navbar-main a:focus-visible { outline: 3px solid var(--ink-900); outline-offset: 2px; box-shadow: 0 0 0 6px var(--yellow-300) }
+
+/* Receipts and printing */
+@media print {
+  .sidenav, .navbar-main, .console-footer, .no-print, .notice, .errors { display: none !important }
+  body { background: #fff !important; background-image: none !important }
+  .main-content { margin: 0 !important; padding: 0 !important; width: var(--receipt-width, 80mm); max-width: 100% }
+  .console-content .panel { border: 0; border-radius: 0; box-shadow: none; padding: 0; margin: 0 }
+  .console-content .receipt { font: 11px monospace; overflow-wrap: anywhere }
+  .console-content .receipt p { line-height: 1.35; color: #000 }
+  .console-content .receipt h2 { font-size: 14px }
+  .console-content .receipt h1 { font-size: 1.4rem }
+}
+
+/* Adjacent links on one line (breadcrumb-style back links) get breathing room */
+.console-content a + a { margin-left: 1rem }
+.console-content .module-card a + a, .console-content .button + a, .console-content a.button { margin-left: 0 }
+
+/* ---- Link menus: standalone links become tidy chips instead of a pile of text ---- */
+.console-content .menu-chips { display: flex; flex-wrap: wrap; gap: .6rem; margin: .25rem 0 1.25rem }
+.console-content .menu-chips > a,
+.console-content > a,
+.console-content > p:has(> a:only-child) > a {
+  display: inline-flex; align-items: center; gap: .5rem; padding: .55rem .95rem; background: #fff; border: 1px solid var(--surface-line); border-radius: .75rem;
+  color: var(--red-700); font-size: .86rem; font-weight: 650; line-height: 1.25; text-decoration: none; box-shadow: 0 6px 14px -10px rgba(150, 60, 20, .45); transition: transform .12s, box-shadow .12s, border-color .12s;
+}
+.console-content .menu-chips > a:hover,
+.console-content > a:hover,
+.console-content > p:has(> a:only-child) > a:hover { color: var(--red-900); border-color: var(--red-300); transform: translateY(-1px); box-shadow: 0 10px 18px -10px rgba(245, 71, 58, .5) }
+.console-content > p:has(> a:only-child) { display: inline-block; margin: 0 .6rem .6rem 0 }
+.console-content > a { margin: 0 .6rem .6rem 0 }
+.console-content .menu-chips > a + a, .console-content > a + a { margin-left: 0 }
+.console-content .menu-title { margin: 1.25rem 0 .5rem; font-size: .72rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-500) }
+
+/* ---- Forms: fields tile into columns on wide screens and stack on phones ---- */
+.console-content form { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr)); column-gap: 1.25rem; row-gap: .1rem; align-items: start }
+.console-content form > :is(h1, h2, h3, h4, p, ul, ol, table, hr, fieldset, details, section, div, aside, pre, dl, legend, .button, button, a, strong) { grid-column: 1 / -1 }
+.console-content form > .button, .console-content form > button { justify-self: start; margin-top: .6rem }
+.console-content form.item-row { display: flex }
+.console-content form > .form-grid { margin: 0 }
+.console-content .panel > form { margin-top: .25rem }
+
+/* Groups of checkboxes and radios read as selectable chips */
+.console-content fieldset > label:has(> input[type="checkbox"], > input[type="radio"]) { display: inline-flex; align-items: center; gap: .4rem; margin: 0; padding: .4rem .8rem; background: #fff; border: 1px solid var(--surface-line); border-radius: 999px; font-size: .85rem }
+.console-content fieldset > label:has(> input:checked) { border-color: var(--red-400); background: var(--red-50) }
+/* Repeating item rows (order lines, POS cart lines): fields tile in a grid, remove button aligned to the end */
+.console-content fieldset.order-row, .console-content fieldset.pos-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: .25rem 1rem; align-items: end }
+.console-content fieldset.order-row > label, .console-content fieldset.pos-row > label { margin: .4rem 0 !important; align-self: start }
+.console-content fieldset.order-row > .button, .console-content fieldset.pos-row > .button { justify-self: start; margin-bottom: .5rem }
+.console-content label > input[type="checkbox"] + *, .console-content label > input[type="radio"] + * { margin: 0 }
+
+/* Tighter rhythm inside panels */
+.console-content .panel h2 { margin-top: 0 }
+.console-content .panel h3 { margin-top: 1rem }
+.console-content .panel > p + form, .console-content .panel > h2 + form { margin-top: .5rem }
+.console-content .module-grid > .panel { margin: 0 }
+.console-content .menu-chips > a.is-active { background: var(--soft-grad-primary); border-color: var(--red-600); color: #fff; box-shadow: 0 8px 16px -8px rgba(224, 51, 40, .6) }
+.console-content .menu-chips > a.is-active:hover { color: #fff }
+
+/* ---- Tablets: comfortable 2-column grids and compact top bar ---- */
+@media (max-width: 1024px) {
+  .console-content .panel, .console-content .module-card { padding: 1.2rem }
+  .console-content .module-grid { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: .85rem }
+  .navbar-main .user-chip { font-size: .78rem; padding: .3rem .65rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
+}
+
+/* ---- Phones: touch-friendly forms and a compact POS cart ---- */
+@media (max-width: 600px) {
+  /* 16px inputs stop iOS from zooming the page on focus; 44px targets are easy to hit */
+  .console-content input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]), .console-content select, .console-content textarea { min-height: 46px; font-size: 16px }
+  .console-content form > .button, .console-content form > button, .console-content .button { width: 100%; min-height: 48px; justify-self: stretch }
+  .console-content .menu-chips > a, .console-content > a, .console-content > p:has(> a:only-child) > a { min-height: 44px }
+  .console-content .panel { padding: 1rem }
+  .console-content .action-grid { grid-template-columns: 1fr }
+  .console-content .module-grid { grid-template-columns: 1fr }
+  .console-content .pill-actions .button, .console-content .pill-actions a { width: 100%; text-align: center }
+  /* POS and order lines: product and stock span the row, unit and quantity sit side by side */
+  .console-content fieldset.pos-row, .console-content fieldset.order-row { grid-template-columns: 1fr 1fr; padding: .85rem }
+  .console-content fieldset.pos-row > label:nth-of-type(1), .console-content fieldset.pos-row > label:nth-of-type(4), .console-content fieldset.pos-row > .button,
+  .console-content fieldset.order-row > label:nth-of-type(1), .console-content fieldset.order-row > label:nth-of-type(2), .console-content fieldset.order-row > .button { grid-column: 1 / -1 }
+  .console-content .item-row .button { width: auto }
+}
+
+/* Secondary actions (add or remove a line) stay quiet so the main action stands out */
+.console-content fieldset.pos-row .button, .console-content fieldset.order-row .button, .console-content #add-pos-line, .console-content #add-order-line {
+  background: #fff; color: var(--ink-700); box-shadow: inset 0 0 0 1px #cbd5e1;
+}
+.console-content fieldset.pos-row .button:hover, .console-content fieldset.order-row .button:hover, .console-content #add-pos-line:hover, .console-content #add-order-line:hover { background: #f1f5f9; color: var(--ink-900) }
+
+/* The hidden attribute must win over the field layout rules above */
+.console-content [hidden] { display: none !important }

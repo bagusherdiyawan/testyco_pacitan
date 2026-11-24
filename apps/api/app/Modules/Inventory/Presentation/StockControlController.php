@@ -4,8 +4,10 @@ namespace App\Modules\Inventory\Presentation;
 
 use App\Modules\Inventory\Application\StockAccess;
 use App\Modules\Inventory\Application\StockControl;
+use App\Modules\Inventory\Infrastructure\InventoryBatch;
 use App\Modules\Inventory\Infrastructure\InventoryCount;
 use App\Modules\Inventory\Infrastructure\InventoryProcess;
+use App\Modules\Inventory\Infrastructure\QuarantineRelease;
 use DomainException;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -16,14 +18,15 @@ final class StockControlController
 
     public function context(Request $r, string $store): mixed
     {
-        $s = $this->access->staff($r->user(), $store);
+        $s = $this->access->processStaff($r->user(), $store);
+        $isStaff = $this->access->isStaff($r->user(), $s);
 
-        return ['data' => ['store_id' => $s->id, 'store_name' => $s->name, 'active' => $s->active, 'can_process' => $s->active, 'can_propose' => $s->active, 'can_review' => $s->active && $this->access->canReview($r->user(), $s)]];
+        return ['data' => ['store_id' => $s->id, 'store_name' => $s->name, 'active' => $s->active, 'can_process' => $s->active, 'can_propose' => $s->active && $isStaff, 'can_review' => $s->active && $this->access->canReview($r->user(), $s)]];
     }
 
     public function processes(Request $r, string $store): mixed
     {
-        $this->access->staff($r->user(), $store);
+        $this->access->processStaff($r->user(), $store);
 
         return InventoryProcess::where('store_id', $store)->with('batch')->orderByDesc('id')->paginate(50);
     }
@@ -65,5 +68,32 @@ final class StockControlController
         $v = $r->validate(['operation_id' => 'required|uuid', 'version' => 'required|integer|min:1', 'review_note' => 'required|string|max:2000']);
 
         return ['data' => $this->control->review($r->user(), $count, $action, $v)];
+    }
+
+    public function releases(Request $r, string $store): mixed
+    {
+        $s = $this->access->staff($r->user(), $store);
+        $reviewer = $this->access->canReview($r->user(), $s);
+
+        return QuarantineRelease::where('store_id', $store)->with('batch')->orderByDesc('id')->paginate(50)->through(function ($release) use ($r, $s, $reviewer) {
+            $stale = $release->status === 'pending' && $release->snapshot_revision !== $release->batch->stock_revision;
+
+            return [...$release->toArray(), 'is_stale' => $stale, 'can_review' => $s->active && $reviewer && (int) $release->created_by !== $r->user()->id && $release->status === 'pending', 'can_cancel' => $s->active && (int) $release->created_by === $r->user()->id && $release->status === 'pending'];
+        });
+    }
+
+    public function proposeRelease(Request $r, string $store): mixed
+    {
+        $v = $r->validate(['operation_id' => 'required|uuid', 'batch_id' => 'required|ulid', 'expected_revision' => 'required|integer|min:0', 'target_bucket' => 'required|in:usable,opened', 'quantity_pieces' => 'required|integer|min:1|max:1000000000', 'reason' => 'required|string|max:2000']);
+
+        return response()->json(['data' => $this->control->proposeRelease($r->user(), $store, $v)], 201);
+    }
+
+    public function reviewRelease(Request $r, string $release, string $action): mixed
+    {
+        abort_unless(in_array($action, ['approve', 'reject', 'cancel'], true), 404);
+        $v = $r->validate(['operation_id' => 'required|uuid', 'version' => 'required|integer|min:1', 'review_note' => 'required|string|max:2000']);
+
+        return ['data' => $this->control->reviewRelease($r->user(), $release, $action, $v)];
     }
 }

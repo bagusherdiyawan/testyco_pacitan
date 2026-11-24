@@ -31,7 +31,7 @@ final class CatalogExtensionController
 
     public function saveRecipe(Request $r, string $organization, string $product): mixed
     {
-        $v = $r->validate(['operation_id' => 'required|uuid', 'version' => 'required|integer|min:0', 'active' => 'required|boolean', 'components' => 'required|array|min:1|max:50', 'components.*.product_id' => 'required|ulid|distinct', 'components.*.pieces' => 'required|integer|min:1|max:10000']);
+        $v = $r->validate(['operation_id' => 'required|uuid', 'version' => 'required|integer|min:0', 'active' => 'required|boolean', 'portion_equivalent' => 'nullable|integer|min:0|max:100', 'components' => 'required|array|min:1|max:50', 'components.*.product_id' => 'required|ulid|distinct', 'components.*.pieces' => 'required|integer|min:1|max:10000']);
 
         return response()->json(['data' => $this->work->saveRecipe($r->user(), $organization, $product, $v)], 200)->header('Cache-Control', 'private, no-store');
     }

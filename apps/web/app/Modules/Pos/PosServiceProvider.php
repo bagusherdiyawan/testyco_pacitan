@@ -29,6 +29,9 @@ final class PosServiceProvider extends ServiceProvider
             Route::post('/app/stores/{store}/pos/bundles/{product}', [BundleController::class, 'create']);
             Route::post('/app/stores/{store}/pos/bundles/{product}/retry', [BundleController::class, 'retry']);
             Route::get('/app/stores/{store}/pos', [$c, 'index']);
+            Route::get('/app/stores/{store}/catalog/{product}/image', [$c, 'productImage']);
+            Route::post('/app/pos/receipt-settings', [$c, 'saveReceiptSettings']);
+            Route::post('/app/stores/{store}/pos/policy', [$c, 'policy']);
             Route::post('/app/stores/{store}/pos/shifts', [$c, 'open']);
             Route::post('/app/stores/{store}/pos/intents', [$c, 'create']);
             Route::get('/app/stores/{store}/pos/sales', [ReceiptHistoryController::class, 'index']);
@@ -44,7 +47,12 @@ final class PosServiceProvider extends ServiceProvider
             Route::get('/app/pos/sales/{sale}', [$c, 'receipt']);
             Route::get('/app/pos/shifts/{shift}', [$c, 'shift']);
             Route::post('/app/pos/shifts/{shift}/close', [$c, 'close']);
+            Route::post('/app/pos/shifts/{shift}/force-close', [$c, 'forceClose']);
             Route::post('/app/pos/shifts/{shift}/cash-movements', [$c, 'movement']);
+            Route::post('/app/pos/shifts/{shift}/cash-requests', [$c, 'requestMovement']);
+            Route::post('/app/pos/cash-requests/{requestRecord}/approve', [$c, 'approveRequest']);
+            Route::post('/app/pos/cash-requests/{requestRecord}/reject', [$c, 'rejectRequest']);
+            Route::post('/app/pos/cash-requests/{requestRecord}/cancel', [$c, 'cancelRequest']);
         });
     }
 }

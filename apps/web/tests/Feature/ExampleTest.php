@@ -7,11 +7,11 @@ use Tests\TestCase;
 
 class ExampleTest extends TestCase
 {
-    public function test_workspace_renders_manifest_from_api(): void
+    public function test_landing_page_shows_the_hero_without_a_module_map_and_still_checks_the_api(): void
     {
         Http::preventStrayRequests();
         Http::fake(['*/api/v1/modules' => Http::response(['data' => [['id' => 'catalog', 'name' => 'Katalog dan harga', 'prd' => '02', 'status' => 'planned']]])]);
-        $this->get('/')->assertOk()->assertSee('Katalog dan harga')->assertSee('tersedia setelah masuk');
+        $this->get('/')->assertOk()->assertSee('Operasional dalam satu ekosistem')->assertSee('Masuk workspace')->assertSee('tersedia setelah masuk')->assertDontSee('Peta modul')->assertDontSee('Katalog dan harga')->assertDontSee('API belum tersedia');
         Http::assertSentCount(1);
     }
 

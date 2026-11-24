@@ -3,15 +3,19 @@
 namespace App\Modules\Identity\Presentation;
 
 use App\Modules\Identity\Infrastructure\Backend;
+use App\Shared\Application\SalesDashboard;
 use Illuminate\Http\Request;
 
 final class OrganizationController
 {
-    public function __construct(private Backend $api) {}
+    public function __construct(private Backend $api, private SalesDashboard $dashboard) {}
 
-    public function index(): mixed
+    public function index(Request $r): mixed
     {
-        return view('pages.organizations', ['organizations' => $this->api->page('organizations', 'organizations_page'), 'stores' => $this->api->page('stores', 'stores_page')]);
+        $organizations = $this->api->page('organizations', 'organizations_page');
+        $requested = is_string($r->query('org')) ? $r->query('org') : null;
+
+        return view('pages.organizations', ['organizations' => $organizations, 'stores' => $this->api->page('stores', 'stores_page'), 'dashboard' => $this->dashboard->build($organizations->getCollection(), $requested)]);
     }
 
     public function create(Request $r): mixed

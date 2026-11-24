@@ -34,7 +34,7 @@ final class ReturnWorkflow
         Shipment::where('supply_order_id', $id)->lockForUpdate()->findOrFail($shipment);
         $case = ShipmentDiscrepancy::where('supply_order_id', $id)->where('shipment_id', $shipment)->lockForUpdate()->firstOrFail();
         $plan = ShipmentDiscrepancyResolution::where('shipment_discrepancy_id', $case->id)->where('status', 'confirmed')->lockForUpdate()->first();
-        abort_unless($o->kind === 'wholesale' && $case->status === 'plan_confirmed' && $plan?->type === 'return', 409, 'Rencana retur belum dikonfirmasi.');
+        abort_unless(in_array($o->kind, ['wholesale', 'internal_transfer'], true) && $case->status === 'plan_confirmed' && $plan?->type === 'return', 409, 'Rencana retur belum dikonfirmasi.');
 
         return [$o, $case, $plan];
     }
@@ -173,6 +173,7 @@ final class ReturnWorkflow
             $s->update(['received_by' => $u->id, 'received_at' => now(), 'receipt_note' => $v['note'] ?? null]);
             $case->increment('version');
             $s->load('lines');
+            app(OrderSettlement::class)->evaluate($u, $o);
             $this->audit($u, $o, $case, $s, 'received');
 
             return ['order_id' => $id, 'shipment_id' => $shipment, 'case_id' => $case->id, 'case_version' => $case->version, 'return' => $s->toArray(), 'execution_status' => $this->state($this->quota($o, $case))];

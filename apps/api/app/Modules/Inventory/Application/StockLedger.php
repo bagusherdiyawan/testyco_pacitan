@@ -96,6 +96,9 @@ final class StockLedger
         }
         if ($deltas) {
             app(InventoryValuation::class)->movement(clone $batch, $deltas, $sourceType, $sourceId, $actor, $inventoryValue, $costOrigin, $costOffset);
+            if (isset($deltas['ready']) && $deltas['ready'] < 0) {
+                $attributes['ready_expires_at'] = app(FoodSafety::class)->depleteReadyLots($batch, -$deltas['ready'], $sourceType);
+            }
             if (isset($attributes['ready_pieces']) && $attributes['ready_pieces'] === 0) {
                 $attributes['ready_expires_at'] = null;
             }

@@ -2,5 +2,5 @@
 import 'package:flutter/material.dart';
 
 abstract final class DesignTokens {
-  static const primary = Color(0xFF176757);
+  static const primary = Color(0xFFb91c1c);
 }

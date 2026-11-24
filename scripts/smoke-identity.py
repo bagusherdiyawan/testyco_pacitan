@@ -254,7 +254,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
             expiry_html=response.read().decode()
             assert 'no-store' in response.headers['Cache-Control']
         assert 'Penelusuran kedaluwarsa batch' in expiry_html and 'SMOKE-BATCH' in expiry_html and 'Karantina 16' in expiry_html
-        assert 'Telusuri kedaluwarsa batch' in stock_html
+        assert f'/app/stores/{store}/inventory/batch-expiry' in stock_html and 'Kedaluwarsa Batch' in stock_html
 
 
         api(base,'GET',f'stores/{store}/inventory/ledger',token=owner,expected=403)
@@ -328,7 +328,8 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         cashier = {'name':'Smoke Cashier','email':'cashier@smoke.test','password':PASSWORD,'role':'cashier','store_ids':[store]}
         api(base, 'POST', f'organizations/{org}/users', cashier, owner, 201)
         cashier_token = api(base, 'POST', 'auth/login', {'email':cashier['email'],'password':PASSWORD,'device_name':'smoke'})['token']
-        api(base, 'GET', f'stores/{store}/inventory/control-context', token=cashier_token, expected=403)
+        cashier_context = api(base, 'GET', f'stores/{store}/inventory/control-context', token=cashier_token)['data']
+        assert cashier_context['can_process'] and not cashier_context['can_propose'] and not cashier_context['can_review']
         api(base,'GET',f'stores/{store}/inventory/ledger',token=cashier_token,expected=403)
         api(base,'GET',f'stores/{store}/inventory/ledger/export?'+ledger_export_query,token=cashier_token,expected=403)
         assert not api(base,'GET',minimum_detail_path,token=cashier_token)['can_manage']
@@ -389,21 +390,23 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         opener.open(web+f'/app/pos/sales/{sale_id}').read()
         assert api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']==entries
         shift=api(base,'GET',f'shifts/{sale["cash_shift_id"]}',token=cashier_token)['data']
-        assert shift['expected_cash']==112000 and shift['cash_sales']==12000
+        assert shift['blind_close'] and shift['expected_cash'] is None
         assert not shift['can_record_movement']
         manager_shift=api(base,'GET',f'shifts/{shift["id"]}',token=manager_token)['data']
+        assert manager_shift['expected_cash']==112000 and manager_shift['cash_sales']==12000
         assert manager_shift['can_record_movement']
         assert api(base,'GET',f'stores/{store}/shifts?page=1',token=manager_token)['data'][0]['id']==shift['id']
         movement_body={'operation_id':str(uuid.uuid4()),'version':shift['version'],'kind':'out','amount':2000,'category':'Operations','reason':'Physical drawer expense'}
         movement=api(base,'POST',f'shifts/{shift["id"]}/cash-movements',movement_body,manager_token,201)['data']
         assert movement['shift']['expected_cash']==110000 and movement['shift']['cash_sales']==12000
         html=opener.open(web+f'/app/pos/shifts/{shift["id"]}').read().decode()
+        assert 'Mode Hitung Buta' in html and 'Kas seharusnya Rp' not in html
         close_path=f'/app/pos/shifts/{shift["id"]}/close'; closing=fields(html,close_path)
         closing.update({'counted_cash':'109000','closing_note':'Physical count differs by one thousand'})
         html=web_post(close_path,closing).read().decode()
         assert 'closed' in html and '-1000' in html
         shift=api(base,'GET',f'shifts/{shift["id"]}',token=cashier_token)['data']
-        assert shift['expected_cash']==110000 and shift['difference_cash']==-1000 and shift['cash_sales']==12000
+        assert (not shift['blind_close']) and shift['expected_cash']==110000 and shift['difference_cash']==-1000 and shift['cash_sales']==12000
         assert not api(base,'GET',f'shifts/{shift["id"]}',token=manager_token)['data']['can_record_movement']
         replay=api(base,'POST',f'shifts/{shift["id"]}/cash-movements',movement_body,manager_token,201)['data']
         assert replay['movement']['id']==movement['movement']['id']
@@ -582,7 +585,8 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert source_after['usable_pieces']==source_before-16
         assert sum(b['usable_pieces'] for b in target_after)==target_before+16
         assert sum(b['quarantined_pieces'] for b in target_after)==damaged_before
-        assert api(base,'GET',f'orders/{order_id}',token=lead_token)['data']['version']==before_case_order['version']
+        settled_order=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
+        assert settled_order['status']=='settled' and settled_order['version']==before_case_order['version']+1
         assert api(base,'GET',f'stores/{store}/inventory/ledger?source_type=replacement_receipt',token=manager_token)['data'][0]['quantity_pieces']==16
         ledger_before+=1
         # Disposable account: real web CSRF reactivation, stale version and old-token denial.
@@ -617,25 +621,34 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         new_source=api(base,'POST',f'organizations/{center}/products',{'sku':'UDANG-8','name':'Smoke Udang','condition':'frozen','pack_size':8,'portion_size':4,'wholesale_price':24000,'retail_price':4000},owner,201)['data']
         new_local=api(base,'POST',f'organizations/{org}/products',{'sku':'LOCAL-UDANG8','name':'Smoke Local Udang','condition':'frozen','pack_size':8,'portion_size':4,'wholesale_price':24000,'retail_price':4000},lead_token,201)['data']
         original=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
-        revision_path=f'/app/orders/{order_id}/revisions'
+        # A settled order is final, so the revision scenario runs on its own fully received order.
+        revision_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':supplier_id,'batch_code':'REVISION-BASE','expires_on':'2030-01-01','quantity_packs':20,'note':'Stock for the revision scenario order'},owner,201)['data']
+        rev=api(base,'POST',f'stores/{store}/orders',{'operation_id':str(uuid.uuid4()),'delivery_mode':'pickup','lines':[{'supplier_product_id':supplier_id,'local_product_id':local_product_id,'quantity_packs':20}]},lead_token,201)['data']
+        for action,actor,extra in [('approve',lead_token,{}),('process',owner,{'source_store_id':source})]:
+            rev=api(base,'POST',f'orders/{rev["id"]}/{action}',{'operation_id':str(uuid.uuid4()),'version':rev['version'],**extra},actor)['data']
+        rev_ship=api(base,'POST',f'orders/{rev["id"]}/shipments',{'operation_id':str(uuid.uuid4()),'version':rev['version'],'handler':'Revision base shipment','lines':[{'order_line_id':rev['lines'][0]['id'],'allocations':[{'batch_id':revision_stock['id'],'quantity_packs':20}]}]},owner,201)['data']
+        api(base,'POST',f'shipments/{rev_ship["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':rev_ship['order']['version'],'lines':[{'shipment_line_id':rev_ship['shipment']['lines'][0]['id'],'good_packs':20,'damaged_packs':0}]},lead_token)
+        ledger_before=api(base,'GET',f'stores/{store}/inventory/ledger',token=manager_token)['total']
+        rev_id=rev['id']
+        revision_path=f'/app/orders/{rev_id}/revisions'
         revision_html=opener.open(web+revision_path).read().decode()
         proposal=fields(revision_html,revision_path)
         proposal.update({'existing[0][quantity_packs]':'20','additions[0][supplier_product_id]':new_source['id'],'additions[0][local_product_id]':new_local['id'],'additions[0][quantity_packs]':'3','reason':'Add shrimp after actual initial shipment'})
         preview_html=web_post(revision_path,proposal).read().decode()
         assert '432000' in preview_html and 'Konfirmasi ajukan revisi' in preview_html
-        assert api(base,'GET',f'orders/{order_id}/revisions',token=lead_token)['total']==0
+        assert api(base,'GET',f'orders/{rev_id}/revisions',token=lead_token)['total']==0
         confirm_revision=revision_path+'/confirm'
         web_post(confirm_revision,fields(preview_html,confirm_revision)).read()
-        revised=api(base,'GET',f'orders/{order_id}/revisions',token=lead_token)
+        revised=api(base,'GET',f'orders/{rev_id}/revisions',token=lead_token)
         assert revised['pending']['after']['total_amount']==432000
         revision_id=revised['pending']['id'];accept_revision=revision_path+'/'+revision_id+'/approve'
         revision_html=central_browser.open(web+revision_path).read().decode()
         central_browser.open(Request(web+accept_revision,data=urlencode(fields(revision_html,accept_revision)).encode())).read()
-        revised=api(base,'GET',f'orders/{order_id}',token=lead_token)['data']
+        revised=api(base,'GET',f'orders/{rev_id}',token=lead_token)['data']
         assert len(revised['lines'])==2 and revised['total_amount']==432000
         new_line=next(l for l in revised['lines'] if l['supplier_product_id']==new_source['id'])
         new_stock=api(base,'POST',f'stores/{source}/inventory/intakes',{'operation_id':str(uuid.uuid4()),'product_id':new_source['id'],'batch_code':'UDANG-NEW','expires_on':'2030-01-01','quantity_packs':3,'note':'Actual shrimp stock'},owner,201)['data']
-        extra_shipment=api(base,'POST',f'orders/{order_id}/shipments',{'operation_id':str(uuid.uuid4()),'version':revised['version'],'handler':'Shrimp dispatch','lines':[{'order_line_id':new_line['id'],'allocations':[{'batch_id':new_stock['id'],'quantity_packs':3}]}]},owner,201)['data']
+        extra_shipment=api(base,'POST',f'orders/{rev_id}/shipments',{'operation_id':str(uuid.uuid4()),'version':revised['version'],'handler':'Shrimp dispatch','lines':[{'order_line_id':new_line['id'],'allocations':[{'batch_id':new_stock['id'],'quantity_packs':3}]}]},owner,201)['data']
         api(base,'POST',f'shipments/{extra_shipment["shipment"]["id"]}/receive',{'operation_id':str(uuid.uuid4()),'version':extra_shipment['order']['version'],'lines':[{'shipment_line_id':extra_shipment['shipment']['lines'][0]['id'],'good_packs':3,'damaged_packs':0}]},lead_token)
         stocks=api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data']
         old_batch=next(b for b in stocks if b['product_id']==local_product_id and b['usable_pieces']>=8)
@@ -655,7 +668,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         assert api(base,'GET',f'stores/{store}/catalog/{new_local["id"]}/image-data',token=cashier_token)['image_base64']==png
         bundle=api(base,'POST',f'organizations/{org}/products',{'sku':'BUNDLE-AYAM-UDANG','name':'Smoke bundle2 ayam1 udang','condition':'frozen','pack_size':1,'portion_size':1,'wholesale_price':0,'retail_price':14000},lead_token,201)['data']
         api(base,'POST',f'organizations/{org}/products/{bundle["id"]}/recipe',{'operation_id':str(uuid.uuid4()),'version':0,'active':True,'components':[{'product_id':local_product_id,'pieces':2},{'product_id':new_local['id'],'pieces':1}]},lead_token)
-        bundle_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Bundle terminal','opening_cash':0},cashier_token,201)['data']
+        bundle_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Bundle terminal','opening_cash':0,'opening_note':'Isolated bundle fixture shift'},cashier_token,201)['data']
         bundle_path=f'/app/stores/{store}/pos/bundles/{bundle["id"]}'
         bundle_html=cashier_browser.open(web+bundle_path).read().decode();bundle_form=fields(bundle_html,bundle_path)
         bundle_form.update({'quantity':'1','components[0][stock]':old_batch['id']+':opened','components[1][stock]':new_batch['id']+':opened'})
@@ -722,7 +735,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         api(base,'POST',f'orders/{order_id}/billing/invoices/{ci["id"]}/accept',{'operation_id':str(uuid.uuid4()),'version':1,'consent':True,'reason':'Report invoice accepted'},lead_token)
         voucher=api(base,'POST',f'organizations/{org}/vouchers',{'operation_id':str(uuid.uuid4()),'code':'SMOKE1001','funding_organization_id':org,'kind':'fixed','value':1001,'maximum_discount':1001,'minimum_subtotal':0,'usage_limit':1,'starts_on':today,'ends_on':today,'store_ids':[store],'product_ids':[local_product_id],'restore_policy':'on_full_refund','terms':'Issuer funds; quota restored once on full refund'},lead_token,201)['data']
         assert 'SMOKE1001' in opener.open(web+f'/app/organizations/{org}/vouchers').read().decode()
-        digital_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Manual noncash','opening_cash':0},cashier_token,201)['data']
+        digital_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Manual noncash','opening_cash':0,'opening_note':'Isolated noncash fixture shift'},cashier_token,201)['data']
         di=api(base,'POST',f'stores/{store}/sales/intents',{'operation_id':str(uuid.uuid4()),'shift_id':digital_shift['id'],'voucher_code':'SMOKE1001','lines':[{'product_id':local_product_id,'unit':'piece','quantity':2,'allocations':[{'batch_id':old_batch['id'],'bucket':'opened','quantity':2}]}]},cashier_token,201)['data']
         assert di['total_amount']==4999
         dp=f'/app/pos/intents/{di["id"]}/pay';dh=cashier_browser.open(web+f'/app/pos/intents/{di["id"]}').read().decode();payment=fields(dh,dp);payment.update({'payment_method':'qris_manual','payment_reference':'QRIS-MANUAL-1','verified':'1','verified_amount':'4999'})
@@ -731,7 +744,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         rp=f'/app/pos/sales/{digital_sale}/refunds';rh=opener.open(web+rp).read().decode();rf=fields(rh,rp+'/preview');rf.update({'shift':digital_shift['id']+':'+str(ds['version']),'stock_disposition':'quarantine','reference':'REFUND-QRIS-1','reason':'Actual returned goods and original QRIS refund verified','lines[0][quantity]':'2'})
         rh=web_post(rp+'/preview',rf).read().decode();confirm=fields(rh,rp+'/confirm');confirm['verified']='1';web_post(rp+'/confirm',confirm).read()
         refunded=api(base,'GET',f'sales/{digital_sale}',token=lead_token)['data'];assert refunded['refunds'][0]['amount']==4999 and refunded['payment_method']=='qris_manual'
-        ds=api(base,'GET',f'shifts/{digital_shift["id"]}',token=cashier_token)['data'];assert ds['expected_cash']==0 and ds['noncash_refunds']==4999
+        ds=api(base,'GET',f'shifts/{digital_shift["id"]}',token=lead_token)['data'];assert ds['expected_cash']==0 and ds['noncash_refunds']==4999
         assert api(base,'GET',f'organizations/{org}/vouchers',token=lead_token)['data'][0]['used_count']==0
         api(base,'POST',f'shifts/{digital_shift["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':ds['version'],'counted_cash':0},cashier_token)
         ledger_before+=5
@@ -761,7 +774,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         web_post(accept_path,form).read()
         assert api(base,'GET',f'sales/offline/{conflict["id"]}',token=cashier_token)['data']['status']=='accepted'
         api(base,'POST',f'sales/offline/permits/{permit["id"]}/end',{'operation_id':str(uuid.uuid4()),'queue_empty':True},cashier_token)
-        settled=api(base,'GET',f'shifts/{os_shift["id"]}',token=cashier_token)['data'];assert settled['expected_cash']==6000
+        settled=api(base,'GET',f'shifts/{os_shift["id"]}',token=lead_token)['data'];assert settled['expected_cash']==6000
         api(base,'POST',f'shifts/{settled["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':settled['version'],'counted_cash':6000},cashier_token)
         ledger_before+=2
         fp_sop=f'organizations/{org}/food-safety'
@@ -817,7 +830,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         cp=agp+'/'+pg['id'];ph=central_browser.open(web+cp).read().decode();pf=fields(ph,cp);pf.update({'action':'accept','reason':'Sponsor confirms budget and refund rules','consent':'1','sharing_consented':'1'});central_browser.open(Request(web+cp,data=urlencode(pf).encode())).read()
         ab=next(b for b in api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data'] if b['batch_code']=='AUTO-CONSIGNMENT-LOT')
         api(base,'POST',f'stores/{store}/inventory/processes',{'operation_id':str(uuid.uuid4()),'batch_id':ab['id'],'expected_revision':ab['stock_revision'],'kind':'open','quantity_packs':1,'reason':'Actual consignment pack opened'},lead_token,201)
-        ash=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Automatic settlement fixture','opening_cash':0},cashier_token,201)['data']
+        ash=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Automatic settlement fixture','opening_cash':0,'opening_note':'Isolated settlement fixture shift'},cashier_token,201)['data']
         ac={'operation_id':str(uuid.uuid4()),'shift_id':ash['id'],'voucher_code':'CROSSORG1000','lines':[{'product_id':new_local['id'],'unit':'piece','quantity':2,'allocations':[{'batch_id':ab['id'],'bucket':'opened','quantity':2}]}]}
         ai=api(base,'POST',f'stores/{store}/sales/intents',ac,cashier_token,201)['data'];paid=api(base,'POST',f'sales/intents/{ai["id"]}/pay',{'operation_id':str(uuid.uuid4()),'payment_method':'cash','cash_received':20000},cashier_token)['data']
         assert paid['voucher_snapshot']['sponsor_amount']==500 and paid['voucher_snapshot']['issuer_amount']==500
@@ -831,7 +844,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         rp=f'/app/organizations/{org}/recalls/{campaign["id"]}';rh=opener.open(web+rp).read().decode();rf=fields(rh,rp);rf.update({'action':'hold','observed_pieces':'14','evidence_reference':'Actual physical check','reason':'Goods held by recipient leader'});web_post(rp,rf).read()
         assert api(base,'GET',f'organizations/{org}/recalls/{campaign["id"]}',token=lead_token)['targets']['data'][0]['status']=='held'
         api(base,'POST',f'stores/{store}/sales/intents',{**ac,'operation_id':str(uuid.uuid4())},cashier_token,expected=409)
-        ash=api(base,'GET',f'shifts/{ash["id"]}',token=cashier_token)['data'];assert ash['expected_cash']==paid['total_amount']
+        ash=api(base,'GET',f'shifts/{ash["id"]}',token=lead_token)['data'];assert ash['expected_cash']==paid['total_amount']
         api(base,'POST',f'shifts/{ash["id"]}/close',{'operation_id':str(uuid.uuid4()),'version':ash['version'],'counted_cash':paid['total_amount']},cashier_token)
         ledger_before+=4
         print('PASS: standing consignment BFF consent/automatic share, sponsor consent/budget/claim, thermal controls, provenance recall/recipient hold',flush=True)
@@ -969,11 +982,11 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         wp=api(base,'POST',wbpath+'/'+wi['id']+'/payments',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'kind':'collection','method':'bank_transfer','amount':4000,'reference':'WHOLESALE-PAY-1','paid_on':erp_day,'verified':True,'note':'Verified manual collection'},owner,201)['data']
         reverse={'operation_id':str(uuid.uuid4()),'version':wp['version'],'reason':'Incorrect matching reversed'}
         wi=api(base,'POST',wbpath+'/'+wi['id']+'/payments/'+wp['payments'][0]['id']+'/reverse',reverse,owner)['data'];api(base,'POST',wbpath+'/'+wi['id']+'/payments/'+wp['payments'][0]['id']+'/reverse',reverse,owner)
-        credit=api(base,'POST',wbpath+'/'+wi['id']+'/credits',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'case_id':case['case']['id'],'base_amount':10000,'tax_amount':1000,'reason':'Agreed one damaged pack credit'},owner,201)['data']
+        credit=api(base,'POST',wbpath+'/'+wi['id']+'/credits',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'case_id':case['case']['id'],'base_amount':9950,'tax_amount':995,'reason':'Agreed one damaged pack credit'},owner,201)['data']
         credit_id=credit['credits'][0]['id']
         wi=api(base,'POST',wbpath+'/'+wi['id']+'/credits/'+credit_id+'/accept',{'operation_id':str(uuid.uuid4()),'version':credit['version'],'consent':True,'reason':'Buyer confirms historical credit'},lead_token)['data']
-        assert wi['outstanding_amount']==11990
-        api(base,'POST',wbpath+'/'+wi['id']+'/payments',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'kind':'collection','method':'cash','amount':11990,'reference':'WHOLESALE-PAY-2','paid_on':erp_day,'verified':True,'note':'Actual external cash verified; no POS drawer write'},owner,201)
+        assert wi['outstanding_amount']==12045
+        api(base,'POST',wbpath+'/'+wi['id']+'/payments',{'operation_id':str(uuid.uuid4()),'version':wi['version'],'kind':'collection','method':'cash','amount':12045,'reference':'WHOLESALE-PAY-2','paid_on':erp_day,'verified':True,'note':'Actual external cash verified; no POS drawer write'},owner,201)
         assert 'Jurnal dibukukan: 10' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         assert 'Jurnal dibukukan: 0' in docker('exec',api_name,'php','artisan','accounting:post','--limit=100')
         buyer_events=api(base,'GET',partner_erp+'/context?section=posting_events',token=lead_token)['data']
@@ -1056,7 +1069,7 @@ Illuminate\\Support\\Facades\\DB::table('organization_user')->insert(['organizat
         gls=api(base,'POST',f'organizations/{org}/commercial-agreements',{'operation_id':str(uuid.uuid4()),'kind':'sponsored_promo','contract_id':cc['id'],'starts_on':erp_day,'ends_on':'2030-12-31','reference':'GL sponsor fixture','terms':sponsor_terms},lead_token,201)['data']
         api(base,'POST',f'organizations/{center}/commercial-agreements/{gls["id"]}/accept',{'operation_id':str(uuid.uuid4()),'version':1,'reason':'Sponsor consents to exact budget','consent':True,'sharing_consented':True},owner)
         var_batch=next(b for b in api(base,'GET',f'stores/{store}/inventory/batches',token=lead_token)['data'] if b['batch_code']=='GL-VARIANCE-LOT')
-        sponsor_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Sponsored GL fixture','opening_cash':0},cashier_token,201)['data']
+        sponsor_shift=api(base,'POST',f'stores/{store}/shifts',{'operation_id':str(uuid.uuid4()),'device_name':'Sponsored GL fixture','opening_cash':0,'opening_note':'Isolated sponsored GL fixture shift'},cashier_token,201)['data']
         si=api(base,'POST',f'stores/{store}/sales/intents',{'operation_id':str(uuid.uuid4()),'shift_id':sponsor_shift['id'],'voucher_code':'GL-SPONSOR','lines':[{'product_id':wl['id'],'unit':'pack','quantity':1,'allocations':[{'batch_id':var_batch['id'],'bucket':'usable','quantity':1}]}]},cashier_token,201)['data']
         sponsored_sale=api(base,'POST',f'sales/intents/{si["id"]}/pay',{'operation_id':str(uuid.uuid4()),'payment_method':'cash','cash_received':20000},cashier_token)['data'];assert sponsored_sale['voucher_snapshot']['sponsor_amount']==500
         ledger_before+=1

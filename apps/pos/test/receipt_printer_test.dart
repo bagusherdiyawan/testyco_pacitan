@@ -172,4 +172,61 @@ void main() {
       expect(tester.takeException(), isNull);
     });
   }
+
+  test('Thermal receipt template customizes header, footer, visibility and logo raster', () async {
+    final storage = MemoryDeviceState();
+    final printer = ReceiptPrinter(storage, 'S1');
+    const onePxPngBase64 =
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=';
+
+    await printer.saveTemplate({
+      'header_text': 'Dimsum Hangat Pacitan',
+      'footer_text': 'Terima kasih sudah mampir!',
+      'show_address': false,
+      'show_cashier': false,
+      'show_discount': false,
+      'show_logo': true,
+      'logo_base64': onePxPngBase64,
+    });
+
+    final loaded = await printer.load();
+    final tpl = loaded['template'] as Map<String, dynamic>;
+    final bytes = EscPosReceipt.encode(
+      sale(),
+      58,
+      copy: false,
+      template: tpl,
+    );
+    final text = ascii.decode(bytes, allowInvalid: true);
+
+    expect(text, contains('Dimsum Hangat Pacitan'));
+    expect(text, contains('Terima kasih sudah mampir!'));
+    expect(text, isNot(contains('Street')));
+    expect(text, isNot(contains('Kasir: Kasir')));
+    expect(text, isNot(contains('Diskon')));
+    // ESC/POS GS v 0 raster command prefix (0x1D 0x76 0x30 0x00)
+    expect(bytes.contains(0x1d), isTrue);
+  });
+
+  test('encodeShiftSummary formats closed shift cash reconciliation', () {
+    final bytes = EscPosReceipt.encodeShiftSummary(
+      {
+        'device_name': 'Kasir-01',
+        'cashier_name': 'Sari',
+        'opening_cash': 100000,
+        'counted_cash': 250000,
+        'difference_cash': 0,
+        'deposit_cash': 150000,
+        'retained_cash': 100000,
+      },
+      58,
+      storeName: 'Booth Pacitan 1',
+    );
+    final text = ascii.decode(bytes, allowInvalid: true);
+    expect(text, contains('REKAP TUTUP SHIFT'));
+    expect(text, contains('Booth Pacitan 1'));
+    expect(text, contains('Kasir-01'));
+    expect(text, contains('Rp 250000'));
+    expect(text, contains('Rp 150000'));
+  });
 }

@@ -13,10 +13,10 @@ final class Store extends Model
 
     protected $guarded = ['id'];
 
-    protected $attributes = ['active' => true];
+    protected $attributes = ['active' => true, 'single_active_shift' => true];
 
     protected function casts(): array
     {
-        return ['active' => 'boolean'];
+        return ['active' => 'boolean', 'single_active_shift' => 'boolean'];
     }
 }

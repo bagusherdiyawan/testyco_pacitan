@@ -9,6 +9,7 @@ use App\Modules\Billing\Infrastructure\ConsignmentReport;
 use App\Modules\Billing\Infrastructure\Invoice;
 use App\Modules\Billing\Infrastructure\InvoiceCredit;
 use App\Modules\Billing\Infrastructure\InvoicePayment;
+use App\Modules\Fulfillment\Application\OrderSettlement;
 use App\Modules\Fulfillment\Infrastructure\ReturnLine;
 use App\Modules\Fulfillment\Infrastructure\ReturnShipment;
 use App\Modules\Fulfillment\Infrastructure\Shipment;
@@ -214,8 +215,10 @@ final class BillingWorkflow
         }
         $used = (int) InvoiceCredit::where('invoice_id', $i->id)->where('case_id', $case)->where('status', 'accepted')->sum('base_amount');
         $all = InvoiceCredit::where('invoice_id', $i->id)->where('status', 'accepted')->get();
+        $netSubtotal = $i->subtotal - $i->discount_amount;
+        $discountedCap = $i->subtotal > 0 ? intdiv($cap * $netSubtotal, $i->subtotal) : 0;
 
-        return ['resolution_id' => $resolution->id, 'base' => max(0, min($cap - $used, $i->subtotal - $i->discount_amount - (int) $all->sum('base_amount'))), 'tax' => max(0, $i->tax_amount - (int) $all->sum('tax_amount'))];
+        return ['resolution_id' => $resolution->id, 'base' => max(0, min($discountedCap - $used, $netSubtotal - (int) $all->sum('base_amount'))), 'tax' => max(0, $i->tax_amount - (int) $all->sum('tax_amount'))];
     }
 
     public function credit(User $u, string $order, string $id, array $v): array
@@ -249,6 +252,7 @@ final class BillingWorkflow
             $i->increment('version');
             if ($action === 'accept') {
                 app(BillingPosting::class)->credit($i, $c, $u->id);
+                app(OrderSettlement::class)->evaluate($u, $o->fresh('lines'));
             }
             $this->audit($u, $o, 'credit_'.$action, $credit, $c->toArray());
 

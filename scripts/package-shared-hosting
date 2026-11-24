@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Builds upload-ready zips for shared hosting: dist/testyco-api.zip and dist/testyco-web.zip.
+# Needs local PHP + Composer, rsync and zip. Each zip contains a fresh APP_KEY in .env: do not commit or share it.
+set -euo pipefail
+root=$(cd "$(dirname "$0")/.." && pwd)
+out="$root/dist"; stage=$(mktemp -d)
+trap 'rm -rf "$stage"' EXIT
+rm -rf "$out"; mkdir -p "$out"
+for app in api web; do
+  dest="$stage/$app"; mkdir -p "$dest"
+  rsync -a --exclude vendor --exclude .env --exclude tests --exclude 'database/*.sqlite' --exclude 'storage/logs/*' --exclude '.phpunit.result.cache' --exclude phpunit.xml "$root/apps/$app/" "$dest/"
+  (cd "$dest" && COMPOSER_ALLOW_SUPERUSER=1 composer install --no-dev --optimize-autoloader --no-interaction --no-progress --quiet)
+  mkdir -p "$dest/storage/framework/"{cache/data,sessions,views} "$dest/storage/logs" "$dest/bootstrap/cache"
+  find "$dest/storage" "$dest/bootstrap/cache" -name .gitignore -delete
+  cp "$root/deploy/$app.env.production" "$dest/.env"
+  key=$(cd "$dest" && php artisan key:generate --show --no-ansi)
+  sed -i.bak "s|^APP_KEY=.*|APP_KEY=$key|" "$dest/.env" && rm "$dest/.env.bak"
+  (cd "$dest" && zip -qr "$out/testyco-$app.zip" . -x '.DS_Store')
+done
+ls -lh "$out"

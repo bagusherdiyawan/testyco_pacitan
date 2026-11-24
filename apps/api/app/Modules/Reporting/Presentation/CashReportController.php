@@ -7,13 +7,14 @@ use App\Modules\Reporting\Application\ReportAccess;
 use App\Modules\Reporting\Domain\CsvText;
 use App\Modules\Reporting\Domain\ReportPeriod;
 use App\Modules\Sales\Application\CashSalesReadModel;
+use App\Modules\Sales\Application\SalesTrendReadModel;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 
 final class CashReportController
 {
-    public function __construct(private ReportAccess $access, private CashSalesReadModel $read) {}
+    public function __construct(private ReportAccess $access, private CashSalesReadModel $read, private SalesTrendReadModel $trend) {}
 
     private function scope(Request $r, string $organization): array
     {
@@ -48,6 +49,13 @@ final class CashReportController
         }
 
         return response()->json(['data' => ['organization' => $scope['organization'], 'available_stores' => $scope['available_stores'], ...$period->toArray(), 'currency' => 'IDR', 'scope' => 'server_confirmed_cash_sales', 'observed_at' => now()->toIso8601String(), 'totals' => $totals, 'by_store' => $byStore]])->header('Cache-Control', 'private, no-store');
+    }
+
+    public function trend(Request $r, string $organization): mixed
+    {
+        [$scope, $period] = $this->scope($r, $organization);
+
+        return response()->json(['data' => ['organization' => $scope['organization'], 'available_stores' => $scope['available_stores'], ...$period->toArray(), 'currency' => 'IDR', 'scope' => 'server_confirmed_sales_all_payment_methods', 'observed_at' => now()->toIso8601String(), ...$this->trend->trend($organization, $scope['store_ids'], $period->from, $period->to)]])->header('Cache-Control', 'private, no-store');
     }
 
     public function products(Request $r, string $organization): mixed

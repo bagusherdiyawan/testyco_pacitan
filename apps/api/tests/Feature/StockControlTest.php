@@ -290,13 +290,19 @@ class StockControlTest extends TestCase
     public function test_cashier_other_tenant_and_unassigned_staff_are_denied_all_stock_control_actions(): void
     {
         $unassigned = $this->user($this->org, 'store_manager');
-        foreach ([$this->cashier, $this->otherLead, $unassigned] as $u) {
+        foreach ([$this->otherLead, $unassigned] as $u) {
             $this->act($u);
             foreach (['processes', 'counts'] as $path) {
                 $this->getJson('/api/v1/stores/'.$this->store->id.'/inventory/'.$path)->assertForbidden();
             }$this->postJson('/api/v1/stores/'.$this->store->id.'/inventory/processes', $this->processBody())->assertForbidden();
             $this->postJson('/api/v1/stores/'.$this->store->id.'/inventory/counts', $this->countBody())->assertForbidden();
         }
+        // Assigned cashier may open/cook and view process history, but cannot propose or read opname counts.
+        $this->act($this->cashier);
+        $this->getJson('/api/v1/stores/'.$this->store->id.'/inventory/processes')->assertOk();
+        $this->postJson('/api/v1/stores/'.$this->store->id.'/inventory/processes', $this->processBody())->assertCreated();
+        $this->getJson('/api/v1/stores/'.$this->store->id.'/inventory/counts')->assertForbidden();
+        $this->postJson('/api/v1/stores/'.$this->store->id.'/inventory/counts', $this->countBody())->assertForbidden();
     }
 
     public function test_batch_and_count_ids_do_not_bypass_store_or_partner_scoping(): void
@@ -405,8 +411,54 @@ class StockControlTest extends TestCase
     {
         $center = Organization::create(['name' => 'Pusat', 'type' => 'center']);
         $url = '/api/v1/stores/'.$this->store->id.'/inventory/control-context';
-        foreach ([$this->cashier, $this->otherLead, $this->user($this->org, 'warehouse'), $this->user($center, 'owner')] as $actor) {
+        $this->act($this->cashier)->getJson($url)->assertOk()->assertJsonPath('data.can_process', true)->assertJsonPath('data.can_propose', false)->assertJsonPath('data.can_review', false);
+        foreach ([$this->otherLead, $this->user($this->org, 'warehouse'), $this->user($center, 'owner')] as $actor) {
             $this->act($actor)->getJson($url)->assertForbidden();
         }
+    }
+
+    public function test_ready_lots_track_separate_cook_deadlines_and_quarantine_release_requires_independent_review(): void
+    {
+        // Enable 60-minute ready life SOP.
+        $this->act($this->lead)->postJson('/api/v1/organizations/'.$this->org->id.'/food-safety', [
+            'operation_id' => (string) Str::uuid(),
+            'version' => 0,
+            'enabled' => true,
+            'block_expired' => true,
+            'fefo' => 'off',
+            'ready_life_minutes' => 60,
+            'reference' => 'SOP-READY-01',
+        ])->assertOk();
+
+        // Open 1 pack (10 opened) and cook 4 pieces at T0.
+        $this->process(['kind' => 'open', 'quantity_packs' => 1]);
+        $this->process(['kind' => 'cook', 'input_pieces' => 4, 'output_pieces' => 4], $this->cashier);
+
+        // Expire the first ready lot in DB, then cook 6 fresh pieces as cashier.
+        $firstLot = DB::table('inventory_ready_lots')->where('inventory_batch_id', $this->batch->id)->first();
+        DB::table('inventory_ready_lots')->where('id', $firstLot->id)->update(['ready_expires_at' => now()->subMinutes(5)]);
+        $this->process(['kind' => 'cook', 'input_pieces' => 6, 'output_pieces' => 6], $this->cashier);
+
+        // Batch remains eligible for ready sale because the second lot (6 pieces) is still fresh.
+        $this->assertTrue(app(\App\Modules\Inventory\Application\FoodSafety::class)->eligible($this->batch->fresh(), 'ready'));
+
+        // Propose and independently approve quarantine release of 10 pieces (1 pack) to usable.
+        DB::transaction(fn () => app(StockLedger::class)->apply($this->batch->fresh(), $this->lead->id, ['quarantined' => 10], 'shipment_receipt', (string) Str::ulid(), 'Damaged'));
+        $rev = $this->batch->fresh()->stock_revision;
+        $release = $this->act($this->manager)->postJson('/api/v1/stores/'.$this->store->id.'/inventory/quarantine-releases', [
+            'operation_id' => (string) Str::uuid(),
+            'batch_id' => $this->batch->id,
+            'expected_revision' => $rev,
+            'target_bucket' => 'usable',
+            'quantity_pieces' => 10,
+            'reason' => 'Kemasan luar penyok ringan, isi vakum utuh',
+        ])->assertCreated()->json('data');
+
+        // Proposer cannot self-approve; partner_lead approves.
+        $this->act($this->manager)->postJson('/api/v1/inventory/quarantine-releases/'.$release['id'].'/approve', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'review_note' => 'Self'])->assertForbidden();
+        $this->act($this->lead)->postJson('/api/v1/inventory/quarantine-releases/'.$release['id'].'/approve', ['operation_id' => (string) Str::uuid(), 'version' => 1, 'review_note' => 'Terverifikasi layak'])->assertOk()->assertJsonPath('data.status', 'approved');
+        $fresh = $this->batch->fresh();
+        $this->assertSame(0, $fresh->quarantined_pieces);
+        $this->assertSame(10, $fresh->usable_pieces);
     }
 }

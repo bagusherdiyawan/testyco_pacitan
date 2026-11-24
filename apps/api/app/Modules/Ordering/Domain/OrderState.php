@@ -11,6 +11,7 @@ enum OrderState: string
     case Dispatched = 'dispatched';
     case Partial = 'partially_received';
     case Completed = 'completed';
+    case Settled = 'settled';
     case Cancelled = 'cancelled';
 
     public function allows(string $action): bool

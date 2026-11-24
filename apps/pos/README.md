@@ -35,3 +35,7 @@ Delivery DL-12/14/17: [kasus/pengganti Flutter](../../docs/native-shipment-cases
 Delivery4 November2026: lihat [retur/keuangan/POS](../../docs/finance-and-pos-adjustments.md). Modul Billing/Promotions eksplisit; administrasi keuangan di web, retur/pembayaran/voucher/refund operasional juga di Flutter. Verifikasi pembayaran manual, bukan gateway atau offline.
 
 [Administrasi organisasi native](../../docs/native-administration-and-bluetooth.md): invoice/kredit/konsinyasi manual, kontrak/PDF, voucher, aset dan laporan komersial/biaya. FEATURE_ADMINISTRATION mengendalikan registry, bukan izin API. Ikon pada pemilihan toko tersedia untuk pengelola tanpa toko terpilih. Printer Bluetooth Android Classic/SPP dipilih dari perangkat terpasang; LAN lama tetap didukung. Model printer, APK/release dan perangkat nyata masih memerlukan verifikasi.
+
+## Preset Build APK Booth Kasir
+
+Untuk perangkat kasir di booth yang hanya membutuhkan operasional harian (POS, Shift Kas, Buka/Kukus Stok, Pesanan, dan Struk) tanpa modul admin/audit/ERP/laporan organisasi, gunakan `scripts/build-pos-booth` (atau tambahkan `--dart-define=FEATURE_ADMINISTRATION=false --dart-define=FEATURE_AUDIT=false --dart-define=FEATURE_MANUFACTURING=false --dart-define=FEATURE_REPORTING=false`). Untuk tablet manajer/pimpinan dengan seluruh modul, build langsung tanpa flag `false` tersebut.

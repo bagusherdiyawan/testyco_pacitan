@@ -64,7 +64,7 @@ final class RecallCoordinator
             abort_unless($r && $r->status === 'active', 409);
             abort_if(DB::table('recall_campaigns')->where('batch_recall_id', $r->id)->exists(), 409, 'Koordinasi recall ini sudah ada.');
             $id = (string) Str::ulid();
-            $c = ['id' => $id, 'batch_recall_id' => $r->id, 'organization_id' => $org, 'status' => 'active', 'version' => 1, 'instructions' => $v['instructions'], 'created_by' => $u->id, 'created_at' => now()->toIso8601String()];
+            $c = ['id' => $id, 'batch_recall_id' => $r->id, 'organization_id' => $org, 'status' => 'active', 'version' => 1, 'instructions' => $v['instructions'], 'created_by' => $u->id, 'created_at' => now()->format('Y-m-d H:i:s')];
             DB::table('recall_campaigns')->insert($c);
             $roots = InventoryBatch::where('organization_id', $org)->where('product_id', $r->product_id)->where('batch_code', $r->batch_code)->orderBy('id')->get();
             foreach ($roots as $b) {
@@ -162,7 +162,7 @@ final class RecallCoordinator
             $t = DB::table('recall_targets')->lockForUpdate()->find($target);
             abort_unless((int) $t->version === (int) $v['version'] && $b->stock_revision === (int) $v['expected_revision'], 409);
             abort_if($v['action'] === 'hold' && $t->status === 'held' || $v['action'] === 'release' && $t->status === 'released', 409);
-            $d = ['status' => $v['action'] === 'hold' ? 'held' : 'released', 'version' => (int) $t->version + 1, 'evidence_reference' => $v['evidence_reference'], 'reason' => $v['reason'], 'observed_pieces' => (int) $v['observed_pieces'], 'reviewed_by' => $u->id, 'reviewed_at' => now()->toIso8601String()];
+            $d = ['status' => $v['action'] === 'hold' ? 'held' : 'released', 'version' => (int) $t->version + 1, 'evidence_reference' => $v['evidence_reference'], 'reason' => $v['reason'], 'observed_pieces' => (int) $v['observed_pieces'], 'reviewed_by' => $u->id, 'reviewed_at' => now()->format('Y-m-d H:i:s')];
             DB::table('recall_targets')->where('id', $target)->update($d);
             app(FoodSafety::class)->forget($org);
             Audit::record($u->id, $org, 'food.coordinated_'.$v['action'], $target, (array) $t, ['campaign_id' => $id, ...$d]);
@@ -178,7 +178,7 @@ final class RecallCoordinator
         return $this->ops->run($org, $u->id, $v['operation_id'], 'recall.close:'.$id, $v, function () use ($u, $org, $id, $v) {
             $c = DB::table('recall_campaigns')->where('organization_id', $org)->lockForUpdate()->find($id);
             abort_unless($c && $c->status === 'active' && (int) $c->version === (int) $v['version'], 409);
-            $d = ['id' => $id, 'organization_id' => $org, 'status' => 'closed', 'version' => (int) $c->version + 1, 'closed_at' => now()->toIso8601String()];
+            $d = ['id' => $id, 'organization_id' => $org, 'status' => 'closed', 'version' => (int) $c->version + 1, 'closed_at' => now()->format('Y-m-d H:i:s')];
             DB::table('recall_campaigns')->where('id', $id)->update(['status' => 'closed', 'version' => $d['version'], 'closed_at' => $d['closed_at']]);
             Audit::record($u->id, $org, 'food.coordination_closed', $id, null, [...$d, 'reason' => $v['reason']]);
 

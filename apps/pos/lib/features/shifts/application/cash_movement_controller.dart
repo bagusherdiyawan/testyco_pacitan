@@ -74,7 +74,7 @@ class CashMovementController extends ChangeNotifier {
         'Isi kategori (maksimal 80 karakter) dan alasan (maksimal 2000 karakter).',
       );
     }
-    if (kind == 'out' && amount > shift!.expected) {
+    if (kind == 'out' && shift!.expected != null && amount > shift!.expected!) {
       throw const ApiException('Kas keluar melebihi kas yang diharapkan.');
     }
     return CashMovementDraft(shiftId, {

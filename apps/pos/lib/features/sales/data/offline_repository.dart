@@ -140,12 +140,19 @@ class OfflineRepository {
   Future<Map<String, dynamic>> preview(
     String permitId,
     List<Map<String, dynamic>> requested,
-    int cash,
-  ) async {
+    int cash, {
+    String? serviceType,
+  }) async {
     final state = await load();
     final p = state['permits'][permitId];
     if (p is! Map || p['closed_at'] != null) {
       throw const ApiException('Izin offline tidak tersedia.');
+    }
+    if (p['snapshot']['consumables_enabled'] == true &&
+        !['dine_in', 'takeaway'].contains(serviceType)) {
+      throw const ApiException(
+        'Pilih jenis penjualan (Makan di tempat / Bawa pulang).',
+      );
     }
     final now = DateTime.now().toUtc();
     final from = DateTime.tryParse(p['issued_at'] ?? ''),
@@ -313,6 +320,7 @@ class OfflineRepository {
         'operation_id': const Uuid().v4(),
         'permit_id': permitId,
         'captured_at': now.toIso8601String(),
+        if (serviceType != null) 'service_type': serviceType,
         'client_total': total,
         'cash_received': cash,
         'lines': lines,

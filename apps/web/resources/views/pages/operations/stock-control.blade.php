@@ -207,5 +207,5 @@
         <div class="mt-3"><x-molecules.pagination :items="$processes" /></div>
     </section>
 
-    <script src="/stock-control.js" defer></script>
+    <script src="/stock-control.js?v={{ @filemtime(public_path('stock-control.js')) }}" defer></script>
 </x-templates.console>

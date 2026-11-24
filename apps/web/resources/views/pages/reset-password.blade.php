@@ -16,5 +16,5 @@
             </form>
         </section>
     </div>
-    <script src="/reset-password.js" defer></script>
+    <script src="/reset-password.js?v={{ @filemtime(public_path('reset-password.js')) }}" defer></script>
 </x-templates.console>

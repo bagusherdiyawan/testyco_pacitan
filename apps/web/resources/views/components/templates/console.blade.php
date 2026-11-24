@@ -67,9 +67,9 @@
 <link rel="stylesheet" href="/soft-ui/css/nucleo-icons.css">
 <link rel="stylesheet" href="/soft-ui/css/nucleo-svg.css">
 <link rel="stylesheet" href="/soft-ui/css/soft-ui-dashboard.min.css">
-<link rel="stylesheet" href="/tokens.css">
-<link rel="stylesheet" href="/soft-brand.css">
-<link rel="stylesheet" href="/console.css">
+<link rel="stylesheet" href="/tokens.css?v={{ @filemtime(public_path('tokens.css')) }}">
+<link rel="stylesheet" href="/soft-brand.css?v={{ @filemtime(public_path('soft-brand.css')) }}">
+<link rel="stylesheet" href="/console.css?v={{ @filemtime(public_path('console.css')) }}">
 </head>
 <body class="g-sidenav-show bg-gray-100">
 <aside class="sidenav navbar navbar-vertical navbar-expand-xs border-0 border-radius-xl my-3 fixed-start ms-3 bg-white" id="sidenav-main" aria-label="Menu utama">

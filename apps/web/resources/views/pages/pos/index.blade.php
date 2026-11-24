@@ -336,5 +336,5 @@
         <div class="mt-3"><x-molecules.pagination :items="$shifts" /></div>
     </section>
 
-    <script src="/pos-cart.js" defer></script>
+    <script src="/pos-cart.js?v={{ @filemtime(public_path('pos-cart.js')) }}" defer></script>
 </x-templates.console>

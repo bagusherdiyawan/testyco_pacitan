@@ -59,4 +59,4 @@
         </div>
     </div>
 </section>
-@push('scripts')<script src="/dashboard-charts.js"></script>@endpush
+@push('scripts')<script src="/dashboard-charts.js?v={{ @filemtime(public_path('dashboard-charts.js')) }}"></script>@endpush

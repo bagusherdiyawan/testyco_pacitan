@@ -79,6 +79,6 @@
 
     <p class="text-sm"><a href="/app/stores/{{ $intent['store_id'] }}/pos" class="text-emerald-700 hover:underline">Kembali ke POS dan periksa struk terbaru</a></p>
     @if($intent['status'] === 'pending' && $is_owner)
-        <script src="/pos-payment.js" defer></script>
+        <script src="/pos-payment.js?v={{ @filemtime(public_path('pos-payment.js')) }}" defer></script>
     @endif
 </x-templates.console>

@@ -60,5 +60,5 @@
         </form>
     </section>
 
-    <script src="/order-form.js" defer></script>
+    <script src="/order-form.js?v={{ @filemtime(public_path('order-form.js')) }}" defer></script>
 </x-templates.console>

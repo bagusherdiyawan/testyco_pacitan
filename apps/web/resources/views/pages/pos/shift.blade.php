@@ -294,5 +294,5 @@
         </div>
     </section>
 
-    <script src="/pos-shift-count.js" defer></script>
+    <script src="/pos-shift-count.js?v={{ @filemtime(public_path('pos-shift-count.js')) }}" defer></script>
 </x-templates.console>

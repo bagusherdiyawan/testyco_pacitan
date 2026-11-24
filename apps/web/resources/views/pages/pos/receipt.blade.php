@@ -64,5 +64,5 @@
         </div>
     </div>
 
-    <script src="/receipt.js" defer></script>
+    <script src="/receipt.js?v={{ @filemtime(public_path('receipt.js')) }}" defer></script>
 </x-templates.console>
